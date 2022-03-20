@@ -53,7 +53,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	return nil, nil //nolint:nilnil
 }
 
-//nolint:gocognit;funlen
+//nolint:gocognit,funlen,cyclop
 func newVisitor(pass *analysis.Pass, include PatternsList, exclude PatternsList) func(node ast.Node) {
 	var ret *ast.ReturnStmt
 
