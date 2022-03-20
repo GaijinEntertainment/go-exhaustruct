@@ -1,0 +1,31 @@
+run:
+  timeout: 10s
+  allow-parallel-runners: true
+
+linters:
+  enable-all: true
+  disable:
+    - depguard
+    - gci
+    - godox
+    - gofmt
+    - gofumpt
+    - goheader
+    - goimports
+    - varnamelen
+    - exhaustivestruct
+    - gocritic    # it is bugged, ToDo: enable it back
+    - errname     # naming is too strict and is not observed in many places
+    - golint      # deprecated
+    - importas    # may be useful later, requires configuration
+    - interfacer  # deprecated
+    - maligned    # deprecated
+    - misspell    # we have IDE speller
+    - scopelint   # obsoleted, replaced by other linters
+    - govet       # invoked by the goland internally
+    - tagliatelle # it isn't very handy to have such linter in a monorepo with a lot of different coding standards
+    - nlreturn    # there is wsl linter what implements the same checks
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
