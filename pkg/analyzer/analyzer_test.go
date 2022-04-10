@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/tools/go/analysis/analysistest"
 
-	"github.com/GaijinEntertainment/go-exhaustruct/pkg/analyzer"
+	"github.com/GaijinEntertainment/go-exhaustruct/v2/pkg/analyzer"
 )
 
 func TestAll(t *testing.T) {

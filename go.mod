@@ -1,4 +1,4 @@
-module github.com/GaijinEntertainment/go-exhaustruct
+module github.com/GaijinEntertainment/go-exhaustruct/v2
 
 go 1.18
 
