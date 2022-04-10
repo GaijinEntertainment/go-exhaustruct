@@ -20,10 +20,13 @@ func TestAll(t *testing.T) {
 
 	testdata := filepath.Join(filepath.Dir(filepath.Dir(wd)), "testdata")
 
-	a := analyzer.MustNewAnalyzer(
+	a, err := analyzer.NewAnalyzer(
 		[]string{".*\\.Test", ".*\\.Test2", ".*\\.Embedded", ".*\\.External"},
 		[]string{".*Excluded$"},
 	)
+	if err != nil {
+		t.Error(err)
+	}
 
 	analysistest.Run(t, testdata, a, "s")
 }
@@ -36,10 +39,13 @@ func BenchmarkAll(b *testing.B) {
 
 	testdata := filepath.Join(filepath.Dir(filepath.Dir(wd)), "testdata")
 
-	a := analyzer.MustNewAnalyzer(
+	a, err := analyzer.NewAnalyzer(
 		[]string{".*\\.Test", ".*\\.Test2", ".*\\.Embedded", ".*\\.External"},
 		[]string{".*Excluded$"},
 	)
+	if err != nil {
+		b.Error(err)
+	}
 
 	for i := 0; i < b.N; i++ {
 		analysistest.Run(b, testdata, a, "s")

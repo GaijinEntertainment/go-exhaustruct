@@ -23,13 +23,22 @@ type analyzer struct {
 	exclude PatternsList
 }
 
-// MustNewAnalyzer returns a go/analysis-compatible analyzer.
+// NewAnalyzer returns a go/analysis-compatible analyzer.
 //   -i arguments adds include patterns
 //   -e arguments adds exclude patterns
-func MustNewAnalyzer(include []string, exclude []string) *analysis.Analyzer {
-	a := analyzer{
-		include: mustNewPatternsList(include),
-		exclude: mustNewPatternsList(exclude),
+func NewAnalyzer(include []string, exclude []string) (*analysis.Analyzer, error) {
+	a := analyzer{}
+
+	var err error
+
+	a.include, err = newPatternsList(include)
+	if err != nil {
+		return nil, err
+	}
+
+	a.exclude, err = newPatternsList(exclude)
+	if err != nil {
+		return nil, err
 	}
 
 	return &analysis.Analyzer{
@@ -38,7 +47,7 @@ func MustNewAnalyzer(include []string, exclude []string) *analysis.Analyzer {
 		Run:      a.run,
 		Requires: []*analysis.Analyzer{inspect.Analyzer},
 		Flags:    a.newFlagSet(),
-	}
+	}, nil
 }
 
 func (a *analyzer) newFlagSet() flag.FlagSet {
@@ -194,13 +203,13 @@ func literalKeys(lit *ast.CompositeLit) (keys []string, unnamed bool) {
 
 func structFields(strct *types.Struct, withPrivate bool) (keys []string) {
 	for i := 0; i < strct.NumFields(); i++ {
-		fieldName := strct.Field(i).Name()
+		f := strct.Field(i)
 
-		if !withPrivate && !strct.Field(i).Exported() {
+		if !f.Exported() && !withPrivate {
 			continue
 		}
 
-		keys = append(keys, fieldName)
+		keys = append(keys, f.Name())
 	}
 
 	return keys
@@ -208,9 +217,9 @@ func structFields(strct *types.Struct, withPrivate bool) (keys []string) {
 
 // difference returns elements that are in `a` and not in `b`.
 func difference(a, b []string) (diff []string) {
-	mb := make(map[string]struct{}, len(b))
+	mb := make(map[string]bool, len(b))
 	for _, x := range b {
-		mb[x] = struct{}{}
+		mb[x] = true
 	}
 
 	for _, x := range a {
@@ -228,7 +237,6 @@ func exprName(expr ast.Expr) string {
 	}
 
 	s, ok := expr.(*ast.SelectorExpr)
-
 	if !ok {
 		return ""
 	}
@@ -249,23 +257,21 @@ func (l PatternsList) MatchesAny(str string) bool {
 	return false
 }
 
-// mustNewPatternsList parses slice of strings to a slice of compiled regular
+// newPatternsList parses slice of strings to a slice of compiled regular
 // expressions.
-func mustNewPatternsList(in []string) (list PatternsList) {
-	for _, reStr := range in {
-		if reStr == "" {
-			panic(ErrEmptyPattern)
-		}
+func newPatternsList(in []string) (PatternsList, error) {
+	list := PatternsList{}
 
-		re, err := regexp.Compile(reStr)
+	for _, str := range in {
+		re, err := strToRegexp(str)
 		if err != nil {
-			panic(fmt.Errorf("unable to compile %s as regular expression: %w", reStr, err))
+			return nil, err
 		}
 
 		list = append(list, re)
 	}
 
-	return list
+	return list, nil
 }
 
 type reListVar struct {
@@ -273,13 +279,9 @@ type reListVar struct {
 }
 
 func (v *reListVar) Set(value string) error {
-	if value == "" {
-		return ErrEmptyPattern
-	}
-
-	re, err := regexp.Compile(value)
+	re, err := strToRegexp(value)
 	if err != nil {
-		return fmt.Errorf("unable to compile %s as regular expression: %w", value, err)
+		return err
 	}
 
 	*v.values = append(*v.values, re)
@@ -289,4 +291,17 @@ func (v *reListVar) Set(value string) error {
 
 func (v *reListVar) String() string {
 	return ""
+}
+
+func strToRegexp(str string) (*regexp.Regexp, error) {
+	if str == "" {
+		return nil, ErrEmptyPattern
+	}
+
+	re, err := regexp.Compile(str)
+	if err != nil {
+		return nil, fmt.Errorf("unable to compile %s as regular expression: %w", str, err)
+	}
+
+	return re, nil
 }
