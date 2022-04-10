@@ -1,7 +1,9 @@
 package analyzer
 
 import (
+	"errors"
 	"flag"
+	"fmt"
 	"go/ast"
 	"go/types"
 	"regexp"
@@ -12,49 +14,65 @@ import (
 	"golang.org/x/tools/go/ast/inspector"
 )
 
-//nolint:gochecknoglobals
-var Analyzer = &analysis.Analyzer{
-	Name:     "exhaustruct",
-	Doc:      "Checks if all structure fields are initialized",
-	Run:      run,
-	Requires: []*analysis.Analyzer{inspect.Analyzer},
-	Flags:    newFlagSet(),
-}
-
-//nolint:gochecknoglobals
 var (
-	IncludePatternsString string
-	ExcludePatternsString string
+	ErrEmptyPattern = errors.New("pattern can't be empty")
 )
 
-func newFlagSet() flag.FlagSet {
+type analyzer struct {
+	include PatternsList
+	exclude PatternsList
+}
+
+// MustNewAnalyzer returns a go/analysis-compatible analyzer.
+//   -i arguments adds include patterns
+//   -e arguments adds exclude patterns
+func MustNewAnalyzer(include []string, exclude []string) *analysis.Analyzer {
+	a := analyzer{
+		include: mustNewPatternsList(include),
+		exclude: mustNewPatternsList(exclude),
+	}
+
+	return &analysis.Analyzer{
+		Name:     "exhaustruct",
+		Doc:      "Checks if all structure fields are initialized",
+		Run:      a.run,
+		Requires: []*analysis.Analyzer{inspect.Analyzer},
+		Flags:    a.newFlagSet(),
+	}
+}
+
+func (a *analyzer) newFlagSet() flag.FlagSet {
 	fs := flag.NewFlagSet("exhaustruct flags", flag.PanicOnError)
 
-	fs.StringVar(&IncludePatternsString, "include", "", "Comma separated list of regular expressions to match struct packages and names")   //nolint:lll
-	fs.StringVar(&ExcludePatternsString, "exclude", "", "Comma separated list of regular expressions to exclude struct packages and names") //nolint:lll
+	fs.Var(
+		&reListVar{values: &a.include},
+		"i",
+		"Regular expression to match struct packages and names, can receive multiple flags",
+	)
+	fs.Var(
+		&reListVar{values: &a.exclude},
+		"e",
+		"Regular expression to exclude struct packages and names, can receive multiple flags",
+	)
 
 	return *fs
 }
 
-func run(pass *analysis.Pass) (interface{}, error) {
-	include := mustNewPatternsList(IncludePatternsString)
-	exclude := mustNewPatternsList(ExcludePatternsString)
-
-	//nolint:forcetypeassert
-	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
+func (a *analyzer) run(pass *analysis.Pass) (interface{}, error) {
+	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector) //nolint:forcetypeassert
 
 	nodeTypes := []ast.Node{
 		(*ast.CompositeLit)(nil),
 		(*ast.ReturnStmt)(nil),
 	}
 
-	insp.Preorder(nodeTypes, newVisitor(pass, include, exclude))
+	insp.Preorder(nodeTypes, a.newVisitor(pass))
 
 	return nil, nil //nolint:nilnil
 }
 
-//nolint:gocognit,funlen,cyclop
-func newVisitor(pass *analysis.Pass, include PatternsList, exclude PatternsList) func(node ast.Node) {
+//nolint:funlen,cyclop
+func (a *analyzer) newVisitor(pass *analysis.Pass) func(node ast.Node) {
 	var ret *ast.ReturnStmt
 
 	return func(node ast.Node) {
@@ -87,16 +105,14 @@ func newVisitor(pass *analysis.Pass, include PatternsList, exclude PatternsList)
 			return
 		}
 
-		if len(exclude) > 0 {
-			if exclude.MatchesAny(typ.String()) {
+		if len(a.include) > 0 {
+			if !a.include.MatchesAny(typ.String()) {
 				return
 			}
 		}
 
-		if len(include) > 0 {
-			if !include.MatchesAny(typ.String()) {
-				return
-			}
+		if a.exclude.MatchesAny(typ.String()) {
+			return
 		}
 
 		if len(lit.Elts) == 0 && ret != nil {
@@ -233,13 +249,17 @@ func (l PatternsList) MatchesAny(str string) bool {
 	return false
 }
 
-// mustNewPatternsList parses comma separated regexp string to a slice of
-// compiled regular expressions.
-func mustNewPatternsList(in string) (list PatternsList) {
-	for _, chunk := range strings.FieldsFunc(in, patternsSlitFn) {
-		re, err := regexp.Compile(chunk)
+// mustNewPatternsList parses slice of strings to a slice of compiled regular
+// expressions.
+func mustNewPatternsList(in []string) (list PatternsList) {
+	for _, reStr := range in {
+		if reStr == "" {
+			panic(ErrEmptyPattern)
+		}
+
+		re, err := regexp.Compile(reStr)
 		if err != nil {
-			panic(err)
+			panic(fmt.Errorf("unable to compile %s as regular expression: %w", reStr, err))
 		}
 
 		list = append(list, re)
@@ -248,6 +268,25 @@ func mustNewPatternsList(in string) (list PatternsList) {
 	return list
 }
 
-func patternsSlitFn(r rune) bool {
-	return r == ','
+type reListVar struct {
+	values *PatternsList
+}
+
+func (v *reListVar) Set(value string) error {
+	if value == "" {
+		return ErrEmptyPattern
+	}
+
+	re, err := regexp.Compile(value)
+	if err != nil {
+		return fmt.Errorf("unable to compile %s as regular expression: %w", value, err)
+	}
+
+	*v.values = append(*v.values, re)
+
+	return nil
+}
+
+func (v *reListVar) String() string {
+	return ""
 }

@@ -31,10 +31,10 @@ go get -u github.com/GaijinEntertainment/go-exhaustruct/cmd/exhaustruct
 exhaustruct [-flag] [package]
 
 Flags:
-  -include string
-        Comma separated list of regular expressions to match struct packages and names
-  -exclude string
-        Comma separated list of regular expressions to exclude struct packages and names
+  -i value
+        Regular expression to match struct packages and names, can receive multiple flags
+  -e value
+        Regular expression to exclude struct packages and names, can receive multiple flags
 ```
 
 ### Example

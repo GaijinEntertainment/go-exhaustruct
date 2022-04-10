@@ -19,9 +19,13 @@ func TestAll(t *testing.T) {
 	}
 
 	testdata := filepath.Join(filepath.Dir(filepath.Dir(wd)), "testdata")
-	analyzer.IncludePatternsString = ".*\\.Test,.*\\.Test2,.*\\.Embedded,.*\\.External"
-	analyzer.ExcludePatternsString = ".*Excluded$"
-	analysistest.Run(t, testdata, analyzer.Analyzer, "s")
+
+	a := analyzer.MustNewAnalyzer(
+		[]string{".*\\.Test", ".*\\.Test2", ".*\\.Embedded", ".*\\.External"},
+		[]string{".*Excluded$"},
+	)
+
+	analysistest.Run(t, testdata, a, "s")
 }
 
 func BenchmarkAll(b *testing.B) {
@@ -31,10 +35,13 @@ func BenchmarkAll(b *testing.B) {
 	}
 
 	testdata := filepath.Join(filepath.Dir(filepath.Dir(wd)), "testdata")
-	analyzer.IncludePatternsString = ".*\\.Test,.*\\.Test2,.*\\.Embedded,.*\\.External"
-	analyzer.ExcludePatternsString = ".*Excluded$"
+
+	a := analyzer.MustNewAnalyzer(
+		[]string{".*\\.Test", ".*\\.Test2", ".*\\.Embedded", ".*\\.External"},
+		[]string{".*Excluded$"},
+	)
 
 	for i := 0; i < b.N; i++ {
-		analysistest.Run(b, testdata, analyzer.Analyzer, "s")
+		analysistest.Run(b, testdata, a, "s")
 	}
 }
