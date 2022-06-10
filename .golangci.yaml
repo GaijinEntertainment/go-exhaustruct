@@ -6,9 +6,13 @@ linters:
   disable:
     - varnamelen
     - nonamedreturns
-    - exhaustivestruct
     - gofumpt
     - gci
+    - exhaustivestruct # deprecated
+    - scopelint # deprecated
+    - golint # deprecated
+    - interfacer # deprecated
+    - maligned # deprecated
 
 issues:
   max-issues-per-linter: 0

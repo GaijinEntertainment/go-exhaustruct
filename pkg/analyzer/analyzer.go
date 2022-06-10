@@ -8,6 +8,7 @@ import (
 	"go/types"
 	"regexp"
 	"strings"
+	"sync"
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
@@ -21,13 +22,18 @@ var (
 type analyzer struct {
 	include PatternsList
 	exclude PatternsList
+
+	typesProcessCache   map[string]bool
+	typesProcessCacheMu sync.RWMutex
 }
 
 // NewAnalyzer returns a go/analysis-compatible analyzer.
 //   -i arguments adds include patterns
 //   -e arguments adds exclude patterns
 func NewAnalyzer(include []string, exclude []string) (*analysis.Analyzer, error) {
-	a := analyzer{}
+	a := analyzer{ //nolint:exhaustruct
+		typesProcessCache: map[string]bool{},
+	}
 
 	var err error
 
@@ -41,7 +47,7 @@ func NewAnalyzer(include []string, exclude []string) (*analysis.Analyzer, error)
 		return nil, err
 	}
 
-	return &analysis.Analyzer{
+	return &analysis.Analyzer{ //nolint:exhaustruct
 		Name:     "exhaustruct",
 		Doc:      "Checks if all structure fields are initialized",
 		Run:      a.run,
@@ -80,7 +86,7 @@ func (a *analyzer) run(pass *analysis.Pass) (interface{}, error) {
 	return nil, nil //nolint:nilnil
 }
 
-//nolint:funlen,cyclop
+//nolint:cyclop
 func (a *analyzer) newVisitor(pass *analysis.Pass) func(node ast.Node) {
 	var ret *ast.ReturnStmt
 
@@ -114,13 +120,7 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(node ast.Node) {
 			return
 		}
 
-		if len(a.include) > 0 {
-			if !a.include.MatchesAny(typ.String()) {
-				return
-			}
-		}
-
-		if a.exclude.MatchesAny(typ.String()) {
+		if !a.shouldProcess(typ.String()) {
 			return
 		}
 
@@ -143,6 +143,35 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(node ast.Node) {
 			pass.Reportf(node.Pos(), "%s are missing in %s", strings.Join(missingFields, ", "), strctName)
 		}
 	}
+}
+
+func (a *analyzer) shouldProcess(typ string) bool {
+	if len(a.include) == 0 && len(a.exclude) == 0 {
+		// skip whole part with cache, since we have no restrictions and have to check everything
+		return true
+	}
+
+	a.typesProcessCacheMu.RLock()
+	v, ok := a.typesProcessCache[typ]
+	a.typesProcessCacheMu.RUnlock()
+
+	if !ok {
+		a.typesProcessCacheMu.Lock()
+		v = true
+
+		if len(a.include) > 0 && !a.include.MatchesAny(typ) {
+			v = false
+		}
+
+		if v && a.exclude.MatchesAny(typ) {
+			v = false
+		}
+
+		a.typesProcessCache[typ] = v
+		a.typesProcessCacheMu.Unlock()
+	}
+
+	return v
 }
 
 func returnContainsLiteral(ret *ast.ReturnStmt, lit *ast.CompositeLit) bool {
