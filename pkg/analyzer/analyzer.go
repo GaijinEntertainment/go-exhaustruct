@@ -3,10 +3,8 @@ package analyzer
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"go/ast"
 	"go/types"
-	"regexp"
 	"strings"
 	"sync"
 
@@ -25,6 +23,9 @@ type analyzer struct {
 
 	typesProcessCache   map[string]bool
 	typesProcessCacheMu sync.RWMutex
+
+	structFieldsCache   map[string]*StructFields
+	structFieldsCacheMu sync.RWMutex
 }
 
 // NewAnalyzer returns a go/analysis-compatible analyzer.
@@ -33,6 +34,8 @@ type analyzer struct {
 func NewAnalyzer(include []string, exclude []string) (*analysis.Analyzer, error) {
 	a := analyzer{ //nolint:exhaustruct
 		typesProcessCache: map[string]bool{},
+
+		structFieldsCache: map[string]*StructFields{},
 	}
 
 	var err error
@@ -120,7 +123,7 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(node ast.Node) {
 			return
 		}
 
-		if !a.shouldProcess(typ.String()) {
+		if !a.shouldProcessType(typ.String()) {
 			return
 		}
 
@@ -135,7 +138,7 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(node ast.Node) {
 			}
 		}
 
-		missingFields := structMissingFields(lit, strct, typ, pass)
+		missingFields := a.structMissingFields(lit, strct, typ.String(), pass.Pkg.Path())
 
 		if len(missingFields) == 1 {
 			pass.Reportf(node.Pos(), "%s is missing in %s", missingFields[0], strctName)
@@ -145,7 +148,7 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(node ast.Node) {
 	}
 }
 
-func (a *analyzer) shouldProcess(typ string) bool {
+func (a *analyzer) shouldProcessType(typ string) bool {
 	if len(a.include) == 0 && len(a.exclude) == 0 {
 		// skip whole part with cache, since we have no restrictions and have to check everything
 		return true
@@ -157,6 +160,8 @@ func (a *analyzer) shouldProcess(typ string) bool {
 
 	if !ok {
 		a.typesProcessCacheMu.Lock()
+		defer a.typesProcessCacheMu.Unlock()
+
 		v = true
 
 		if len(a.include) > 0 && !a.include.MatchesAny(typ) {
@@ -168,10 +173,50 @@ func (a *analyzer) shouldProcess(typ string) bool {
 		}
 
 		a.typesProcessCache[typ] = v
-		a.typesProcessCacheMu.Unlock()
 	}
 
 	return v
+}
+
+func (a *analyzer) structMissingFields(
+	lit *ast.CompositeLit,
+	strct *types.Struct,
+	typ string,
+	pkgPath string,
+) []string {
+	keys, unnamed := literalKeys(lit)
+	fields := a.structFields(typ, strct)
+
+	var fieldNames []string
+
+	if strings.HasPrefix(typ, pkgPath+".") {
+		// we're in same package and should match private fields
+		fieldNames = fields.All
+	} else {
+		fieldNames = fields.Public
+	}
+
+	if unnamed {
+		return fieldNames[len(keys):]
+	}
+
+	return difference(fieldNames, keys)
+}
+
+func (a *analyzer) structFields(typ string, strct *types.Struct) *StructFields {
+	a.structFieldsCacheMu.RLock()
+	fields, ok := a.structFieldsCache[typ]
+	a.structFieldsCacheMu.RUnlock()
+
+	if !ok {
+		a.structFieldsCacheMu.Lock()
+		defer a.structFieldsCacheMu.Unlock()
+
+		fields = NewStructFields(strct)
+		a.structFieldsCache[typ] = fields
+	}
+
+	return fields
 }
 
 func returnContainsLiteral(ret *ast.ReturnStmt, lit *ast.CompositeLit) bool {
@@ -196,19 +241,6 @@ func returnContainsError(ret *ast.ReturnStmt, pass *analysis.Pass) bool {
 	return false
 }
 
-func structMissingFields(lit *ast.CompositeLit, strct *types.Struct, typ types.Type, pass *analysis.Pass) []string {
-	isSamePackage := strings.HasPrefix(typ.String(), pass.Pkg.Path()+".")
-
-	keys, unnamed := literalKeys(lit)
-	fields := structFields(strct, isSamePackage)
-
-	if unnamed {
-		return fields[len(keys):]
-	}
-
-	return difference(fields, keys)
-}
-
 func literalKeys(lit *ast.CompositeLit) (keys []string, unnamed bool) {
 	for _, elt := range lit.Elts {
 		if k, ok := elt.(*ast.KeyValueExpr); ok {
@@ -224,31 +256,17 @@ func literalKeys(lit *ast.CompositeLit) (keys []string, unnamed bool) {
 		unnamed = true
 		keys = make([]string, len(lit.Elts))
 
-		break
+		return
 	}
 
-	return keys, unnamed
-}
-
-func structFields(strct *types.Struct, withPrivate bool) (keys []string) {
-	for i := 0; i < strct.NumFields(); i++ {
-		f := strct.Field(i)
-
-		if !f.Exported() && !withPrivate {
-			continue
-		}
-
-		keys = append(keys, f.Name())
-	}
-
-	return keys
+	return
 }
 
 // difference returns elements that are in `a` and not in `b`.
 func difference(a, b []string) (diff []string) {
-	mb := make(map[string]bool, len(b))
+	mb := make(map[string]struct{}, len(b))
 	for _, x := range b {
-		mb[x] = true
+		mb[x] = struct{}{}
 	}
 
 	for _, x := range a {
@@ -271,66 +289,4 @@ func exprName(expr ast.Expr) string {
 	}
 
 	return s.Sel.Name
-}
-
-type PatternsList []*regexp.Regexp
-
-// MatchesAny matches provided string against all regexps in a slice.
-func (l PatternsList) MatchesAny(str string) bool {
-	for _, r := range l {
-		if r.MatchString(str) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// newPatternsList parses slice of strings to a slice of compiled regular
-// expressions.
-func newPatternsList(in []string) (PatternsList, error) {
-	list := PatternsList{}
-
-	for _, str := range in {
-		re, err := strToRegexp(str)
-		if err != nil {
-			return nil, err
-		}
-
-		list = append(list, re)
-	}
-
-	return list, nil
-}
-
-type reListVar struct {
-	values *PatternsList
-}
-
-func (v *reListVar) Set(value string) error {
-	re, err := strToRegexp(value)
-	if err != nil {
-		return err
-	}
-
-	*v.values = append(*v.values, re)
-
-	return nil
-}
-
-func (v *reListVar) String() string {
-	return ""
-}
-
-func strToRegexp(str string) (*regexp.Regexp, error) {
-	if str == "" {
-		return nil, ErrEmptyPattern
-	}
-
-	re, err := regexp.Compile(str)
-	if err != nil {
-		return nil, fmt.Errorf("unable to compile %s as regular expression: %w", str, err)
-	}
-
-	return re, nil
 }
