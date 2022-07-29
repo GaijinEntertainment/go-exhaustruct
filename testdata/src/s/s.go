@@ -34,6 +34,25 @@ func shouldPass() Test {
 	}
 }
 
+func shouldPassPrivateLocalTypeCorrect1() {
+	type myTpe struct {
+		a string
+		b string
+	}
+
+	_ = myTpe{"", ""}
+}
+
+func shouldPassPrivateLocalTypeCorrect2() {
+	type myTpe struct {
+		a string
+		b string
+		c string
+	}
+
+	_ = myTpe{"", "", ""}
+}
+
 func shouldPass2() Test2 {
 	return Test2{
 		External: e.External{
