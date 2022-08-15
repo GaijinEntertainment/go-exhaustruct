@@ -18,6 +18,7 @@ type Test struct {
 	B int
 	C float32
 	D bool
+	E string `exhaustruct:"optional"`
 }
 
 type Test2 struct {
@@ -84,7 +85,7 @@ func shouldPass3() {
 }
 
 func shouldPassWithoutNames() Test {
-	return Test{"", 0, 0, false}
+	return Test{"", 0, 0, false, ""}
 }
 
 func shouldFailWithReturn() (Test, error) {
