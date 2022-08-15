@@ -27,7 +27,7 @@ jobs:
       - name: "Run tests"
         run: go test -json ./... > test.json
       - name: "Annotate tests"
-        uses: guyarb/golang-test-annotations@v0.5.0
+        uses: guyarb/golang-test-annotations@v0.6.0
         with:
           test-results: test.json
 
