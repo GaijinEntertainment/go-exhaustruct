@@ -18,6 +18,9 @@ jobs:
       contents: read
     steps:
       - uses: actions/setup-go@v3
+        with:
+          go-version: "1.19"
+          check-latest: true
       - uses: actions/checkout@v2
       - uses: golangci/golangci-lint-action@v3
 
@@ -26,6 +29,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-go@v3
+        with:
+          go-version: "1.19"
+          check-latest: true
       - uses: actions/checkout@v2
       - name: "Run tests"
         run: go test -json ./... > test.json
