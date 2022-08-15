@@ -17,6 +17,7 @@ This linter can be called a successor of `exhaustivestruct`, and:
 
 - it is at least **2.5+ times faster**, due to better algorithm;
 - can receive `include` and/or `exclude` patterns;
+- allows to mark fields as optional (not required to be filled on struct init), via field tag `exhaustruct:"optional"`;
 - expects received patterns to be RegExp, therefore this package is not api-compatible with `exhaustivestruct`.
 
 ### Installation
@@ -48,6 +49,7 @@ type Shape struct {
 	Width  int
 
 	volume int
+	Perimeter int `exhaustruct:"optional"`
 }
 
 // valid

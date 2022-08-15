@@ -8,6 +8,8 @@ linters:
     - nonamedreturns
     - gofumpt
     - gci
+    - gofmt
+    - goimports
     - exhaustivestruct # deprecated
     - scopelint # deprecated
     - golint # deprecated
