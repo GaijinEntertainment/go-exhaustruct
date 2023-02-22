@@ -280,10 +280,17 @@ func exprName(expr ast.Expr) string {
 		return i.Name
 	}
 
-	s, ok := expr.(*ast.SelectorExpr)
-	if !ok {
-		return ""
+	if s, ok := expr.(*ast.SelectorExpr); ok {
+		return s.Sel.Name
 	}
 
-	return s.Sel.Name
+	if i, ok := expr.(*ast.IndexExpr); ok {
+		return exprName(i.X)
+	}
+
+	if i, ok := expr.(*ast.IndexListExpr); ok {
+		return exprName(i.X)
+	}
+
+	return ""
 }

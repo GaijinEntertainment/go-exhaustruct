@@ -26,6 +26,22 @@ type Test2 struct {
 	External e.External
 }
 
+type Generic[T any] struct {
+	A T
+	B int
+	C float32
+	D bool
+	E string `exhaustruct:"optional"`
+}
+
+type Generic2[T any, V any] struct {
+	A T
+	B V
+	C float32
+	D bool
+	E string `exhaustruct:"optional"`
+}
+
 func shouldPass() Test {
 	return Test{
 		A: "a",
@@ -101,6 +117,22 @@ func shouldFailWithMissingFields() Test {
 	}
 }
 
+func shouldFailWithMissingFieldsGeneric() Generic[string] {
+	return Generic[string]{ // want "C is missing in Generic"
+		A: "a",
+		B: 1,
+		D: false,
+	}
+}
+
+func shouldFailWithMissingFieldsGeneric2() Generic2[string, int] {
+	return Generic2[string, int]{ // want "C is missing in Generic2"
+		A: "a",
+		B: 1,
+		D: false,
+	}
+}
+
 // Unchecked is a struct not listed in StructPatternList
 type Unchecked struct {
 	A int
@@ -131,7 +163,7 @@ func shouldFailOnEmbedded() Test2 {
 	}
 }
 
-func shoildFailOnExternal() Test2 {
+func shouldFailOnExternal() Test2 {
 	return Test2{
 		External: e.External{ // want "A is missing in External"
 			B: "",

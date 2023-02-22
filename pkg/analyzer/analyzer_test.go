@@ -21,7 +21,7 @@ func TestAll(t *testing.T) {
 	testdata := filepath.Join(filepath.Dir(filepath.Dir(wd)), "testdata")
 
 	a, err := analyzer.NewAnalyzer(
-		[]string{".*\\.Test", ".*\\.Test2", ".*\\.Embedded", ".*\\.External"},
+		[]string{".*\\.Test", ".*\\.Test2", ".*\\.Embedded", ".*\\.External", ".*\\.Generic"},
 		[]string{".*Excluded$"},
 	)
 	if err != nil {
