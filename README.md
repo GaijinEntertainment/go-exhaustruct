@@ -2,6 +2,12 @@
 
 # exhaustruct
 
+![Package Version](https://img.shields.io/github/v/release/GaijinEntertainment/go-exhaustruct?style=flat-square)
+![Go version](https://img.shields.io/github/go-mod/go-version/GaijinEntertainment/go-exhaustruct?style=flat-square)
+![GitHub Workflow Status (with branch)](https://img.shields.io/github/actions/workflow/status/GaijinEntertainment/go-exhaustruct/ci.yml?branch=master)
+![License](https://img.shields.io/github/license/GaijinEntertainment/go-exhaustruct?style=flat-square)
+
+
 </div>
 
 ---
@@ -10,15 +16,18 @@
 
 #### The "why?"
 
-There is a similar linter [exhaustivestruct](https://github.com/mbilski/exhaustivestruct), but it is abandoned and not
+There is a similar linter [exhaustivestruct](https://github.com/mbilski/exhaustivestruct), but it is abandoned
+and not
 optimal.
 
 This linter can be called a successor of `exhaustivestruct`, and:
 
 - it is at least **2.5+ times faster**, due to better algorithm;
 - can receive `include` and/or `exclude` patterns;
-- allows to mark fields as optional (not required to be filled on struct init), via field tag `exhaustruct:"optional"`;
-- expects received patterns to be RegExp, therefore this package is not api-compatible with `exhaustivestruct`.
+- allows to mark fields as optional (not required to be filled on struct init), via field
+  tag `exhaustruct:"optional"`;
+- expects received patterns to be RegExp, therefore this package is not api-compatible
+  with `exhaustivestruct`.
 
 ### Installation
 
@@ -48,7 +57,7 @@ type Shape struct {
 	Length int
 	Width  int
 
-	volume int
+	volume    int
 	Perimeter int `exhaustruct:"optional"`
 }
 
