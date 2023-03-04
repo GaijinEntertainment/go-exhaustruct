@@ -131,7 +131,7 @@ func shouldFailOnEmbedded() Test2 {
 	}
 }
 
-func shoildFailOnExternal() Test2 {
+func shouldFailOnExternal() Test2 {
 	return Test2{
 		External: e.External{ // want "A is missing in External"
 			B: "",
@@ -143,4 +143,14 @@ func shoildFailOnExternal() Test2 {
 			g: "",
 		},
 	}
+}
+
+// https://github.com/GaijinEntertainment/go-exhaustruct/issues/6
+func testIssue6() {
+	type TestIssue6 struct {
+		str string
+	}
+
+	_ = TestIssue6{} // want "str is missing in TestIssue6"
+	_ = TestIssue6{str: "123"}
 }
