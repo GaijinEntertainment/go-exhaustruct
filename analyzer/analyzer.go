@@ -142,7 +142,7 @@ func stackParentIsReturn(stack []ast.Node) (*ast.ReturnStmt, bool) {
 func returnContainsNonNilError(pass *analysis.Pass, ret *ast.ReturnStmt) bool {
 	// errors are mostly located at the end of return statement, so we're starting
 	// from the end.
-	for i := len(ret.Results); i >= 0; i-- {
+	for i := len(ret.Results) - 1; i >= 0; i-- {
 		if pass.TypesInfo.TypeOf(ret.Results[i]).String() == "error" {
 			return true
 		}

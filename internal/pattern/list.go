@@ -37,8 +37,8 @@ func NewList(strs ...string) (List, error) {
 // MatchFullString matches provided string against all regexps in a slice and returns
 // true if any of them matches whole string.
 func (l List) MatchFullString(str string) bool {
-	for _, r := range l {
-		if m := r.FindStringSubmatch(str); len(m) > 0 && m[0] == str {
+	for i := 0; i < len(l); i++ {
+		if m := l[i].FindStringSubmatch(str); len(m) > 0 && m[0] == str {
 			return true
 		}
 	}
