@@ -43,12 +43,12 @@ func HasOptionalTag(tags string) bool {
 
 // String returns a comma-separated list of field names.
 func (sf StructFields) String() (res string) {
-	for _, f := range sf {
+	for i := 0; i < len(sf); i++ {
 		if res != "" {
 			res += ", "
 		}
 
-		res += f.Name
+		res += sf[i].Name
 	}
 
 	return res
@@ -69,8 +69,8 @@ func (sf StructFields) SkippedFields(lit *ast.CompositeLit, onlyExported bool) (
 
 	pm := sf.positionsMap()
 
-	for _, elt := range lit.Elts {
-		kv, ok := elt.(*ast.KeyValueExpr)
+	for i := 0; i < len(lit.Elts); i++ {
+		kv, ok := lit.Elts[i].(*ast.KeyValueExpr)
 		if !ok {
 			continue
 		}
@@ -83,12 +83,12 @@ func (sf StructFields) SkippedFields(lit *ast.CompositeLit, onlyExported bool) (
 		delete(pm, k.Name)
 	}
 
-	for _, i := range sf {
-		if _, ok := pm[i.Name]; !ok || (!i.Exported && onlyExported) || i.Optional {
+	for i := 0; i < len(sf); i++ {
+		if _, ok := pm[sf[i].Name]; !ok || (!sf[i].Exported && onlyExported) || sf[i].Optional {
 			continue
 		}
 
-		res = append(res, i)
+		res = append(res, sf[i])
 	}
 
 	return res
@@ -97,8 +97,8 @@ func (sf StructFields) SkippedFields(lit *ast.CompositeLit, onlyExported bool) (
 func (sf StructFields) positionsMap() map[string]int {
 	m := make(map[string]int, len(sf))
 
-	for i, f := range sf {
-		m[f.Name] = i
+	for i := 0; i < len(sf); i++ {
+		m[sf[i].Name] = i
 	}
 
 	return m
