@@ -1,10 +1,6 @@
 run:
   timeout: 10s
   allow-parallel-runners: true
-  skip-dirs:
-    - ".*/ext/oapi-codegen/.*" # mostly foreign codebase - no need to lint
-  skip-flies:
-    - ".*\\.gen\\.go$"
 
 linters:
   enable-all: true
