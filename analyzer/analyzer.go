@@ -219,7 +219,6 @@ func (a *analyzer) litSkippedFields(
 	typ *types.Struct,
 	onlyExported bool,
 ) fields.StructFields {
-
 	a.fieldsCacheMu.RLock()
 	f, ok := a.fieldsCache[typ]
 	a.fieldsCacheMu.RUnlock()

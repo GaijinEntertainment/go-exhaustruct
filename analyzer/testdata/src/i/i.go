@@ -37,6 +37,16 @@ func shouldPassFullyDefined() {
 	}
 }
 
+func shouldPassPointer() {
+	_ = &Test{
+		A: "",
+		B: 0,
+		C: 0.0,
+		D: false,
+		E: "",
+	}
+}
+
 func shouldPassOnlyOptionalOmitted() {
 	_ = Test{
 		A: "",
@@ -177,4 +187,8 @@ func shouldFailMapOfStructs() {
 		"a": {},            // want "Test3 is missing field A"
 		"b": Test3{B: 123}, // want "Test3 is missing field A"
 	}
+}
+
+func shouldPassSlice() {
+	_ = []string{"a", "b"}
 }
