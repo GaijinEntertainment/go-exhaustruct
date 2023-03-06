@@ -17,21 +17,21 @@ type StructField struct {
 	Optional bool
 }
 
-type StructFields []StructField
+type StructFields []*StructField
 
 // NewStructFields creates a new [StructFields] from a given struct type.
 // StructFields items are listed in order they appear in the struct.
 func NewStructFields(strct *types.Struct) StructFields {
-	sf := make(StructFields, strct.NumFields())
+	sf := make(StructFields, 0, strct.NumFields())
 
 	for i := 0; i < strct.NumFields(); i++ {
 		f := strct.Field(i)
 
-		sf[i] = StructField{
+		sf = append(sf, &StructField{
 			Name:     f.Name(),
 			Exported: f.Exported(),
 			Optional: HasOptionalTag(strct.Tag(i)),
-		}
+		})
 	}
 
 	return sf
@@ -58,7 +58,7 @@ func (sf StructFields) String() (res string) {
 // literal, but expected to.
 //
 //revive:disable-next-line:cyclomatic
-func (sf StructFields) SkippedFields(lit *ast.CompositeLit, onlyExported bool) (res StructFields) {
+func (sf StructFields) SkippedFields(lit *ast.CompositeLit, onlyExported bool) StructFields {
 	if len(lit.Elts) != 0 && !isNamedLiteral(lit) {
 		if len(lit.Elts) == len(sf) {
 			return nil
@@ -67,7 +67,8 @@ func (sf StructFields) SkippedFields(lit *ast.CompositeLit, onlyExported bool) (
 		return sf[len(lit.Elts):]
 	}
 
-	pm := sf.positionsMap()
+	em := sf.existenceMap()
+	res := make(StructFields, 0, len(sf))
 
 	for i := 0; i < len(lit.Elts); i++ {
 		kv, ok := lit.Elts[i].(*ast.KeyValueExpr)
@@ -80,25 +81,29 @@ func (sf StructFields) SkippedFields(lit *ast.CompositeLit, onlyExported bool) (
 			continue
 		}
 
-		delete(pm, k.Name)
+		em[k.Name] = true
 	}
 
 	for i := 0; i < len(sf); i++ {
-		if _, ok := pm[sf[i].Name]; !ok || (!sf[i].Exported && onlyExported) || sf[i].Optional {
+		if em[sf[i].Name] || (!sf[i].Exported && onlyExported) || sf[i].Optional {
 			continue
 		}
 
 		res = append(res, sf[i])
 	}
 
+	if len(res) == 0 {
+		return nil
+	}
+
 	return res
 }
 
-func (sf StructFields) positionsMap() map[string]int {
-	m := make(map[string]int, len(sf))
+func (sf StructFields) existenceMap() map[string]bool {
+	m := make(map[string]bool, len(sf))
 
 	for i := 0; i < len(sf); i++ {
-		m[sf[i].Name] = i
+		m[sf[i].Name] = false
 	}
 
 	return m
