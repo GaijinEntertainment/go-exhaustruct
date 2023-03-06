@@ -20,6 +20,6 @@ func BenchmarkAnalyzer(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		analysistest.Run(b, testdataPath, a, "i")
+		_ = analysistest.Run(b, testdataPath, a, "i")
 	}
 }

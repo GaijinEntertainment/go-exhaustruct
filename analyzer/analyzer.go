@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"sync"
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
@@ -18,10 +19,19 @@ import (
 type analyzer struct {
 	include pattern.List
 	exclude pattern.List
+
+	fieldsCache   map[types.Type]fields.StructFields
+	fieldsCacheMu sync.RWMutex
+
+	typeProcessingNeed   map[types.Type]bool
+	typeProcessingNeedMu sync.RWMutex
 }
 
 func NewAnalyzer(include, exclude []string) (an *analysis.Analyzer, err error) {
-	a := analyzer{} //nolint:exhaustruct
+	a := analyzer{ //nolint:exhaustruct
+		fieldsCache:        make(map[types.Type]fields.StructFields),
+		typeProcessingNeed: make(map[types.Type]bool),
+	}
 
 	a.include, err = pattern.NewList(include...)
 	if err != nil {
@@ -179,15 +189,25 @@ func (a *analyzer) shouldProcessType(typ *types.Named) bool {
 		return true
 	}
 
-	typStr := typ.String()
-	res := true
+	a.typeProcessingNeedMu.RLock()
+	res, ok := a.typeProcessingNeed[typ]
+	a.typeProcessingNeedMu.RUnlock()
 
-	if a.include != nil && !a.include.MatchFullString(typStr) {
-		res = false
-	}
+	if !ok {
+		a.typeProcessingNeedMu.Lock()
+		typStr := typ.String()
+		res = true
 
-	if res && a.exclude != nil && a.exclude.MatchFullString(typStr) {
-		res = false
+		if a.include != nil && !a.include.MatchFullString(typStr) {
+			res = false
+		}
+
+		if res && a.exclude != nil && a.exclude.MatchFullString(typStr) {
+			res = false
+		}
+
+		a.typeProcessingNeed[typ] = res
+		a.typeProcessingNeedMu.Unlock()
 	}
 
 	return res
@@ -199,5 +219,17 @@ func (a *analyzer) litSkippedFields(
 	typ *types.Struct,
 	onlyExported bool,
 ) fields.StructFields {
-	return fields.NewStructFields(typ).SkippedFields(lit, onlyExported)
+
+	a.fieldsCacheMu.RLock()
+	f, ok := a.fieldsCache[typ]
+	a.fieldsCacheMu.RUnlock()
+
+	if !ok {
+		a.fieldsCacheMu.Lock()
+		f = fields.NewStructFields(typ)
+		a.fieldsCache[typ] = f
+		a.fieldsCacheMu.Unlock()
+	}
+
+	return f.SkippedFields(lit, onlyExported)
 }
