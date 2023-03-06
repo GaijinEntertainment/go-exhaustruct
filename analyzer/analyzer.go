@@ -17,21 +17,23 @@ import (
 )
 
 type analyzer struct {
-	include pattern.List
-	exclude pattern.List
+	include pattern.List `exhaustruct:"optional"`
+	exclude pattern.List `exhaustruct:"optional"`
 
 	fieldsCache   map[types.Type]fields.StructFields
-	fieldsCacheMu sync.RWMutex
+	fieldsCacheMu sync.RWMutex `exhaustruct:"optional"`
 
 	typeProcessingNeed   map[types.Type]bool
-	typeProcessingNeedMu sync.RWMutex
+	typeProcessingNeedMu sync.RWMutex `exhaustruct:"optional"`
 }
 
-func NewAnalyzer(include, exclude []string) (an *analysis.Analyzer, err error) {
-	a := analyzer{ //nolint:exhaustruct
+func NewAnalyzer(include, exclude []string) (*analysis.Analyzer, error) {
+	a := analyzer{
 		fieldsCache:        make(map[types.Type]fields.StructFields),
 		typeProcessingNeed: make(map[types.Type]bool),
 	}
+
+	var err error
 
 	a.include, err = pattern.NewList(include...)
 	if err != nil {
