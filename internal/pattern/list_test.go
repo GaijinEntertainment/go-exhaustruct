@@ -14,7 +14,7 @@ func TestList_MatchFullString(t *testing.T) {
 
 	l, err := pattern.NewList()
 	assert.NoError(t, err)
-	assert.Len(t, l, 0)
+	assert.Nil(t, l)
 
 	l, err = pattern.NewList("a", "b", "c")
 	require.NoError(t, err)
@@ -65,5 +65,4 @@ func TestList_String(t *testing.T) {
 	l, err = pattern.NewList()
 	require.NoError(t, err)
 	assert.Equal(t, "", l.String())
-
 }

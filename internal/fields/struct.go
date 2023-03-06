@@ -59,7 +59,7 @@ func (sf StructFields) String() (res string) {
 //
 //revive:disable-next-line:cyclomatic
 func (sf StructFields) SkippedFields(lit *ast.CompositeLit, onlyExported bool) (res StructFields) {
-	if len(lit.Elts) == 0 || !isNamedLiteral(lit) {
+	if len(lit.Elts) != 0 && !isNamedLiteral(lit) {
 		if len(lit.Elts) == len(sf) {
 			return nil
 		}
@@ -83,12 +83,12 @@ func (sf StructFields) SkippedFields(lit *ast.CompositeLit, onlyExported bool) (
 		delete(pm, k.Name)
 	}
 
-	for _, i := range pm {
-		if (!sf[i].Exported && onlyExported) || sf[i].Optional {
+	for _, i := range sf {
+		if _, ok := pm[i.Name]; !ok || (!i.Exported && onlyExported) || i.Optional {
 			continue
 		}
 
-		res = append(res, sf[i])
+		res = append(res, i)
 	}
 
 	return res

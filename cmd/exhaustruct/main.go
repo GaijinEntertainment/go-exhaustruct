@@ -5,13 +5,13 @@ import (
 
 	"golang.org/x/tools/go/analysis/singlechecker"
 
-	"github.com/GaijinEntertainment/go-exhaustruct/v2/pkg/analyzer"
+	"github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer"
 )
 
 func main() {
 	flag.Bool("unsafeptr", false, "")
 
-	a, err := analyzer.NewAnalyzer([]string{}, []string{})
+	a, err := analyzer.NewAnalyzer(nil, nil)
 	if err != nil {
 		panic(err)
 	}

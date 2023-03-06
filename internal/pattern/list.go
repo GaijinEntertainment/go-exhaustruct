@@ -16,7 +16,11 @@ type List []*regexp.Regexp
 
 // NewList parses slice of strings to a slice of compiled regular expressions.
 func NewList(strs ...string) (List, error) {
-	l := List{}
+	if len(strs) == 0 {
+		return nil, nil
+	}
+
+	l := make(List, 0, len(strs))
 
 	for _, str := range strs {
 		re, err := strToRe(str)
