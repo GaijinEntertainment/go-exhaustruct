@@ -22,7 +22,11 @@ jobs:
           go-version: "1.20"
           check-latest: true
       - uses: actions/checkout@v3
-      - uses: golangci/golangci-lint-action@v3
+      - name: "Lint"
+        uses: golangci/golangci-lint-action@v3
+        with:
+          only-new-issues: true
+
 
   test:
     name: "Test"
@@ -33,12 +37,7 @@ jobs:
           go-version: "1.20"
           check-latest: true
       - uses: actions/checkout@v3
-      - name: "Run tests"
-        run: go test -json ./... > test.json
-      - name: "Annotate tests"
-        uses: guyarb/golang-test-annotations@v0.6.0
-        with:
-          test-results: test.json
+      - uses: n8maninger/action-golang-test@v1
 
   dependabot-merge:
     name: "Dependabot auto-merge"
