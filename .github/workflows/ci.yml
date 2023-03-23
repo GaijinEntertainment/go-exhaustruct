@@ -12,32 +12,48 @@ on:
 jobs:
   lint:
     name: "Lint"
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [ "1.20" ]
+        os: [ "ubuntu-latest" ]
+    runs-on: ${{ matrix.os }}
     permissions:
       pull-requests: read
       contents: read
     steps:
       - uses: actions/setup-go@v4
         with:
-          go-version: "1.20"
+          go-version: ${{ matrix.go }}
           check-latest: true
       - uses: actions/checkout@v3
       - name: "Lint"
         uses: golangci/golangci-lint-action@v3
         with:
           only-new-issues: true
+          args: --timeout 5m --issues-exit-code 0
 
 
   test:
     name: "Test"
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [ "1.20" ]
+        os: [ "ubuntu-latest", "windows-latest", "macos-latest" ]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/setup-go@v4
         with:
-          go-version: "1.20"
+          go-version: ${{ matrix.go-version }}
           check-latest: true
       - uses: actions/checkout@v3
-      - uses: n8maninger/action-golang-test@v1
+      - name: "Run tests"
+        run: go test -json ./... > test.json
+
+      - name: "Annotate tests"
+        if: always()
+        uses: guyarb/golang-test-annotations@v0.5.1
+        with:
+          test-results: test.json
 
   dependabot-merge:
     name: "Dependabot auto-merge"
