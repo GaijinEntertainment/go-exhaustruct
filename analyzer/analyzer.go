@@ -170,7 +170,7 @@ func (a *analyzer) processStruct(
 	if f := a.litSkippedFields(lit, structTyp, !isSamePackage); len(f) > 0 {
 		structName := "anonymous struct"
 		if namedTyp != nil {
-			structName = namedTyp.Obj().Name()
+			structName = namedTyp.Obj().Pkg().Name() + "." + namedTyp.Obj().Name()
 		}
 
 		pos := lit.Pos()

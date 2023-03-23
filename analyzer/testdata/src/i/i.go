@@ -57,7 +57,7 @@ func shouldPassOnlyOptionalOmitted() {
 }
 
 func shouldFailRequiredOmitted() {
-	_ = Test{ // want "Test is missing field D"
+	_ = Test{ // want "i.Test is missing field D"
 		A: "",
 		B: 0,
 		C: 0.0,
@@ -69,11 +69,11 @@ func shouldPassEmptyStructWithNonNilErr() (Test, error) {
 }
 
 func shouldFailEmptyStructWithNilErr() (Test, error) {
-	return Test{}, nil // want "Test is missing fields A, B, C, D"
+	return Test{}, nil // want "i.Test is missing fields A, B, C, D"
 }
 
 func shouldFailEmptyNestedStructWithNonNilErr() ([]Test, error) {
-	return []Test{{}}, nil // want "Test is missing fields A, B, C, D"
+	return []Test{{}}, nil // want "i.Test is missing fields A, B, C, D"
 }
 
 func shouldPassUnnamed() {
@@ -110,8 +110,8 @@ func shouldFailEmbedded() {
 }
 
 func shouldFailEmbeddedCompletelyMissing() {
-	_ = Test2{ // want "Test2 is missing field Embedded"
-		External: e.External{ // want "External is missing field B"
+	_ = Test2{ // want "i.Test2 is missing field Embedded"
+		External: e.External{ // want "e.External is missing field B"
 			A: "",
 		},
 	}
@@ -130,8 +130,8 @@ func shouldPassGeneric() {
 }
 
 func shouldFailGeneric() {
-	_ = testGenericStruct[int]{} // want "testGenericStruct is missing fields A, B"
-	_ = testGenericStruct[int]{  // want "testGenericStruct is missing field B"
+	_ = testGenericStruct[int]{} // want "i.testGenericStruct is missing fields A, B"
+	_ = testGenericStruct[int]{  // want "i.testGenericStruct is missing field B"
 		A: 42,
 	}
 }
@@ -169,8 +169,8 @@ func shouldPassSlicesOfStructs() {
 
 func shouldFailSlicesOfStructs() {
 	_ = []Test3{
-		{},            // want "Test3 is missing field A"
-		Test3{B: 123}, // want "Test3 is missing field A"
+		{},            // want "i.Test3 is missing field A"
+		Test3{B: 123}, // want "i.Test3 is missing field A"
 	}
 }
 
@@ -184,8 +184,8 @@ func shouldPassMapOfStructs() {
 
 func shouldFailMapOfStructs() {
 	_ = map[string]Test3{
-		"a": {},            // want "Test3 is missing field A"
-		"b": Test3{B: 123}, // want "Test3 is missing field A"
+		"a": {},            // want "i.Test3 is missing field A"
+		"b": Test3{B: 123}, // want "i.Test3 is missing field A"
 	}
 }
 
