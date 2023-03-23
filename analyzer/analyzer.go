@@ -63,7 +63,7 @@ func (a *analyzer) newFlagSet() flag.FlagSet {
 	return *fs
 }
 
-func (a *analyzer) run(pass *analysis.Pass) (interface{}, error) {
+func (a *analyzer) run(pass *analysis.Pass) (any, error) {
 	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector) //nolint:forcetypeassert
 
 	insp.WithStack(

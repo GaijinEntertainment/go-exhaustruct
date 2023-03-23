@@ -44,6 +44,10 @@ linters-settings:
     enable-all-rules: true
     confidence: 0.8
     rules:
+      - name: comment-spacings
+        severity: warning
+        disabled: false
+        arguments: [ "nolint" ]
       - name: function-length
         severity: warning
         disabled: false
