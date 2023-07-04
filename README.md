@@ -27,9 +27,20 @@ exhaustruct [-flag] [package]
 
 Flags:
   -i value
-        Regular expression to match structures, can receive multiple flags
+        Regular expression to match struct definitions, can receive multiple flags.
+
+		Default: empty (match all struct definitions)
   -e value
-        Regular expression to exclude structures, can receive multiple flags
+        Regular expression to exclude struct definitions, can receive multiple flags
+
+		Default: empty (exclude no struct definitions)
+  -filter-anon bool
+        Only enforce exhaustive anonymous struct literals when the package and struct pseudonym
+		of the literal are matched by the inclusion and exclusion filters; otherwise all anonymous
+		struct literals will be subject to enforcement. Note that anonymous structs are identified
+		by the pseudonym "<anonymous>" for filtering purposes, e.g. "github.com/my/pkg.<anonymous>"
+
+		Default: false (match all anonymous struct literals)
 ```
 
 ### Example

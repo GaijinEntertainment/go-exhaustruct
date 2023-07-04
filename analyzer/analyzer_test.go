@@ -17,19 +17,19 @@ func TestAnalyzer(t *testing.T) {
 	t.Parallel()
 
 	t.Run("invalid patterns", func(t *testing.T) {
-		a, err := analyzer.NewAnalyzer([]string{""}, nil, true)
+		a, err := analyzer.NewAnalyzer([]string{""}, nil, false)
 		assert.Nil(t, a)
 		assert.Error(t, err)
 
-		a, err = analyzer.NewAnalyzer([]string{"["}, nil, true)
+		a, err = analyzer.NewAnalyzer([]string{"["}, nil, false)
 		assert.Nil(t, a)
 		assert.Error(t, err)
 
-		a, err = analyzer.NewAnalyzer(nil, []string{""}, true)
+		a, err = analyzer.NewAnalyzer(nil, []string{""}, false)
 		assert.Nil(t, a)
 		assert.Error(t, err)
 
-		a, err = analyzer.NewAnalyzer(nil, []string{"["}, true)
+		a, err = analyzer.NewAnalyzer(nil, []string{"["}, false)
 		assert.Nil(t, a)
 		assert.Error(t, err)
 	})
@@ -38,20 +38,20 @@ func TestAnalyzer(t *testing.T) {
 		a, err := analyzer.NewAnalyzer(
 			[]string{`.*[Tt]est.*`, `.*External`, `.*Embedded`},
 			[]string{`.*Excluded$`},
-			true,
+			false,
 		)
 		require.NoError(t, err)
 		analysistest.Run(t, testdataPath, a, "i", "e")
 	})
 
-	t.Run("ignore anon", func(t *testing.T) {
+	t.Run("filter anon", func(t *testing.T) {
 		a, err := analyzer.NewAnalyzer(
-			[]string{`.*[Tt]est.*`, `.*External`, `.*Embedded`},
-			[]string{`.*Excluded$`},
-			false,
+			nil,
+			[]string{`ignore_anon\.<anonymous>`},
+			true,
 		)
 		require.NoError(t, err)
 
-		analysistest.Run(t, testdataPath, a, "ignore_anon")
+		analysistest.Run(t, testdataPath, a, "ignore_anon", "match_anon")
 	})
 }
