@@ -6,7 +6,6 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
-	"strings"
 	"sync"
 
 	"golang.org/x/tools/go/analysis"
@@ -230,10 +229,6 @@ func (a *analyzer) shouldProcessAnonymousType(currentPackagePath string) bool {
 	if !a.filterAnonymous {
 		// if anonymous filtering is disabled, always enforce
 		return true
-	}
-	// remove .test suffix if present from package path
-	if strings.HasSuffix(currentPackagePath, ".test") {
-		currentPackagePath = currentPackagePath[:len(currentPackagePath)-5]
 	}
 
 	a.anonProcessingNeedMu.RLock()
