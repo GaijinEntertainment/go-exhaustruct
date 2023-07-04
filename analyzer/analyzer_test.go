@@ -16,27 +16,42 @@ var testdataPath, _ = filepath.Abs("./testdata/") //nolint:gochecknoglobals
 func TestAnalyzer(t *testing.T) {
 	t.Parallel()
 
-	a, err := analyzer.NewAnalyzer([]string{""}, nil)
-	assert.Nil(t, a)
-	assert.Error(t, err)
+	t.Run("invalid patterns", func(t *testing.T) {
+		a, err := analyzer.NewAnalyzer([]string{""}, nil, true)
+		assert.Nil(t, a)
+		assert.Error(t, err)
 
-	a, err = analyzer.NewAnalyzer([]string{"["}, nil)
-	assert.Nil(t, a)
-	assert.Error(t, err)
+		a, err = analyzer.NewAnalyzer([]string{"["}, nil, true)
+		assert.Nil(t, a)
+		assert.Error(t, err)
 
-	a, err = analyzer.NewAnalyzer(nil, []string{""})
-	assert.Nil(t, a)
-	assert.Error(t, err)
+		a, err = analyzer.NewAnalyzer(nil, []string{""}, true)
+		assert.Nil(t, a)
+		assert.Error(t, err)
 
-	a, err = analyzer.NewAnalyzer(nil, []string{"["})
-	assert.Nil(t, a)
-	assert.Error(t, err)
+		a, err = analyzer.NewAnalyzer(nil, []string{"["}, true)
+		assert.Nil(t, a)
+		assert.Error(t, err)
+	})
 
-	a, err = analyzer.NewAnalyzer(
-		[]string{`.*[Tt]est.*`, `.*External`, `.*Embedded`},
-		[]string{`.*Excluded$`},
-	)
-	require.NoError(t, err)
+	t.Run("basic test", func(t *testing.T) {
+		a, err := analyzer.NewAnalyzer(
+			[]string{`.*[Tt]est.*`, `.*External`, `.*Embedded`},
+			[]string{`.*Excluded$`},
+			true,
+		)
+		require.NoError(t, err)
+		analysistest.Run(t, testdataPath, a, "i", "e")
+	})
 
-	analysistest.Run(t, testdataPath, a, "i")
+	t.Run("ignore anon", func(t *testing.T) {
+		a, err := analyzer.NewAnalyzer(
+			[]string{`.*[Tt]est.*`, `.*External`, `.*Embedded`},
+			[]string{`.*Excluded$`},
+			false,
+		)
+		require.NoError(t, err)
+
+		analysistest.Run(t, testdataPath, a, "ignore_anon")
+	})
 }

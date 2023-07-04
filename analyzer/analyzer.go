@@ -17,8 +17,9 @@ import (
 )
 
 type analyzer struct {
-	include pattern.List `exhaustruct:"optional"`
-	exclude pattern.List `exhaustruct:"optional"`
+	include          pattern.List `exhaustruct:"optional"`
+	exclude          pattern.List `exhaustruct:"optional"`
+	enforceAnonymous bool         `exhaustruct:"optional"`
 
 	fieldsCache   map[types.Type]fields.StructFields
 	fieldsCacheMu sync.RWMutex `exhaustruct:"optional"`
@@ -27,7 +28,7 @@ type analyzer struct {
 	typeProcessingNeedMu sync.RWMutex `exhaustruct:"optional"`
 }
 
-func NewAnalyzer(include, exclude []string) (*analysis.Analyzer, error) {
+func NewAnalyzer(include, exclude []string, enforceAnonymous bool) (*analysis.Analyzer, error) {
 	a := analyzer{
 		fieldsCache:        make(map[types.Type]fields.StructFields),
 		typeProcessingNeed: make(map[types.Type]bool),
@@ -45,6 +46,8 @@ func NewAnalyzer(include, exclude []string) (*analysis.Analyzer, error) {
 		return nil, err //nolint:wrapcheck
 	}
 
+	a.enforceAnonymous = enforceAnonymous
+
 	return &analysis.Analyzer{ //nolint:exhaustruct
 		Name:     "exhaustruct",
 		Doc:      "Checks if all structure fields are initialized",
@@ -59,6 +62,10 @@ func (a *analyzer) newFlagSet() flag.FlagSet {
 
 	fs.Var(&a.include, "i", "Regular expression to match structures, can receive multiple flags")
 	fs.Var(&a.exclude, "e", "Regular expression to exclude structures, can receive multiple flags")
+	fs.BoolVar(
+		&a.enforceAnonymous, "enforce-anon", a.enforceAnonymous,
+		"Enforce exhaustive anonymous structure literals",
+	)
 
 	return *fs
 }
@@ -188,8 +195,11 @@ func (a *analyzer) processStruct(
 // shouldProcessType returns true if type should be processed basing off include
 // and exclude patterns, defined though constructor and\or flags.
 func (a *analyzer) shouldProcessType(typ *types.Named) bool {
-	if typ == nil || (len(a.include) == 0 && len(a.exclude) == 0) {
-		// anonymous structs or in case no filtering configured
+	if typ == nil {
+		// process anonymous structs based on config
+		return a.enforceAnonymous
+	} else if len(a.include) == 0 && len(a.exclude) == 0 {
+		// no filtering configured
 		return true
 	}
 
