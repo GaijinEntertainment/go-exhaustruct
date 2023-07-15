@@ -192,3 +192,22 @@ func shouldFailMapOfStructs() {
 func shouldPassSlice() {
 	_ = []string{"a", "b"}
 }
+
+func shouldPassAnonymousStruct() {
+	_ = struct {
+		A string
+		B int
+	}{
+		A: "a",
+		B: 1,
+	}
+}
+
+func shouldFailAnonymousStructUnfilled() {
+	_ = struct { // want "i.<anonymous> is missing field A"
+		A string
+		B int
+	}{
+		B: 1,
+	}
+}
