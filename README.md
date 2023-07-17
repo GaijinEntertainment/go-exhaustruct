@@ -27,9 +27,18 @@ exhaustruct [-flag] [package]
 
 Flags:
   -i value
-        Regular expression to match structures, can receive multiple flags
+        Regular expression to match type names, can receive multiple flags.
+        Anonymous structs can be matched by '<anonymous>' alias.
+        4ex:
+                github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.<anonymous>
+                github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo
+        
   -e value
-        Regular expression to exclude structures, can receive multiple flags
+        Regular expression to exclude type names, can receive multiple flags.
+        Anonymous structs can be matched by '<anonymous>' alias.
+        4ex:
+                github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.<anonymous>
+                github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo
 ```
 
 ### Example

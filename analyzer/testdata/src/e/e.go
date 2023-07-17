@@ -12,3 +12,10 @@ type ExternalExcluded struct {
 	B string
 	c string
 }
+
+func shouldPassAnonymousExcludedStruct() {
+	_ = struct {
+		A string
+		B int
+	}{}
+}
