@@ -39,11 +39,35 @@ Flags:
         4ex:
                 github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.<anonymous>
                 github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo
+
+  -use-directives value
+        Boolean that determines whether to scan for comment directives in the form of
+        '//exhaustruct:enforce' and '//exhaustruct:ignore' for enforcement decisions. Comment
+        directives on struct literals have higher precedence than command-level inclusion and
+        exclusion flags.
+
+        Default: false
 ```
 
 ### Example
 
+Invocation
+
+```shell
+exhaustruct -e 'mymodule/excluded.*' -i 'mymodule/.*' -use-directives 'true'
+```
+
+Code
+
 ```go
+// Package excluded.go
+package excluded
+
+type Point struct {
+      X int
+      Y int
+}
+
 // Package a.go
 package a
 
@@ -68,10 +92,18 @@ var b Shape = Shape{
 	Width:  3,
 }
 
+// valid due to ignore directive in spite of missing `volume` (when -use-directives=true)
+//exhaustruct:ignore
+var c Shape = Shape{
+      Length: 5,
+      Width:  3,
+}
+
 // Package b.go
 package b
 
 import "a"
+import "excluded"
 
 // valid
 var b Shape = a.Shape{
@@ -80,7 +112,18 @@ var b Shape = a.Shape{
 }
 
 // invalid, `Width` is missing
-var b Shape = a.Shape{
+var c Shape = a.Shape{
 	Length: 5,
+}
+
+// valid due to exclusion on this type
+var d = excluded.Point{
+      X: 1,
+}
+
+// invalid, `Y` is missing, due to enforce directive (when -use-directives=true)
+//exhastruct:enforce
+var e = excluded.Point{
+      X: 1,
 }
 ```
