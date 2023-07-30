@@ -122,7 +122,7 @@ var d = excluded.Point{
 }
 
 // invalid, `Y` is missing, due to enforce directive (when -use-directives=true)
-//exhastruct:enforce
+//exhaustruct:enforce
 var e = excluded.Point{
       X: 1,
 }
