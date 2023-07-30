@@ -49,5 +49,4 @@ func TestAnalyzer(t *testing.T) {
 	require.NoError(t, err)
 
 	analysistest.Run(t, testdataPath, a, "i", "e", "directives")
-
 }

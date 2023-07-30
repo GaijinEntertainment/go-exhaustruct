@@ -28,8 +28,8 @@ type analyzer struct {
 	typeProcessingNeed   map[string]bool
 	typeProcessingNeedMu sync.RWMutex `exhaustruct:"optional"`
 
-	commentMapCache   map[*ast.File]ast.CommentMap
-	commentMapCacheMu sync.RWMutex `exhaustruct:"optional"`
+	commentMapCache   map[*ast.File]ast.CommentMap `exhaustruct:"optional"`
+	commentMapCacheMu sync.RWMutex                 `exhaustruct:"optional"`
 }
 
 func NewAnalyzer(include, exclude []string, useDirectives bool) (*analysis.Analyzer, error) {
@@ -97,7 +97,7 @@ func (a *analyzer) run(pass *analysis.Pass) (any, error) {
 		visitor.Visit,
 	)
 
-	return nil, nil //nolint:nilnil
+	return nil, nil
 }
 
 // visitor that only expects [ast.CompositeLit] nodes.
@@ -268,7 +268,7 @@ func (v *Visitor) processStruct(
 	info *TypeInfo,
 	enforcement EnforcementDirective,
 ) (*token.Pos, string) {
-	if !v.shouldProcessLit(lit, info, enforcement) {
+	if !v.shouldProcessLit(info, enforcement) {
 		return nil, ""
 	}
 
@@ -292,9 +292,9 @@ func (v *Visitor) processStruct(
 // shouldProcessLit returns true if type should be processed basing off include
 // and exclude patterns, defined though constructor and\or flags, as well as off
 // comment directives.
-func (v *Visitor) shouldProcessLit(lit *ast.CompositeLit, info *TypeInfo, enforcement EnforcementDirective) bool {
-	a := v.analyzer
-
+func (v *Visitor) shouldProcessLit(
+	info *TypeInfo, enforcement EnforcementDirective,
+) bool {
 	// enforcement directives always have highest precedence if present
 	switch enforcement {
 	case Enforce:
@@ -302,13 +302,16 @@ func (v *Visitor) shouldProcessLit(lit *ast.CompositeLit, info *TypeInfo, enforc
 
 	case Ignore:
 		return false
+
+	case EnforcementUnspecified:
 	}
 
-	if len(a.include) == 0 && len(a.exclude) == 0 {
+	analyzer := v.analyzer
+	if len(analyzer.include) == 0 && len(analyzer.exclude) == 0 {
 		return true
 	}
 
-	return v.analyzer.isTypeProcessingNeeded(info)
+	return analyzer.isTypeProcessingNeeded(info)
 }
 
 func (v *Visitor) decideEnforcementDirective(lit *ast.CompositeLit, stack []ast.Node) EnforcementDirective {
@@ -319,7 +322,7 @@ func (v *Visitor) decideEnforcementDirective(lit *ast.CompositeLit, stack []ast.
 	file, _ := stack[0].(*ast.File)
 	commentMap := v.analyzer.getFileCommentMap(v.pass.Fset, file)
 
-	if enforcement := v.readEnforcement(commentMap[lit]); enforcement != EnforcementUnspecified {
+	if enforcement := parseEnforcement(commentMap[lit]); enforcement != EnforcementUnspecified {
 		return enforcement
 	}
 
@@ -329,10 +332,10 @@ func (v *Visitor) decideEnforcementDirective(lit *ast.CompositeLit, stack []ast.
 		return EnforcementUnspecified
 	}
 
-	return v.readEnforcement(commentMap[parent])
+	return parseEnforcement(commentMap[parent])
 }
 
-func (v *Visitor) readEnforcement(commentGroups []*ast.CommentGroup) EnforcementDirective {
+func parseEnforcement(commentGroups []*ast.CommentGroup) EnforcementDirective {
 	// go from the end to the beginning
 	for i := len(commentGroups) - 1; i >= 0; i-- {
 		for j := len(commentGroups[i].List) - 1; j >= 0; j-- {
