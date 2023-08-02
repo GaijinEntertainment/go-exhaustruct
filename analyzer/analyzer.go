@@ -36,7 +36,7 @@ func NewAnalyzer(include, exclude []string, useDirectives bool) (*analysis.Analy
 	a := analyzer{
 		fieldsCache:        make(map[types.Type]fields.StructFields),
 		typeProcessingNeed: make(map[string]bool),
-		commentMapeCache:   make(map[*ast.File]ast.CommentMap),
+		commentMapCache:   make(map[*ast.File]ast.CommentMap),
 		useDirectives:      useDirectives,
 	}
 
