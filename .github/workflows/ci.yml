@@ -25,7 +25,7 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
           check-latest: true
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: "Lint"
         uses: golangci/golangci-lint-action@v3
         with:
@@ -45,7 +45,7 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
           check-latest: true
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: "Run tests"
         run: go test -json ./... > test.json
 
