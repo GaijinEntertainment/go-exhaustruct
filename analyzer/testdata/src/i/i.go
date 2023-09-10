@@ -211,3 +211,21 @@ func shouldFailAnonymousStructUnfilled() {
 		B: 1,
 	}
 }
+
+type TestWrapper Test
+
+type TestWrapperExcluded Test
+
+type ExcludedTestWrapper TestExcluded
+
+type ExcludedTestWrapperExcluded TestExcluded
+
+func shouldFailWrapped() {
+	_ = TestWrapper{}         // want "i.TestWrapper is missing fields A, B, C, D"
+	_ = ExcludedTestWrapper{} // want "i.ExcludedTestWrapper is missing fields A, B"
+}
+
+func shouldSucceedWrapped() {
+	_ = TestWrapperExcluded{}
+	_ = ExcludedTestWrapperExcluded{}
+}
