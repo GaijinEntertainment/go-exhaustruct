@@ -125,40 +125,32 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 }
 
 func getStructType(pass *analysis.Pass, lit *ast.CompositeLit) (*types.Struct, *TypeInfo, bool) {
-	var topLevelNamedType *types.Named
-
-	for currentLevelType := pass.TypesInfo.TypeOf(lit); ; {
-		switch typ := currentLevelType.(type) {
-		case *types.Named:
-			if topLevelNamedType == nil {
-				topLevelNamedType = typ
+	switch typ := pass.TypesInfo.TypeOf(lit).(type) {
+	case *types.Named: // named type
+		if structTyp, ok := typ.Underlying().(*types.Struct); ok {
+			pkg := typ.Obj().Pkg()
+			ti := TypeInfo{
+				Name:        typ.Obj().Name(),
+				PackageName: pkg.Name(),
+				PackagePath: pkg.Path(),
 			}
 
-			currentLevelType = typ.Underlying()
-
-		case *types.Struct:
-			var ti TypeInfo
-			if isAnonymousType := topLevelNamedType == nil; isAnonymousType {
-				ti = TypeInfo{
-					Name:        "<anonymous>",
-					PackageName: pass.Pkg.Name(),
-					PackagePath: pass.Pkg.Path(),
-				}
-			} else {
-				obj := topLevelNamedType.Obj()
-				pkg := obj.Pkg()
-				ti = TypeInfo{
-					Name:        obj.Name(),
-					PackageName: pkg.Name(),
-					PackagePath: pkg.Path(),
-				}
-			}
-
-			return typ, &ti, true
-
-		default:
-			return nil, nil, false
+			return structTyp, &ti, true
 		}
+
+		return nil, nil, false
+
+	case *types.Struct: // anonymous struct
+		ti := TypeInfo{
+			Name:        "<anonymous>",
+			PackageName: pass.Pkg.Name(),
+			PackagePath: pass.Pkg.Path(),
+		}
+
+		return typ, &ti, true
+
+	default:
+		return nil, nil, false
 	}
 }
 
