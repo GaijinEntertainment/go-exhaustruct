@@ -212,20 +212,28 @@ func shouldFailAnonymousStructUnfilled() {
 	}
 }
 
-type TestWrapper Test
+type TestAlias Test
+type TestAliasAlias TestAlias
+type TestExcludedAlias TestExcluded
 
-type TestWrapperExcluded Test
-
-type ExcludedTestWrapper TestExcluded
-
-type ExcludedTestWrapperExcluded TestExcluded
-
-func shouldFailWrapped() {
-	_ = TestWrapper{}         // want "i.TestWrapper is missing fields A, B, C, D"
-	_ = ExcludedTestWrapper{} // want "i.ExcludedTestWrapper is missing fields A, B"
+func shouldFailTypeAliases() {
+	_ = TestAlias{}         // want "i.TestAlias is missing fields A, B, C, D"
+	_ = TestAliasAlias{}    // want "i.TestAliasAlias is missing fields A, B, C, D"
+	_ = TestExcludedAlias{} // want "i.TestExcludedAlias is missing fields A, B"
 }
 
-func shouldSucceedWrapped() {
-	_ = TestWrapperExcluded{}
-	_ = ExcludedTestWrapperExcluded{}
+type TestAliasExcluded TestAlias
+
+func shouldSucceedExcludedAliases() {
+	_ = TestAliasExcluded{}
+}
+
+type TestExternalAlias e.External
+type TestExternalAliasAlias TestExternalAlias
+type TestExternalExcludedAlias e.ExternalExcluded
+
+func shouldFailExternalTypeAliases() {
+	_ = TestExternalAlias{}         // want "i.TestExternalAlias is missing fields A, B"
+	_ = TestExternalAliasAlias{}    // want "i.TestExternalAliasAlias is missing fields A, B"
+	_ = TestExternalExcludedAlias{} // want "i.TestExternalExcludedAlias is missing fields A, B"
 }
