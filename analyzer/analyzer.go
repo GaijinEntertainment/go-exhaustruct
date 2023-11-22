@@ -91,13 +91,7 @@ func (a *analyzer) run(pass *analysis.Pass) (any, error) {
 		a.newVisitor(pass),
 	)
 
-	return nil, nil
-}
-
-// visitor that only expects [ast.CompositeLit] nodes.
-type Visitor struct {
-	analyzer *analyzer
-	pass     *analysis.Pass
+	return nil, nil //nolint:nilnil
 }
 
 // Implements inspector.Visitor interface.
@@ -143,69 +137,6 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 
 		return true
 	}
-}
-
-//revive:disable-next-line:unused-receiver
-func (a *analyzer) litSkippedFields(
-	lit *ast.CompositeLit,
-	typ *types.Struct,
-	onlyExported bool,
-) fields.StructFields {
-	a.fieldsCacheMu.RLock()
-	f, ok := a.fieldsCache[typ]
-	a.fieldsCacheMu.RUnlock()
-
-	if !ok {
-		a.fieldsCacheMu.Lock()
-		f = fields.NewStructFields(typ)
-		a.fieldsCache[typ] = f
-		a.fieldsCacheMu.Unlock()
-	}
-
-	return f.SkippedFields(lit, onlyExported)
-}
-
-func (a *analyzer) getFileCommentMap(fileSet *token.FileSet, file *ast.File) ast.CommentMap {
-	a.commentMapCacheMu.RLock()
-	commentMap, exists := a.commentMapCache[file]
-	a.commentMapCacheMu.RUnlock()
-
-	if !exists {
-		// TODO: consider avoiding risk of double-computation by using per-file mutex
-		commentMap = ast.NewCommentMap(fileSet, file, file.Comments)
-
-		a.commentMapCacheMu.Lock()
-		a.commentMapCache[file] = commentMap
-		a.commentMapCacheMu.Unlock()
-	}
-
-	return commentMap
-}
-
-func (a *analyzer) isTypeProcessingNeeded(info *TypeInfo) bool {
-	name := info.String()
-
-	a.typeProcessingNeedMu.RLock()
-	res, ok := a.typeProcessingNeed[name]
-	a.typeProcessingNeedMu.RUnlock()
-
-	if !ok {
-		a.typeProcessingNeedMu.Lock()
-		res = true
-
-		if a.include != nil && !a.include.MatchFullString(name) {
-			res = false
-		}
-
-		if res && a.exclude != nil && a.exclude.MatchFullString(name) {
-			res = false
-		}
-
-		a.typeProcessingNeed[name] = res
-		a.typeProcessingNeedMu.Unlock()
-	}
-
-	return res
 }
 
 func getStructType(pass *analysis.Pass, lit *ast.CompositeLit) (*types.Struct, *TypeInfo, bool) {
@@ -331,6 +262,69 @@ func (a *analyzer) decideEnforcementDirective(
 	}
 
 	return parseEnforcement(commentMap[parent])
+}
+
+//revive:disable-next-line:unused-receiver
+func (a *analyzer) litSkippedFields(
+	lit *ast.CompositeLit,
+	typ *types.Struct,
+	onlyExported bool,
+) fields.StructFields {
+	a.fieldsCacheMu.RLock()
+	f, ok := a.fieldsCache[typ]
+	a.fieldsCacheMu.RUnlock()
+
+	if !ok {
+		a.fieldsCacheMu.Lock()
+		f = fields.NewStructFields(typ)
+		a.fieldsCache[typ] = f
+		a.fieldsCacheMu.Unlock()
+	}
+
+	return f.SkippedFields(lit, onlyExported)
+}
+
+func (a *analyzer) getFileCommentMap(fileSet *token.FileSet, file *ast.File) ast.CommentMap {
+	a.commentMapCacheMu.RLock()
+	commentMap, exists := a.commentMapCache[file]
+	a.commentMapCacheMu.RUnlock()
+
+	if !exists {
+		// TODO: consider avoiding risk of double-computation by using per-file mutex
+		commentMap = ast.NewCommentMap(fileSet, file, file.Comments)
+
+		a.commentMapCacheMu.Lock()
+		a.commentMapCache[file] = commentMap
+		a.commentMapCacheMu.Unlock()
+	}
+
+	return commentMap
+}
+
+func (a *analyzer) isTypeProcessingNeeded(info *TypeInfo) bool {
+	name := info.String()
+
+	a.typeProcessingNeedMu.RLock()
+	res, ok := a.typeProcessingNeed[name]
+	a.typeProcessingNeedMu.RUnlock()
+
+	if !ok {
+		a.typeProcessingNeedMu.Lock()
+		res = true
+
+		if a.include != nil && !a.include.MatchFullString(name) {
+			res = false
+		}
+
+		if res && a.exclude != nil && a.exclude.MatchFullString(name) {
+			res = false
+		}
+
+		a.typeProcessingNeed[name] = res
+		a.typeProcessingNeedMu.Unlock()
+	}
+
+	return res
 }
 
 func parseEnforcement(commentGroups []*ast.CommentGroup) EnforcementDirective {
