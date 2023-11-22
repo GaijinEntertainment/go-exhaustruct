@@ -241,6 +241,26 @@ func (a *analyzer) shouldProcessLit(
 	return a.isTypeProcessingNeeded(info)
 }
 
+//revive:disable-next-line:unused-receiver
+func (a *analyzer) litSkippedFields(
+	lit *ast.CompositeLit,
+	typ *types.Struct,
+	onlyExported bool,
+) fields.StructFields {
+	a.fieldsCacheMu.RLock()
+	f, ok := a.fieldsCache[typ]
+	a.fieldsCacheMu.RUnlock()
+
+	if !ok {
+		a.fieldsCacheMu.Lock()
+		f = fields.NewStructFields(typ)
+		a.fieldsCache[typ] = f
+		a.fieldsCacheMu.Unlock()
+	}
+
+	return f.SkippedFields(lit, onlyExported)
+}
+
 func (a *analyzer) decideEnforcementDirective(
 	pass *analysis.Pass, lit *ast.CompositeLit, stack []ast.Node,
 ) EnforcementDirective {
@@ -262,26 +282,6 @@ func (a *analyzer) decideEnforcementDirective(
 	}
 
 	return parseEnforcement(commentMap[parent])
-}
-
-//revive:disable-next-line:unused-receiver
-func (a *analyzer) litSkippedFields(
-	lit *ast.CompositeLit,
-	typ *types.Struct,
-	onlyExported bool,
-) fields.StructFields {
-	a.fieldsCacheMu.RLock()
-	f, ok := a.fieldsCache[typ]
-	a.fieldsCacheMu.RUnlock()
-
-	if !ok {
-		a.fieldsCacheMu.Lock()
-		f = fields.NewStructFields(typ)
-		a.fieldsCache[typ] = f
-		a.fieldsCacheMu.Unlock()
-	}
-
-	return f.SkippedFields(lit, onlyExported)
 }
 
 func (a *analyzer) getFileCommentMap(fileSet *token.FileSet, file *ast.File) ast.CommentMap {
