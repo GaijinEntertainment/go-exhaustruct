@@ -94,7 +94,7 @@ func (a *analyzer) run(pass *analysis.Pass) (any, error) {
 	return nil, nil //nolint:nilnil
 }
 
-// Implements inspector.Visitor interface.
+// newVisitor returns visitor that only expects [ast.CompositeLit] nodes.
 func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, stack []ast.Node) bool {
 	return func(n ast.Node, push bool, stack []ast.Node) bool {
 		if !push {
