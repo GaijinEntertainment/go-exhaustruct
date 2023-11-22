@@ -36,7 +36,7 @@ func NewAnalyzer(include, exclude []string, useDirectives bool) (*analysis.Analy
 	a := analyzer{
 		fieldsCache:        make(map[types.Type]fields.StructFields),
 		typeProcessingNeed: make(map[string]bool),
-		commentMapCache:   make(map[*ast.File]ast.CommentMap),
+		commentMapCache:    make(map[*ast.File]ast.CommentMap),
 		useDirectives:      useDirectives,
 	}
 
@@ -84,15 +84,11 @@ any include/exclude patterns. Default: false.`)
 func (a *analyzer) run(pass *analysis.Pass) (any, error) {
 	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector) //nolint:forcetypeassert
 
-	visitor := &Visitor{
-		analyzer: a,
-		pass:     pass,
-	}
 	insp.WithStack(
 		[]ast.Node{
 			(*ast.CompositeLit)(nil),
 		},
-		visitor.Visit,
+		a.newVisitor(pass),
 	)
 
 	return nil, nil
@@ -105,46 +101,48 @@ type Visitor struct {
 }
 
 // Implements inspector.Visitor interface.
-func (v *Visitor) Visit(n ast.Node, push bool, stack []ast.Node) bool {
-	if !push {
-		return true
-	}
+func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, stack []ast.Node) bool {
+	return func(n ast.Node, push bool, stack []ast.Node) bool {
+		if !push {
+			return true
+		}
 
-	lit, ok := n.(*ast.CompositeLit)
-	if !ok {
-		// this should never happen, but better be prepared
-		return true
-	}
+		lit, ok := n.(*ast.CompositeLit)
+		if !ok {
+			// this should never happen, but better be prepared
+			return true
+		}
 
-	structTyp, typeInfo, ok := v.getStructType(lit)
-	if !ok {
-		return true
-	}
+		structTyp, typeInfo, ok := getStructType(pass, lit)
+		if !ok {
+			return true
+		}
 
-	if len(lit.Elts) == 0 {
-		if ret, ok := stackParentIsReturn(stack); ok {
-			if v.returnContainsNonNilError(ret) {
-				// it is okay to return uninitialized structure in case struct's direct parent is
-				// a return statement containing non-nil error
-				//
-				// we're unable to check if returned error is custom, but at least we're able to
-				// cover str [error] type.
-				return true
+		if len(lit.Elts) == 0 {
+			if ret, ok := stackParentIsReturn(stack); ok {
+				if returnContainsNonNilError(pass, ret) {
+					// it is okay to return uninitialized structure in case struct's direct parent is
+					// a return statement containing non-nil error
+					//
+					// we're unable to check if returned error is custom, but at least we're able to
+					// cover str [error] type.
+					return true
+				}
 			}
 		}
-	}
 
-	var enforcement EnforcementDirective
-	if v.analyzer.useDirectives {
-		enforcement = v.decideEnforcementDirective(lit, stack)
-	}
+		var enforcement EnforcementDirective
+		if a.useDirectives {
+			enforcement = a.decideEnforcementDirective(pass, lit, stack)
+		}
 
-	pos, msg := v.processStruct(lit, structTyp, typeInfo, enforcement)
-	if pos != nil {
-		v.pass.Reportf(*pos, msg)
-	}
+		pos, msg := a.processStruct(pass, lit, structTyp, typeInfo, enforcement)
+		if pos != nil {
+			pass.Reportf(*pos, msg)
+		}
 
-	return true
+		return true
+	}
 }
 
 //revive:disable-next-line:unused-receiver
@@ -210,8 +208,8 @@ func (a *analyzer) isTypeProcessingNeeded(info *TypeInfo) bool {
 	return res
 }
 
-func (v *Visitor) getStructType(lit *ast.CompositeLit) (*types.Struct, *TypeInfo, bool) {
-	switch typ := v.pass.TypesInfo.TypeOf(lit).(type) {
+func getStructType(pass *analysis.Pass, lit *ast.CompositeLit) (*types.Struct, *TypeInfo, bool) {
+	switch typ := pass.TypesInfo.TypeOf(lit).(type) {
 	case *types.Named: // named type
 		if structTyp, ok := typ.Underlying().(*types.Struct); ok {
 			pkg := typ.Obj().Pkg()
@@ -229,8 +227,8 @@ func (v *Visitor) getStructType(lit *ast.CompositeLit) (*types.Struct, *TypeInfo
 	case *types.Struct: // anonymous struct
 		ti := TypeInfo{
 			Name:        "<anonymous>",
-			PackageName: v.pass.Pkg.Name(),
-			PackagePath: v.pass.Pkg.Path(),
+			PackageName: pass.Pkg.Name(),
+			PackagePath: pass.Pkg.Path(),
 		}
 
 		return typ, &ti, true
@@ -248,11 +246,11 @@ func stackParentIsReturn(stack []ast.Node) (*ast.ReturnStmt, bool) {
 	return ret, ok
 }
 
-func (v *Visitor) returnContainsNonNilError(ret *ast.ReturnStmt) bool {
+func returnContainsNonNilError(pass *analysis.Pass, ret *ast.ReturnStmt) bool {
 	// errors are mostly located at the end of return statement, so we're starting
 	// from the end.
 	for i := len(ret.Results) - 1; i >= 0; i-- {
-		if v.pass.TypesInfo.TypeOf(ret.Results[i]).String() == "error" {
+		if pass.TypesInfo.TypeOf(ret.Results[i]).String() == "error" {
 			return true
 		}
 	}
@@ -260,21 +258,22 @@ func (v *Visitor) returnContainsNonNilError(ret *ast.ReturnStmt) bool {
 	return false
 }
 
-func (v *Visitor) processStruct(
+func (a *analyzer) processStruct(
+	pass *analysis.Pass,
 	lit *ast.CompositeLit,
 	structTyp *types.Struct,
 	info *TypeInfo,
 	enforcement EnforcementDirective,
 ) (*token.Pos, string) {
-	if !v.shouldProcessLit(info, enforcement) {
+	if !a.shouldProcessLit(info, enforcement) {
 		return nil, ""
 	}
 
 	// unnamed structures are only defined in same package, along with types that has
 	// prefix identical to current package name.
-	isSamePackage := info.PackagePath == v.pass.Pkg.Path()
+	isSamePackage := info.PackagePath == pass.Pkg.Path()
 
-	if f := v.analyzer.litSkippedFields(lit, structTyp, !isSamePackage); len(f) > 0 {
+	if f := a.litSkippedFields(lit, structTyp, !isSamePackage); len(f) > 0 {
 		pos := lit.Pos()
 
 		if len(f) == 1 {
@@ -290,7 +289,7 @@ func (v *Visitor) processStruct(
 // shouldProcessLit returns true if type should be processed basing off include
 // and exclude patterns, defined though constructor and\or flags, as well as off
 // comment directives.
-func (v *Visitor) shouldProcessLit(
+func (a *analyzer) shouldProcessLit(
 	info *TypeInfo, enforcement EnforcementDirective,
 ) bool {
 	// enforcement directives always have highest precedence if present
@@ -304,21 +303,22 @@ func (v *Visitor) shouldProcessLit(
 	case EnforcementUnspecified:
 	}
 
-	analyzer := v.analyzer
-	if len(analyzer.include) == 0 && len(analyzer.exclude) == 0 {
+	if len(a.include) == 0 && len(a.exclude) == 0 {
 		return true
 	}
 
-	return analyzer.isTypeProcessingNeeded(info)
+	return a.isTypeProcessingNeeded(info)
 }
 
-func (v *Visitor) decideEnforcementDirective(lit *ast.CompositeLit, stack []ast.Node) EnforcementDirective {
-	if !v.analyzer.useDirectives {
+func (a *analyzer) decideEnforcementDirective(
+	pass *analysis.Pass, lit *ast.CompositeLit, stack []ast.Node,
+) EnforcementDirective {
+	if !a.useDirectives {
 		return EnforcementUnspecified
 	}
 
 	file, _ := stack[0].(*ast.File)
-	commentMap := v.analyzer.getFileCommentMap(v.pass.Fset, file)
+	commentMap := a.getFileCommentMap(pass.Fset, file)
 
 	if enforcement := parseEnforcement(commentMap[lit]); enforcement != EnforcementUnspecified {
 		return enforcement
