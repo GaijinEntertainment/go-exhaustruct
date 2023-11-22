@@ -268,6 +268,7 @@ func (a *analyzer) decideEnforcementDirective(
 		return EnforcementUnspecified
 	}
 
+	//revive:disable-next-line:unchecked-type-assertion
 	file, _ := stack[0].(*ast.File)
 	commentMap := a.getFileCommentMap(pass.Fset, file)
 
