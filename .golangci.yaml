@@ -73,6 +73,8 @@ linters-settings:
         disabled: false
         arguments: [ 6 ]
       # disabled rules
+      - name: unchecked-type-assertion # forcetypeassert is already used
+        disabled: true
       - name: max-public-structs # quite annoying rule
         disabled: true
       - name: banned-characters # we don't have banned chars
