@@ -272,8 +272,8 @@ func (a *analyzer) litSkippedFields(
 	lit *ast.CompositeLit,
 	typ *types.Struct,
 	onlyExported bool,
-) structure.StructFields {
-	return a.structFields.Get(typ).SkippedFields(lit, onlyExported)
+) structure.Fields {
+	return a.structFields.Get(typ).Skipped(lit, onlyExported)
 }
 
 type TypeInfo struct {

@@ -47,7 +47,7 @@ func (s *StructFieldsSuite) SetupSuite() {
 	s.Require().NotNil(s.scope)
 }
 
-func (s *StructFieldsSuite) getReferenceStructFields() structure.StructFields {
+func (s *StructFieldsSuite) getReferenceStructFields() structure.Fields {
 	s.T().Helper()
 
 	obj := s.scope.Lookup("testStruct")
@@ -56,14 +56,14 @@ func (s *StructFieldsSuite) getReferenceStructFields() structure.StructFields {
 	typ := s.pkg.TypesInfo.TypeOf(obj.Decl.(*ast.TypeSpec).Type) //nolint:forcetypeassert
 	s.Require().NotNil(typ)
 
-	return structure.NewStructFields(typ.Underlying().(*types.Struct)) //nolint:forcetypeassert
+	return structure.NewFields(typ.Underlying().(*types.Struct)) //nolint:forcetypeassert
 }
 
 func (s *StructFieldsSuite) TestNewStructFields() {
 	sf := s.getReferenceStructFields()
 
 	s.Assert().Len(sf, 4)
-	s.Assert().Equal(structure.StructFields{
+	s.Assert().Equal(structure.Fields{
 		{
 			Name:     "ExportedRequired",
 			Exported: true,
@@ -103,8 +103,8 @@ func (s *StructFieldsSuite) TestStructFields_SkippedFields_Unnamed() {
 	if s.Assert().NotNil(unnamed) {
 		lit := unnamed.Decl.(*ast.ValueSpec).Values[0].(*ast.CompositeLit) //nolint:forcetypeassert
 		if s.Assert().NotNil(lit) {
-			s.Assert().Nil(sf.SkippedFields(lit, true))
-			s.Assert().Nil(sf.SkippedFields(lit, false))
+			s.Assert().Nil(sf.Skipped(lit, true))
+			s.Assert().Nil(sf.Skipped(lit, false))
 		}
 	}
 
@@ -112,11 +112,11 @@ func (s *StructFieldsSuite) TestStructFields_SkippedFields_Unnamed() {
 	if s.Assert().NotNil(unnamedIncomplete) {
 		lit := unnamedIncomplete.Decl.(*ast.ValueSpec).Values[0].(*ast.CompositeLit) //nolint:forcetypeassert
 		if s.Assert().NotNil(lit) {
-			s.Assert().Equal(structure.StructFields{
+			s.Assert().Equal(structure.Fields{
 				{"unexportedRequired", false, false},
 				{"ExportedOptional", true, true},
 				{"unexportedOptional", false, true},
-			}, sf.SkippedFields(lit, true))
+			}, sf.Skipped(lit, true))
 		}
 	}
 }
@@ -128,8 +128,8 @@ func (s *StructFieldsSuite) TestStructFields_SkippedFields_Named() {
 	if s.Assert().NotNil(named) {
 		lit := named.Decl.(*ast.ValueSpec).Values[0].(*ast.CompositeLit) //nolint:forcetypeassert
 		if s.Assert().NotNil(lit) {
-			s.Assert().Nil(sf.SkippedFields(lit, true))
-			s.Assert().Nil(sf.SkippedFields(lit, false))
+			s.Assert().Nil(sf.Skipped(lit, true))
+			s.Assert().Nil(sf.Skipped(lit, false))
 		}
 	}
 
@@ -137,10 +137,10 @@ func (s *StructFieldsSuite) TestStructFields_SkippedFields_Named() {
 	if s.Assert().NotNil(namedIncomplete1) {
 		lit := namedIncomplete1.Decl.(*ast.ValueSpec).Values[0].(*ast.CompositeLit) //nolint:forcetypeassert
 		if s.Assert().NotNil(lit) {
-			s.Assert().Nil(sf.SkippedFields(lit, true))
-			s.Assert().Equal(structure.StructFields{
+			s.Assert().Nil(sf.Skipped(lit, true))
+			s.Assert().Equal(structure.Fields{
 				{"unexportedRequired", false, false},
-			}, sf.SkippedFields(lit, false))
+			}, sf.Skipped(lit, false))
 		}
 	}
 
@@ -148,13 +148,13 @@ func (s *StructFieldsSuite) TestStructFields_SkippedFields_Named() {
 	if s.Assert().NotNil(namedIncomplete2) {
 		lit := namedIncomplete2.Decl.(*ast.ValueSpec).Values[0].(*ast.CompositeLit) //nolint:forcetypeassert
 		if s.Assert().NotNil(lit) {
-			s.Assert().Equal(structure.StructFields{
+			s.Assert().Equal(structure.Fields{
 				{"ExportedRequired", true, false},
-			}, sf.SkippedFields(lit, true))
-			s.Assert().Equal(structure.StructFields{
+			}, sf.Skipped(lit, true))
+			s.Assert().Equal(structure.Fields{
 				{"ExportedRequired", true, false},
 				{"unexportedRequired", false, false},
-			}, sf.SkippedFields(lit, false))
+			}, sf.Skipped(lit, false))
 		}
 	}
 }
