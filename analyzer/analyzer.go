@@ -21,10 +21,8 @@ type analyzer struct {
 	include pattern.List `exhaustruct:"optional"`
 	exclude pattern.List `exhaustruct:"optional"`
 
-	fieldsCache   map[types.Type]fields.StructFields
-	fieldsCacheMu sync.RWMutex `exhaustruct:"optional"`
-
-	comments comment.Cache
+	structFields fields.FieldsCache `exhaustruct:"optional"`
+	comments     comment.Cache      `exhaustruct:"optional"`
 
 	typeProcessingNeed   map[string]bool
 	typeProcessingNeedMu sync.RWMutex `exhaustruct:"optional"`
@@ -32,7 +30,6 @@ type analyzer struct {
 
 func NewAnalyzer(include, exclude []string) (*analysis.Analyzer, error) {
 	a := analyzer{
-		fieldsCache:        make(map[types.Type]fields.StructFields),
 		typeProcessingNeed: make(map[string]bool),
 		comments:           comment.Cache{},
 	}
@@ -271,24 +268,12 @@ func (a *analyzer) shouldProcessType(info *TypeInfo) bool {
 	return res
 }
 
-//revive:disable-next-line:unused-receiver
 func (a *analyzer) litSkippedFields(
 	lit *ast.CompositeLit,
 	typ *types.Struct,
 	onlyExported bool,
 ) fields.StructFields {
-	a.fieldsCacheMu.RLock()
-	f, ok := a.fieldsCache[typ]
-	a.fieldsCacheMu.RUnlock()
-
-	if !ok {
-		a.fieldsCacheMu.Lock()
-		f = fields.NewStructFields(typ)
-		a.fieldsCache[typ] = f
-		a.fieldsCacheMu.Unlock()
-	}
-
-	return f.SkippedFields(lit, onlyExported)
+	return a.structFields.Get(typ).SkippedFields(lit, onlyExported)
 }
 
 type TypeInfo struct {
