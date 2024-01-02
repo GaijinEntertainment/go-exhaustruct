@@ -13,16 +13,16 @@ import (
 	"golang.org/x/tools/go/ast/inspector"
 
 	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/comment"
-	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/fields"
 	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/pattern"
+	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/structure"
 )
 
 type analyzer struct {
 	include pattern.List `exhaustruct:"optional"`
 	exclude pattern.List `exhaustruct:"optional"`
 
-	structFields fields.FieldsCache `exhaustruct:"optional"`
-	comments     comment.Cache      `exhaustruct:"optional"`
+	structFields structure.FieldsCache `exhaustruct:"optional"`
+	comments     comment.Cache         `exhaustruct:"optional"`
 
 	typeProcessingNeed   map[string]bool
 	typeProcessingNeedMu sync.RWMutex `exhaustruct:"optional"`
@@ -272,7 +272,7 @@ func (a *analyzer) litSkippedFields(
 	lit *ast.CompositeLit,
 	typ *types.Struct,
 	onlyExported bool,
-) fields.StructFields {
+) structure.StructFields {
 	return a.structFields.Get(typ).SkippedFields(lit, onlyExported)
 }
 

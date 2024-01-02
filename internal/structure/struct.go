@@ -1,4 +1,4 @@
-package fields
+package structure
 
 import (
 	"go/ast"
