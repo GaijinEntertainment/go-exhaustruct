@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/types"
 	"reflect"
+	"strings"
 )
 
 const (
@@ -42,16 +43,18 @@ func HasOptionalTag(tags string) bool {
 }
 
 // String returns a comma-separated list of field names.
-func (sf Fields) String() (res string) {
+func (sf Fields) String() string {
+	b := strings.Builder{}
+
 	for i := 0; i < len(sf); i++ {
-		if res != "" {
-			res += ", "
+		if b.Len() != 0 {
+			b.WriteString(", ")
 		}
 
-		res += sf[i].Name
+		b.WriteString(sf[i].Name)
 	}
 
-	return res
+	return b.String()
 }
 
 // Skipped returns a list of fields that are not present in the given
