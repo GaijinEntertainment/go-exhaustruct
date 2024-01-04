@@ -41,6 +41,21 @@ Flags:
                 github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo
 ```
 
+#### Comment directives
+
+`exhaustruct` supports comment directives to mark individual structures as ignored during linting or enforce it's check
+regardless global configuration. Comment directives have precedence over global configuration.
+
+- `//exhaustruct:ignore` - ignore structure during linting
+- `//exhaustruct:enforce` - enforce structure check during linting even in case global configuration says it should be
+  ignored.
+
+> Note: all directives can be placed in the end of structure declaration or on the line above it.
+>
+> Also, any additional comment can be placed same line right after the directive or anywhere around it, but directive
+> should be at the very beginning of the line. It is _recommended_ to comment directives, especially when ignoring
+> structures - it will help to understand the reason later.
+
 ### Example
 
 ```go
