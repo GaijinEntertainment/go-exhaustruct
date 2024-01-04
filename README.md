@@ -46,9 +46,9 @@ Flags:
 `exhaustruct` supports comment directives to mark individual structures as ignored during linting or enforce it's check
 regardless global configuration. Comment directives have precedence over global configuration.
 
-- `//exhaustruct:ignore` - ignore structure during linting
-- `//exhaustruct:enforce` - enforce structure check during linting even in case global configuration says it should be
-  ignored.
+- **`//exhaustruct:ignore`** - ignore structure during linting
+- **`//exhaustruct:enforce`** - enforce structure check during linting, even in case global configuration says it should
+  be ignored.
 
 > Note: all directives can be placed in the end of structure declaration or on the line above it.
 >
