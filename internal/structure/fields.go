@@ -1,33 +1,34 @@
-package fields
+package structure
 
 import (
 	"go/ast"
 	"go/types"
 	"reflect"
+	"strings"
 )
 
 const (
-	TagName          = "exhaustruct"
-	OptionalTagValue = "optional"
+	tagName          = "exhaustruct"
+	optionalTagValue = "optional"
 )
 
-type StructField struct {
+type Field struct {
 	Name     string
 	Exported bool
 	Optional bool
 }
 
-type StructFields []*StructField
+type Fields []*Field
 
-// NewStructFields creates a new [StructFields] from a given struct type.
-// StructFields items are listed in order they appear in the struct.
-func NewStructFields(strct *types.Struct) StructFields {
-	sf := make(StructFields, 0, strct.NumFields())
+// NewFields creates a new [Fields] from a given struct type.
+// Fields items are listed in order they appear in the struct.
+func NewFields(strct *types.Struct) Fields {
+	sf := make(Fields, 0, strct.NumFields())
 
 	for i := 0; i < strct.NumFields(); i++ {
 		f := strct.Field(i)
 
-		sf = append(sf, &StructField{
+		sf = append(sf, &Field{
 			Name:     f.Name(),
 			Exported: f.Exported(),
 			Optional: HasOptionalTag(strct.Tag(i)),
@@ -38,27 +39,29 @@ func NewStructFields(strct *types.Struct) StructFields {
 }
 
 func HasOptionalTag(tags string) bool {
-	return reflect.StructTag(tags).Get(TagName) == OptionalTagValue
+	return reflect.StructTag(tags).Get(tagName) == optionalTagValue
 }
 
 // String returns a comma-separated list of field names.
-func (sf StructFields) String() (res string) {
+func (sf Fields) String() string {
+	b := strings.Builder{}
+
 	for i := 0; i < len(sf); i++ {
-		if res != "" {
-			res += ", "
+		if b.Len() != 0 {
+			b.WriteString(", ")
 		}
 
-		res += sf[i].Name
+		b.WriteString(sf[i].Name)
 	}
 
-	return res
+	return b.String()
 }
 
-// SkippedFields returns a list of fields that are not present in the given
+// Skipped returns a list of fields that are not present in the given
 // literal, but expected to.
 //
 //revive:disable-next-line:cyclomatic
-func (sf StructFields) SkippedFields(lit *ast.CompositeLit, onlyExported bool) StructFields {
+func (sf Fields) Skipped(lit *ast.CompositeLit, onlyExported bool) Fields {
 	if len(lit.Elts) != 0 && !isNamedLiteral(lit) {
 		if len(lit.Elts) == len(sf) {
 			return nil
@@ -68,7 +71,7 @@ func (sf StructFields) SkippedFields(lit *ast.CompositeLit, onlyExported bool) S
 	}
 
 	em := sf.existenceMap()
-	res := make(StructFields, 0, len(sf))
+	res := make(Fields, 0, len(sf))
 
 	for i := 0; i < len(lit.Elts); i++ {
 		kv, ok := lit.Elts[i].(*ast.KeyValueExpr)
@@ -99,7 +102,7 @@ func (sf StructFields) SkippedFields(lit *ast.CompositeLit, onlyExported bool) S
 	return res
 }
 
-func (sf StructFields) existenceMap() map[string]bool {
+func (sf Fields) existenceMap() map[string]bool {
 	m := make(map[string]bool, len(sf))
 
 	for i := 0; i < len(sf); i++ {
