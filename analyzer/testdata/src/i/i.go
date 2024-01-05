@@ -212,8 +212,13 @@ func shouldFailAnonymousStructUnfilled() {
 	}
 }
 
+//exhaustruct:enforce
 type TestAlias Test
+
+//exhaustruct:ignore
 type TestAliasAlias TestAlias
+
+//exhaustruct:enforce
 type TestExcludedAlias TestExcluded
 
 func shouldFailTypeAliases() {

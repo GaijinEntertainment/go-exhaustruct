@@ -15,11 +15,12 @@ type Cache struct {
 // found, it creates a new one.
 func (c *Cache) Get(fset *token.FileSet, f *ast.File) ast.CommentMap {
 	c.mu.RLock()
-	if cm, ok := c.comments[f]; ok {
-		c.mu.RUnlock()
+	cm, ok := c.comments[f]
+	c.mu.RUnlock()
+
+	if ok {
 		return cm
 	}
-	c.mu.RUnlock()
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -28,7 +29,7 @@ func (c *Cache) Get(fset *token.FileSet, f *ast.File) ast.CommentMap {
 		c.comments = make(map[*ast.File]ast.CommentMap)
 	}
 
-	cm := ast.NewCommentMap(fset, f, f.Comments)
+	cm = ast.NewCommentMap(fset, f, f.Comments)
 	c.comments[f] = cm
 
 	return cm

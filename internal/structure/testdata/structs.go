@@ -28,3 +28,37 @@ var (
 		unexportedOptional: 4,
 	}
 )
+
+//exhaustruct:ignore
+type NamedTestType struct {
+	Required string
+	Optional string `exhaustruct:"optional"`
+	//exhaustruct:optional
+	CommentOptional string
+}
+
+//exhaustruct:enforce
+type AliasNamedTestType NamedTestType
+
+//exhaustruct:ignore
+type AliasOnAliasNamedTestType AliasNamedTestType
+
+//exhaustruct:ignore
+type AnonymousTestType = struct {
+	Required string
+}
+
+//exhaustruct:ignore
+var (
+	_namedTypeVariable                 = NamedTestType{}
+	_aliasNamedTestTypeVariable        = AliasNamedTestType{}
+	_aliasOnAliasNamedTestTypeVariable = AliasOnAliasNamedTestType{}
+	_anonymousTestTypeVariable         = AnonymousTestType{}
+
+	//exhaustruct:ignore
+	_anonymousTypeVariable = struct {
+		Required string
+		//exhaustruct:optional
+		CommentOptional string
+	}{}
+)

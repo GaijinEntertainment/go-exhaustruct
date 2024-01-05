@@ -18,7 +18,7 @@ type Field struct {
 	Optional bool
 }
 
-type Fields []*Field
+type Fields []Field
 
 // NewFields creates a new [Fields] from a given struct type.
 // Fields items are listed in order they appear in the struct.
@@ -28,7 +28,7 @@ func NewFields(strct *types.Struct) Fields {
 	for i := 0; i < strct.NumFields(); i++ {
 		f := strct.Field(i)
 
-		sf = append(sf, &Field{
+		sf = append(sf, Field{
 			Name:     f.Name(),
 			Exported: f.Exported(),
 			Optional: HasOptionalTag(strct.Tag(i)),
@@ -112,16 +112,16 @@ func (sf Fields) existenceMap() map[string]bool {
 	return m
 }
 
-// isNamedLiteral returns true if the given literal is unnamed.
+// isNamedLiteral returns true if the given literal is named.
 //
 // The logic is basing on the principle that literal is named or unnamed,
-// therefore is literal's first element is a [ast.KeyValueExpr], it is named.
+// therefore if literal's first element is a [ast.KeyValueExpr] - it is named.
 //
 // Method will panic if the given literal is empty.
 func isNamedLiteral(lit *ast.CompositeLit) bool {
-	if _, ok := lit.Elts[0].(*ast.KeyValueExpr); !ok {
-		return false
+	if _, ok := lit.Elts[0].(*ast.KeyValueExpr); ok {
+		return true
 	}
 
-	return true
+	return false
 }

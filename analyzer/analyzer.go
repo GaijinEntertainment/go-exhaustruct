@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"go/types"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"golang.org/x/tools/go/ast/inspector"
 
 	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/comment"
+	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/file"
 	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/pattern"
 	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/structure"
 )
@@ -21,8 +23,10 @@ type analyzer struct {
 	include pattern.List `exhaustruct:"optional"`
 	exclude pattern.List `exhaustruct:"optional"`
 
-	structFields structure.FieldsCache `exhaustruct:"optional"`
-	comments     comment.Cache         `exhaustruct:"optional"`
+	structFields *structure.FieldsCache `exhaustruct:"optional"`
+	comments     *comment.Cache         `exhaustruct:"optional"`
+
+	astCache *file.ASTCache `exhaustruct:"optional"`
 
 	typeProcessingNeed   map[string]bool
 	typeProcessingNeedMu sync.RWMutex `exhaustruct:"optional"`
@@ -31,7 +35,9 @@ type analyzer struct {
 func NewAnalyzer(include, exclude []string) (*analysis.Analyzer, error) {
 	a := analyzer{
 		typeProcessingNeed: make(map[string]bool),
-		comments:           comment.Cache{},
+		astCache:           &file.ASTCache{Mode: parser.ParseComments},
+		structFields:       &structure.FieldsCache{},
+		comments:           &comment.Cache{},
 	}
 
 	var err error
@@ -75,6 +81,8 @@ Anonymous structs can be matched by '<anonymous>' alias.
 func (a *analyzer) run(pass *analysis.Pass) (any, error) {
 	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector) //nolint:forcetypeassert
 
+	a.astCache.AddFiles(pass.Fset, pass.Files...)
+
 	insp.WithStack([]ast.Node{(*ast.CompositeLit)(nil)}, a.newVisitor(pass))
 
 	return nil, nil //nolint:nilnil
@@ -89,12 +97,17 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 
 		lit, ok := n.(*ast.CompositeLit)
 		if !ok {
-			// this should never happen, but better be prepared
+			// should never happen, but better be prepared
 			return true
 		}
 
-		structTyp, typeInfo, ok := getStructType(pass, lit)
-		if !ok {
+		structInfo, err := structure.GetInfo(pass.TypesInfo.TypeOf(lit), pass.Fset, a.astCache)
+		if err != nil {
+			panic(err)
+		}
+
+		if !structInfo.IsValid() {
+			// not a structure - skipping
 			return true
 		}
 
@@ -105,15 +118,15 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 					// a return statement containing non-nil error
 					//
 					// we're unable to check if returned error is custom, but at least we're able to
-					// cover str [error] type.
+					// cover std error type.
 					return true
 				}
 			}
 		}
 
-		file := a.comments.Get(pass.Fset, stack[0].(*ast.File)) //nolint:forcetypeassert
-		rc := getCompositeLitRelatedComments(stack, file)
-		pos, msg := a.processStruct(pass, lit, structTyp, typeInfo, rc)
+		commentsMap := a.comments.Get(pass.Fset, stack[0].(*ast.File)) //nolint:forcetypeassert
+		rc := getCompositeLitRelatedComments(stack, commentsMap)
+		pos, msg := a.processStruct(pass, lit, structInfo, rc)
 
 		if pos != nil {
 			pass.Reportf(*pos, msg)
@@ -152,36 +165,6 @@ func getCompositeLitRelatedComments(stack []ast.Node, cm ast.CommentMap) []*ast.
 	return comments
 }
 
-func getStructType(pass *analysis.Pass, lit *ast.CompositeLit) (*types.Struct, *TypeInfo, bool) {
-	switch typ := pass.TypesInfo.TypeOf(lit).(type) {
-	case *types.Named: // named type
-		if structTyp, ok := typ.Underlying().(*types.Struct); ok {
-			pkg := typ.Obj().Pkg()
-			ti := TypeInfo{
-				Name:        typ.Obj().Name(),
-				PackageName: pkg.Name(),
-				PackagePath: pkg.Path(),
-			}
-
-			return structTyp, &ti, true
-		}
-
-		return nil, nil, false
-
-	case *types.Struct: // anonymous struct
-		ti := TypeInfo{
-			Name:        "<anonymous>",
-			PackageName: pass.Pkg.Name(),
-			PackagePath: pass.Pkg.Path(),
-		}
-
-		return typ, &ti, true
-
-	default:
-		return nil, nil, false
-	}
-}
-
 func stackParentIsReturn(stack []ast.Node) (*ast.ReturnStmt, bool) {
 	// it is safe to skip boundary check, since stack always has at least one element
 	// - whole file.
@@ -205,11 +188,10 @@ func returnContainsNonNilError(pass *analysis.Pass, ret *ast.ReturnStmt) bool {
 func (a *analyzer) processStruct(
 	pass *analysis.Pass,
 	lit *ast.CompositeLit,
-	structTyp *types.Struct,
-	info *TypeInfo,
+	info structure.Info,
 	comments []*ast.CommentGroup,
 ) (*token.Pos, string) {
-	shouldProcess := a.shouldProcessType(info)
+	shouldProcess := a.shouldProcessType(info.String())
 
 	if shouldProcess && comment.HasDirective(comments, comment.DirectiveIgnore) {
 		return nil, ""
@@ -223,7 +205,7 @@ func (a *analyzer) processStruct(
 	// prefix identical to current package name.
 	isSamePackage := info.PackagePath == pass.Pkg.Path()
 
-	if f := a.litSkippedFields(lit, structTyp, !isSamePackage); len(f) > 0 {
+	if f := a.litSkippedFields(lit, info.Type, !isSamePackage); len(f) > 0 {
 		pos := lit.Pos()
 
 		if len(f) == 1 {
@@ -238,12 +220,10 @@ func (a *analyzer) processStruct(
 
 // shouldProcessType returns true if type should be processed basing off include
 // and exclude patterns, defined though constructor and\or flags.
-func (a *analyzer) shouldProcessType(info *TypeInfo) bool {
+func (a *analyzer) shouldProcessType(name string) bool {
 	if len(a.include) == 0 && len(a.exclude) == 0 {
 		return true
 	}
-
-	name := info.String()
 
 	a.typeProcessingNeedMu.RLock()
 	res, ok := a.typeProcessingNeed[name]
@@ -274,18 +254,4 @@ func (a *analyzer) litSkippedFields(
 	onlyExported bool,
 ) structure.Fields {
 	return a.structFields.Get(typ).Skipped(lit, onlyExported)
-}
-
-type TypeInfo struct {
-	Name        string
-	PackageName string
-	PackagePath string
-}
-
-func (t TypeInfo) String() string {
-	return t.PackagePath + "." + t.Name
-}
-
-func (t TypeInfo) ShortString() string {
-	return t.PackageName + "." + t.Name
 }
