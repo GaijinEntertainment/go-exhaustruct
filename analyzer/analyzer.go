@@ -1,12 +1,12 @@
 package analyzer
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"go/types"
 	"sync"
 
 	"golang.org/x/tools/go/analysis"
@@ -23,10 +23,8 @@ type analyzer struct {
 	include pattern.List `exhaustruct:"optional"`
 	exclude pattern.List `exhaustruct:"optional"`
 
-	structFields *structure.FieldsCache `exhaustruct:"optional"`
-	comments     *comment.Cache         `exhaustruct:"optional"`
-
-	astCache *file.ASTCache `exhaustruct:"optional"`
+	ASTCache  *file.ASTCache
+	InfoCache *structure.InfoCache
 
 	typeProcessingNeed   map[string]bool
 	typeProcessingNeedMu sync.RWMutex `exhaustruct:"optional"`
@@ -35,9 +33,8 @@ type analyzer struct {
 func NewAnalyzer(include, exclude []string) (*analysis.Analyzer, error) {
 	a := analyzer{
 		typeProcessingNeed: make(map[string]bool),
-		astCache:           &file.ASTCache{Mode: parser.ParseComments},
-		structFields:       &structure.FieldsCache{},
-		comments:           &comment.Cache{},
+		ASTCache:           &file.ASTCache{Mode: parser.ParseComments},
+		InfoCache:          &structure.InfoCache{},
 	}
 
 	var err error
@@ -81,7 +78,9 @@ Anonymous structs can be matched by '<anonymous>' alias.
 func (a *analyzer) run(pass *analysis.Pass) (any, error) {
 	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector) //nolint:forcetypeassert
 
-	a.astCache.AddFiles(pass.Fset, pass.Files...)
+	a.ASTCache.FS = pass.Fset
+
+	a.ASTCache.AddFiles(pass.Files...)
 
 	insp.WithStack([]ast.Node{(*ast.CompositeLit)(nil)}, a.newVisitor(pass))
 
@@ -90,6 +89,8 @@ func (a *analyzer) run(pass *analysis.Pass) (any, error) {
 
 // newVisitor returns visitor that only expects [ast.CompositeLit] nodes.
 func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, stack []ast.Node) bool {
+	infoParser := structure.NewInfoParser(a.InfoCache, pass.Pkg, a.ASTCache, pass.TypesInfo)
+
 	return func(n ast.Node, push bool, stack []ast.Node) bool {
 		if !push {
 			return true
@@ -101,7 +102,7 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 			return true
 		}
 
-		structInfo, err := structure.GetInfo(pass.TypesInfo.TypeOf(lit), pass.Fset, a.astCache)
+		structInfo, err := infoParser.LitInfo(lit)
 		if err != nil {
 			panic(err)
 		}
@@ -124,9 +125,12 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 			}
 		}
 
-		commentsMap := a.comments.Get(pass.Fset, stack[0].(*ast.File)) //nolint:forcetypeassert
-		rc := getCompositeLitRelatedComments(stack, commentsMap)
-		pos, msg := a.processStruct(pass, lit, structInfo, rc)
+		comments, err := a.ASTCache.RelatedComments(lit)
+		if err != nil && !errors.Is(err, file.ErrNotFound) {
+			panic(err)
+		}
+
+		pos, msg := a.processStruct(pass, lit, structInfo, comments)
 
 		if pos != nil {
 			pass.Reportf(*pos, msg)
@@ -134,35 +138,6 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 
 		return true
 	}
-}
-
-// getCompositeLitRelatedComments returns all comments that are related to checked node. We
-// have to traverse the stack manually as ast do not associate comments with
-// [ast.CompositeLit].
-func getCompositeLitRelatedComments(stack []ast.Node, cm ast.CommentMap) []*ast.CommentGroup {
-	comments := make([]*ast.CommentGroup, 0)
-
-	for i := len(stack) - 1; i >= 0; i-- {
-		node := stack[i]
-
-		switch node.(type) {
-		case *ast.CompositeLit, // stack[len(stack)-1]
-			*ast.ReturnStmt, // return ...
-			*ast.IndexExpr,  // map[enum]...{...}[key]
-			*ast.CallExpr,   // myfunc(map...)
-			*ast.UnaryExpr,  // &map...
-			*ast.AssignStmt, // variable assignment (without var keyword)
-			*ast.DeclStmt,   // var declaration, parent of *ast.GenDecl
-			*ast.GenDecl,    // var declaration, parent of *ast.ValueSpec
-			*ast.ValueSpec:  // var declaration
-			comments = append(comments, cm[node]...)
-
-		default:
-			return comments
-		}
-	}
-
-	return comments
 }
 
 func stackParentIsReturn(stack []ast.Node) (*ast.ReturnStmt, bool) {
@@ -205,7 +180,7 @@ func (a *analyzer) processStruct(
 	// prefix identical to current package name.
 	isSamePackage := info.PackagePath == pass.Pkg.Path()
 
-	if f := a.litSkippedFields(lit, info.Type, !isSamePackage); len(f) > 0 {
+	if f := info.Fields.Skipped(lit, !isSamePackage); len(f) > 0 {
 		pos := lit.Pos()
 
 		if len(f) == 1 {
@@ -246,12 +221,4 @@ func (a *analyzer) shouldProcessType(name string) bool {
 	}
 
 	return res
-}
-
-func (a *analyzer) litSkippedFields(
-	lit *ast.CompositeLit,
-	typ *types.Struct,
-	onlyExported bool,
-) structure.Fields {
-	return a.structFields.Get(typ).Skipped(lit, onlyExported)
 }

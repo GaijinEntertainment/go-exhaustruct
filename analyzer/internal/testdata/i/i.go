@@ -4,7 +4,7 @@ package i
 import (
 	"errors"
 
-	"e"
+	"testdata/e"
 )
 
 type Embedded struct {

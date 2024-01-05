@@ -1,5 +1,9 @@
 package testdata
 
+import (
+	"net/http"
+)
+
 type testStruct struct {
 	// some random comment
 
@@ -38,27 +42,44 @@ type NamedTestType struct {
 }
 
 //exhaustruct:enforce
-type AliasNamedTestType NamedTestType
+type NamedTestType2 NamedTestType
 
 //exhaustruct:ignore
-type AliasOnAliasNamedTestType AliasNamedTestType
+type NamedTestType3 NamedTestType2
+
+//exhaustruct:enforce
+type AliasTestType = NamedTestType
 
 //exhaustruct:ignore
-type AnonymousTestType = struct {
+type AliasImportedTestType = http.Transport
+
+//exhaustruct:ignore
+type AnonymousAliasTestType = struct {
 	Required string
 }
 
+//exhaustruct:enforce
+type AnonymousAliasEmptyTestType = struct{}
+
 //exhaustruct:ignore
 var (
-	_namedTypeVariable                 = NamedTestType{}
-	_aliasNamedTestTypeVariable        = AliasNamedTestType{}
-	_aliasOnAliasNamedTestTypeVariable = AliasOnAliasNamedTestType{}
-	_anonymousTestTypeVariable         = AnonymousTestType{}
+	_NamedTestTypeVariable  = NamedTestType{}
+	_NamedTestType2Variable = NamedTestType2{}
+	_NamedTestType3Variable = NamedTestType3{}
 
-	//exhaustruct:ignore
-	_anonymousTypeVariable = struct {
+	_AliasTestTypeVariable         = AliasTestType{}
+	_AliasImportedTestTypeVariable = AliasImportedTestType{}
+
+	_AnonymousAliasTestTypeVariable      = AnonymousAliasTestType{}
+	_AnonymousAliasEmptyTestTypeVariable = AnonymousAliasEmptyTestType{}
+
+	//exhaustruct:ignore i'm searching this one
+	_AnonymousTestTypeVariable = struct {
 		Required string
 		//exhaustruct:optional
 		CommentOptional string
-	}{}
+	}{} //exhaustruct:ignore i'm searching that one
+
+	//exhaustruct:enforce
+	_AnonymousTestTypeVariable2 = struct{}{}
 )

@@ -1,9 +1,10 @@
 package structure
 
 import (
+	"errors"
 	"go/ast"
-	"go/token"
 	"go/types"
+	"unsafe"
 
 	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/comment"
 	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/file"
@@ -38,57 +39,162 @@ func (t Info) ShortString() string {
 	return t.PackageName + "." + t.Name
 }
 
-// GetInfo returns structure information for a given type if it of a structure
+type InfoParser struct {
+	pkg *types.Package
+	ac  *file.ASTCache
+	ti  *types.Info
+
+	IC *InfoCache
+}
+
+func NewInfoParser(ic *InfoCache, pkg *types.Package, ac *file.ASTCache, ti *types.Info) InfoParser {
+	return InfoParser{
+		pkg: pkg,
+		ac:  ac,
+		ti:  ti,
+		IC:  ic,
+	}
+}
+
+// LitInfo returns structure information for a given type if it of a structure
 // type.
-func GetInfo(t types.Type, fs *token.FileSet, ac *file.ASTCache) (Info, error) {
-	switch typ := t.(type) {
+func (p InfoParser) LitInfo(lit *ast.CompositeLit) (Info, error) {
+	switch typ := p.ti.TypeOf(lit).(type) {
 	case *types.Named: // named type
-		return namedStructInfo(typ, fs, ac)
+		structType, ok := typ.Underlying().(*types.Struct)
+		if !ok {
+			return Info{}, nil
+		}
+
+		ident, ok := lit.Type.(*ast.Ident)
+		if ok { // named type alias
+			return p.IC.Get(
+				uintptr(unsafe.Pointer(ident)),
+				func() (Info, error) { return p.byIdent(ident, structType) },
+			)
+		}
+
+		return p.IC.Get(
+			uintptr(unsafe.Pointer(typ)),
+			func() (Info, error) { return p.byNamedType(typ, structType) },
+		)
 
 	case *types.Struct: // anonymous type
+		ident, ok := lit.Type.(*ast.Ident)
+		if ok { // named type alias
+			return p.IC.Get(
+				uintptr(unsafe.Pointer(ident)),
+				func() (Info, error) { return p.byIdent(ident, typ) },
+			)
+		}
 
-		// TODO: Implement.
-		return Info{}, nil
+		astStruct, ok := lit.Type.(*ast.StructType)
+		if !ok {
+			return Info{}, nil
+		}
+
+		return p.IC.Get(
+			uintptr(unsafe.Pointer(astStruct)),
+			func() (Info, error) { return p.byAstStruct(astStruct, typ) },
+		)
 	}
 
 	return Info{}, nil
 }
 
-func namedStructInfo(typ *types.Named, fs *token.FileSet, ac *file.ASTCache) (Info, error) {
-	structType, ok := typ.Underlying().(*types.Struct)
-	if !ok {
-		return Info{}, nil
-	}
+func (p InfoParser) byNamedType(named *types.Named, typ *types.Struct) (Info, error) {
+	obj := named.Obj()
 
-	obj := typ.Obj()
-
-	decl, err := ac.FindTypeNameGenDecl(fs, obj)
-	if err != nil {
+	gd, err := p.ac.FindTypeNameGenDecl(obj)
+	if err != nil && !errors.Is(err, file.ErrNotFound) {
 		return Info{}, err //nolint:wrapcheck
 	}
 
+	var dir Directives
+
+	if gd != nil {
+		relatedComments, err := p.ac.RelatedComments(gd)
+		if err != nil && !errors.Is(err, file.ErrNotFound) {
+			return Info{}, err //nolint:wrapcheck
+		}
+
+		dir = parseDirectives(relatedComments)
+	}
+
 	pkg := obj.Pkg()
+
 	i := Info{
 		valid: true,
 
 		Name:        obj.Name(),
 		PackageName: pkg.Name(),
 		PackagePath: pkg.Path(),
-		Directives:  parseDocDirectives(decl.Doc),
-		Type:        structType,
+		Directives:  dir,
+		Type:        typ,
+		Fields:      NewFields(typ),
 	}
 
 	return i, nil
 }
 
-func parseDocDirectives(doc *ast.CommentGroup) Directives {
-	cg := make([]*ast.CommentGroup, 0, 1)
-	if doc != nil {
-		cg = append(cg, doc)
+func (p InfoParser) byIdent(ident *ast.Ident, typ *types.Struct) (Info, error) {
+	gd, err := p.ac.FindIdentGenDecl(ident)
+	if err != nil && !errors.Is(err, file.ErrNotFound) {
+		return Info{}, err //nolint:wrapcheck
 	}
 
-	return Directives{
-		Ignore:  comment.HasDirective(cg, comment.DirectiveIgnore),
-		Enforce: comment.HasDirective(cg, comment.DirectiveEnforce),
+	var relatedComments []*ast.CommentGroup
+
+	if gd != nil && gd.Doc != nil {
+		relatedComments = append(relatedComments, gd.Doc)
+	} else {
+		relatedComments, err = p.ac.RelatedComments(ident)
+		if err != nil && !errors.Is(err, file.ErrNotFound) {
+			return Info{}, err //nolint:wrapcheck
+		}
 	}
+
+	obj := p.ti.ObjectOf(ident)
+	pkg := obj.Pkg()
+
+	i := Info{
+		valid: true,
+
+		Name:        ident.Name,
+		PackageName: pkg.Name(),
+		PackagePath: pkg.Path(),
+		Directives:  parseDirectives(relatedComments),
+		Type:        typ,
+		Fields:      NewFields(typ),
+	}
+
+	return i, nil
+}
+
+func (p InfoParser) byAstStruct(astStruct *ast.StructType, typ *types.Struct) (Info, error) {
+	relatedComments, err := p.ac.RelatedComments(astStruct)
+	if err != nil && !errors.Is(err, file.ErrNotFound) {
+		return Info{}, err //nolint:wrapcheck
+	}
+
+	return Info{
+		valid:       true,
+		Name:        "<anonymous>",
+		PackageName: p.pkg.Name(),
+		PackagePath: p.pkg.Path(),
+		Directives:  parseDirectives(relatedComments),
+		Type:        typ,
+		Fields:      NewFields(typ),
+	}, nil
+}
+
+func parseDirectives(comments []*ast.CommentGroup) (d Directives) {
+	if len(comments) == 0 {
+		return d
+	}
+
+	d.Ignore = comment.HasDirective(comments, comment.DirectiveIgnore)
+	d.Enforce = comment.HasDirective(comments, comment.DirectiveEnforce)
+
+	return d
 }

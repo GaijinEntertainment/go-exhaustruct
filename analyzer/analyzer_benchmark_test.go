@@ -11,8 +11,9 @@ import (
 
 func BenchmarkAnalyzer(b *testing.B) {
 	a, err := analyzer.NewAnalyzer(
-		[]string{`.*[Tt]est.*`, `.*External`, `.*Embedded`, `.*\.<anonymous>`},
-		[]string{`.*Excluded$`, `e\.<anonymous>`},
+		[]string{`testdata/.*[Tt]est.*`, `testdata/.*External`, `testdata/.*Embedded`,
+			`testdata/.*\.<anonymous>`},
+		[]string{`testdata/.*Excluded$`, `testdata/e\.<anonymous>`},
 	)
 	require.NoError(b, err)
 
@@ -20,6 +21,6 @@ func BenchmarkAnalyzer(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_ = analysistest.Run(b, testdataPath, a, "i")
+		analysistest.Run(b, testdataPath, a, "./...")
 	}
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer"
 )
 
-var testdataPath, _ = filepath.Abs("./testdata/") //nolint:gochecknoglobals
+var testdataPath, _ = filepath.Abs("./internal/testdata/") //nolint:gochecknoglobals
 
 func TestAnalyzer(t *testing.T) {
 	t.Parallel()
@@ -33,10 +33,11 @@ func TestAnalyzer(t *testing.T) {
 	assert.Error(t, err)
 
 	a, err = analyzer.NewAnalyzer(
-		[]string{`.*[Tt]est.*`, `.*External`, `.*Embedded`, `.*\.<anonymous>`},
-		[]string{`.*Excluded$`, `e\.<anonymous>`},
+		[]string{`testdata/.*[Tt]est.*`, `testdata/.*External`, `testdata/.*Embedded`,
+			`testdata/.*\.<anonymous>`},
+		[]string{`testdata/.*Excluded$`, `testdata/e\.<anonymous>`},
 	)
 	require.NoError(t, err)
 
-	analysistest.Run(t, testdataPath, a, "i", "e")
+	analysistest.Run(t, testdataPath, a, "./...")
 }
