@@ -27,7 +27,7 @@ jobs:
           check-latest: true
       - uses: actions/checkout@v4
       - name: "Lint"
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v5
         with:
           only-new-issues: true
           args: --timeout 5m --issues-exit-code 0
