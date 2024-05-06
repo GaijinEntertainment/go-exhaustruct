@@ -99,15 +99,8 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 		}
 
 		if len(lit.Elts) == 0 {
-			if ret, ok := stackParentIsReturn(stack); ok {
-				if returnContainsNonNilError(pass, ret) {
-					// it is okay to return uninitialized structure in case struct's direct parent is
-					// a return statement containing non-nil error
-					//
-					// we're unable to check if returned error is custom, but at least we're able to
-					// cover str [error] type.
-					return true
-				}
+			if litIsInUnhappyPathReturn(pass, stack, lit) {
+				return true
 			}
 		}
 
@@ -121,6 +114,30 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 
 		return true
 	}
+}
+
+// litIsInUnhappyPathReturn reports whenever the "lit" is located in the
+// return statement with etiher a non-nil value of [error] interface type or a
+// struct which corresponding result type in the function declaration is the [error]
+// interface type.
+func litIsInUnhappyPathReturn(pass *analysis.Pass, stack []ast.Node, lit *ast.CompositeLit) bool {
+	ret, ok := stackParentIsReturn(stack)
+	if !ok {
+		return false
+	}
+
+	if containsNonNilValOfErrType(pass, ret) {
+		return true
+	}
+
+	if errLit, ok := containsNonNilValUnderErrType(pass, stack, ret); ok {
+		if errLit != lit {
+			// we want to process composite literals of custom error types as well.
+			return true
+		}
+	}
+
+	return false
 }
 
 // getCompositeLitRelatedComments returns all comments that are related to checked node. We
@@ -190,16 +207,78 @@ func stackParentIsReturn(stack []ast.Node) (*ast.ReturnStmt, bool) {
 	return ret, ok
 }
 
-func returnContainsNonNilError(pass *analysis.Pass, ret *ast.ReturnStmt) bool {
+func typeName(pass *analysis.Pass, e ast.Expr) string {
+	return pass.TypesInfo.TypeOf(e).String()
+}
+
+// containsNonNilValOfErrType reports if "ret" contains value of type [error].
+func containsNonNilValOfErrType(pass *analysis.Pass, ret *ast.ReturnStmt) bool {
 	// errors are mostly located at the end of return statement, so we're starting
 	// from the end.
 	for i := len(ret.Results) - 1; i >= 0; i-- {
-		if pass.TypesInfo.TypeOf(ret.Results[i]).String() == "error" {
+		expr := ret.Results[i]
+
+		if typeName(pass, expr) == "error" {
 			return true
 		}
 	}
 
 	return false
+}
+
+// stackNearestFuncDecl returns nearest [ast.FuncDecl] on the stack or nil if
+// there is none.
+func stackNearestFuncDecl(stack []ast.Node) *ast.FuncDecl {
+	for i := len(stack) - 1; i >= 0; i-- {
+		n := stack[i]
+		if fd, ok := n.(*ast.FuncDecl); ok {
+			return fd
+		}
+	}
+
+	return nil
+}
+
+// containsNonNilValUnderErrType returns expr from the "ret" which
+// corresponding type in nearest function declaration is [error].
+func containsNonNilValUnderErrType(pass *analysis.Pass, stack []ast.Node, ret *ast.ReturnStmt) (ast.Expr, bool) {
+	// errors are mostly located at the end of return statement, so we're starting
+	// from the end.
+	for i := len(ret.Results) - 1; i >= 0; i-- {
+		expr := ret.Results[i]
+		tname := typeName(pass, expr)
+
+		if tname == "untyped nil" {
+			continue
+		}
+
+		fd := stackNearestFuncDecl(stack)
+		if fd == nil {
+			// Only possible in case of a bad expression, because we have a return
+			// statement without corresponding function declaration.
+			return nil, false
+		}
+
+		outTypes := fd.Type.Results.List
+		if len(outTypes) <= i {
+			// Only possible in case of a bad expression, because the number of
+			// arguments in the return statement does not match the number of
+			// arguments in the corresponding function declaration.
+			return nil, false
+		}
+
+		if typeName(pass, outTypes[i].Type) == "error" {
+			// expr is returned under the position of the [error] interface type. If
+			// expr type doesn't actually implement the [error], then the Go
+			// compiler will throw [InvalidIFaceAssign], so we should only care
+			// about the fact that expr is intended to be returned as [error].
+			//
+			// See: https://pkg.go.dev/golang.org/x/tools/internal/typesinternal#InvalidIfaceAssign
+			return expr, true
+		}
+	}
+
+	return nil, false
 }
 
 func (a *analyzer) processStruct(
