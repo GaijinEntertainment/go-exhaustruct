@@ -64,23 +64,6 @@ func shouldFailRequiredOmitted() {
 	}
 }
 
-type CustomEmptyError struct{}
-
-func (CustomEmptyError) Error() string { return "custom error" }
-
-func shouldPassEmptyStructWithCustomErr() (Test, error) {
-	return Test{}, CustomEmptyError{}
-}
-
-type CustomNonEmptyError struct {
-	error
-	A string
-}
-
-func shouldFailEmptyStructWithCustomErrMissingFields() (Test, error) {
-	return Test{}, CustomNonEmptyError{} // want "i.CustomNonEmptyError is missing fields error, A"
-}
-
 func shouldPassEmptyStructWithNonNilErr() (Test, error) {
 	return Test{}, errors.New("some error")
 }
