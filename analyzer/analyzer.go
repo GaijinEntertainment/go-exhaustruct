@@ -259,6 +259,10 @@ func containsNonNilValUnderErrType(pass *analysis.Pass, stack []ast.Node, ret *a
 			return nil, false
 		}
 
+		if fd.Type.Results == nil {
+			return nil, false
+		}
+
 		outTypes := fd.Type.Results.List
 		if len(outTypes) <= i {
 			// Only possible in case of a bad expression, because the number of
