@@ -8,28 +8,28 @@ type Test struct {
 	E string `exhaustruct:"optional"`
 }
 
-type CustomEmptyError struct{}
+type AError struct{}
 
-func (CustomEmptyError) Error() string { return "custom error" }
+func (AError) Error() string { return "error message" }
 
-func shouldPassEmptyStructWithCustomErr() (Test, error) {
-	return Test{}, &CustomEmptyError{}
+func shouldPassEmptyStructWithAError() (Test, error) {
+	return Test{}, &AError{}
 }
 
-type CustomNonEmptyError struct{ msg string }
+type BError struct{ msg string }
 
-func (e CustomNonEmptyError) Error() string { return e.msg }
+func (e BError) Error() string { return e.msg }
 
-func shouldFailEmptyStructWithCustomNonEmptyErrorMissingFields() (Test, error) {
-	return Test{}, &CustomNonEmptyError{} // want "j.CustomNonEmptyError is missing field msg"
+func shouldFailEmptyStructWithEmptyBError() (Test, error) {
+	return Test{}, &BError{} // want "j.BError is missing field msg"
 }
 
-func shouldPassEmptyStructWithFilledCustomNonEmptyError() (Test, error) {
-	return Test{}, &CustomNonEmptyError{msg: "error message"}
+func shouldPassEmptyStructWithFilledBError() (Test, error) {
+	return Test{}, &BError{msg: "error message"}
 }
 
-func shouldPassEmptyStructWithCustomEmptyError() (Test, error) {
-	return Test{}, &CustomEmptyError{}
+func shouldPassEmptyStructWithFilledAError() (Test, error) {
+	return Test{}, &AError{}
 }
 
 func shouldFailEmptyStructWithNilError() (Test, error) {
@@ -38,4 +38,32 @@ func shouldFailEmptyStructWithNilError() (Test, error) {
 
 func shouldPassFilledStructWithNilError() (Test, error) {
 	return Test{"", 0, 0.0, false, ""}, nil
+}
+
+func shouldPassFilledStructWithNilErrorUsingLambda() (Test, error) {
+	f := func() (Test, error) {
+		return Test{"", 0, 0.0, false, ""}, nil
+	}
+	return f()
+}
+
+func shouldFailEmptyStructWithNilErrorUsingLambda() (Test, error) {
+	f := func() (Test, error) {
+		return Test{}, nil // want "j.Test is missing fields A, B, C, D"
+	}
+	return f()
+}
+
+func shouldFailEmptyStructWithEmptyErrorUsingLambda() (Test, error) {
+	f := func() (Test, error) {
+		return Test{}, &BError{} // want "j.BError is missing field msg"
+	}
+	return f()
+}
+
+func shouldPassEmptyStructWithEmptyErrorUsingLambda() (Test, error) {
+	f := func() (Test, error) {
+		return Test{}, &AError{}
+	}
+	return f()
 }
