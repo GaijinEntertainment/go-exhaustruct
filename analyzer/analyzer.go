@@ -255,31 +255,36 @@ func stackNearestFuncType(stack []ast.Node) (*ast.FuncType, bool) {
 
 // containsNonNilValUnderErrType returns expr from the "ret" which
 // corresponding type in "fnType" is [error] if any.
-func containsNonNilValUnderErrType(pass *analysis.Pass, ret *ast.ReturnStmt, fnType *ast.FuncType) (ast.Expr, bool) {
+func containsNonNilValUnderErrType(
+	pass *analysis.Pass,
+	ret *ast.ReturnStmt,
+	fnType *ast.FuncType,
+) (ast.Expr, bool) {
+	if fnType.Results == nil {
+		// "fnType" must have results to match one of them as the [error] interface
+		// type.
+		return nil, false
+	}
+
+	fnTypeExprs := fnType.Results.List
+	retExprs := ret.Results
+
+	if len(retExprs) != len(fnTypeExprs) {
+		// "ret" doesn't belong to the "fnType"
+		return nil, false
+	}
+
 	// errors are mostly located at the end of return statement, so we're starting
 	// from the end.
-	for i := len(ret.Results) - 1; i >= 0; i-- {
-		expr := ret.Results[i]
+	for i := len(retExprs) - 1; i >= 0; i-- {
+		expr := retExprs[i]
 		tname := typeName(pass, expr)
 
 		if tname == "untyped nil" {
 			continue
 		}
 
-		if fnType.Results == nil {
-			// The "ret" contains at least one result, but "fnType" doesn't have any
-			// outgoing results.
-			return nil, false
-		}
-
-		outTypes := fnType.Results.List
-		if len(outTypes) <= i {
-			// The number of arguments in the "ret" does not match the
-			// number of arguments in the corresponding "fnType".
-			return nil, false
-		}
-
-		if typeName(pass, outTypes[i].Type) == "error" {
+		if typeName(pass, fnTypeExprs[i].Type) == "error" {
 			// expr is returned under the position of the [error] interface type. If
 			// expr type doesn't actually implement the [error], then the Go
 			// compiler will throw [InvalidIFaceAssign], so we should only care
