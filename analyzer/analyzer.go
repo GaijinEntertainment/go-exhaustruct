@@ -126,7 +126,7 @@ func litIsInUnhappyPathReturn(pass *analysis.Pass, stack []ast.Node, lit *ast.Co
 		return false
 	}
 
-	if containsNonNilValOfErrType(pass, ret) {
+	if containsErrorIfaceValue(pass, ret) {
 		return true
 	}
 
@@ -137,7 +137,7 @@ func litIsInUnhappyPathReturn(pass *analysis.Pass, stack []ast.Node, lit *ast.Co
 		return false
 	}
 
-	if errLit, ok := containsNonNilValUnderErrType(pass, ret, fnType); ok {
+	if errLit, ok := containsValUnderErrorIface(pass, ret, fnType); ok {
 		if errLit != lit {
 			// we want to process composite literals of custom error types as well.
 			return true
@@ -218,8 +218,8 @@ func typeName(pass *analysis.Pass, e ast.Expr) string {
 	return pass.TypesInfo.TypeOf(e).String()
 }
 
-// containsNonNilValOfErrType reports if "ret" contains value of type [error].
-func containsNonNilValOfErrType(pass *analysis.Pass, ret *ast.ReturnStmt) bool {
+// containsErrorIfaceValue reports if "ret" contains value of type [error].
+func containsErrorIfaceValue(pass *analysis.Pass, ret *ast.ReturnStmt) bool {
 	// errors are mostly located at the end of return statement, so we're starting
 	// from the end.
 	for i := len(ret.Results) - 1; i >= 0; i-- {
@@ -253,9 +253,9 @@ func stackNearestFuncType(stack []ast.Node) (*ast.FuncType, bool) {
 	return nil, false
 }
 
-// containsNonNilValUnderErrType returns expr from the "ret" which
+// containsValUnderErrorIface returns expr from the "ret" which
 // corresponding type in "fnType" is [error] if any.
-func containsNonNilValUnderErrType(
+func containsValUnderErrorIface(
 	pass *analysis.Pass,
 	ret *ast.ReturnStmt,
 	fnType *ast.FuncType,
