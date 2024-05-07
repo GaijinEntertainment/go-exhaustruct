@@ -130,7 +130,14 @@ func litIsInUnhappyPathReturn(pass *analysis.Pass, stack []ast.Node, lit *ast.Co
 		return true
 	}
 
-	if errLit, ok := containsNonNilValUnderErrType(pass, stack, ret); ok {
+	fnType, ok := stackNearestFuncType(stack)
+	if !ok {
+		// Only possible in case of a bad expression, because we have a literal in
+		// the "ret" without corresponding function type.
+		return false
+	}
+
+	if errLit, ok := containsNonNilValUnderErrType(pass, ret, fnType); ok {
 		if errLit != lit {
 			// we want to process composite literals of custom error types as well.
 			return true
@@ -226,22 +233,29 @@ func containsNonNilValOfErrType(pass *analysis.Pass, ret *ast.ReturnStmt) bool {
 	return false
 }
 
-// stackNearestFuncDecl returns nearest [ast.FuncDecl] on the stack or nil if
-// there is none.
-func stackNearestFuncDecl(stack []ast.Node) *ast.FuncDecl {
+// stackNearestFuncType returns nearest [ast.FuncType] on the stack if any.
+// Returned [ast.FuncType] belongs to either a lambda function - [ast.FuncLit]
+// or a global function - [ast.FuncDecl].
+func stackNearestFuncType(stack []ast.Node) (*ast.FuncType, bool) {
 	for i := len(stack) - 1; i >= 0; i-- {
 		n := stack[i]
-		if fd, ok := n.(*ast.FuncDecl); ok {
-			return fd
+		switch fd := n.(type) {
+		case *ast.FuncDecl:
+			return fd.Type, true
+
+		case *ast.FuncLit:
+			return fd.Type, true
+
+		default:
 		}
 	}
 
-	return nil
+	return nil, false
 }
 
 // containsNonNilValUnderErrType returns expr from the "ret" which
-// corresponding type in nearest function declaration is [error].
-func containsNonNilValUnderErrType(pass *analysis.Pass, stack []ast.Node, ret *ast.ReturnStmt) (ast.Expr, bool) {
+// corresponding type in "fnType" is [error] if any.
+func containsNonNilValUnderErrType(pass *analysis.Pass, ret *ast.ReturnStmt, fnType *ast.FuncType) (ast.Expr, bool) {
 	// errors are mostly located at the end of return statement, so we're starting
 	// from the end.
 	for i := len(ret.Results) - 1; i >= 0; i-- {
@@ -252,22 +266,16 @@ func containsNonNilValUnderErrType(pass *analysis.Pass, stack []ast.Node, ret *a
 			continue
 		}
 
-		fd := stackNearestFuncDecl(stack)
-		if fd == nil {
-			// Only possible in case of a bad expression, because we have a return
-			// statement without corresponding function declaration.
+		if fnType.Results == nil {
+			// The "ret" contains at least one result, but "fnType" doesn't have any
+			// outgoing results.
 			return nil, false
 		}
 
-		if fd.Type.Results == nil {
-			return nil, false
-		}
-
-		outTypes := fd.Type.Results.List
+		outTypes := fnType.Results.List
 		if len(outTypes) <= i {
-			// Only possible in case of a bad expression, because the number of
-			// arguments in the return statement does not match the number of
-			// arguments in the corresponding function declaration.
+			// The number of arguments in the "ret" does not match the
+			// number of arguments in the corresponding "fnType".
 			return nil, false
 		}
 
