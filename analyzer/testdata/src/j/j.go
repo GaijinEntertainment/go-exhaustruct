@@ -1,69 +1,52 @@
 package j
 
+import (
+	"fmt"
+	"os"
+)
+
 type Test struct {
 	A string
-	B int
-	C float32
-	D bool
-	E string `exhaustruct:"optional"`
 }
 
 type AError struct{}
 
 func (AError) Error() string { return "error message" }
 
-func shouldPassEmptyStructWithAError() (Test, error) {
-	return Test{}, &AError{}
-}
-
 type BError struct{ msg string }
 
 func (e BError) Error() string { return e.msg }
+
+func shouldPassEmptyStructWithConcreteAError() (Test, *AError) {
+	return Test{}, &AError{}
+}
 
 func shouldFailEmptyStructWithEmptyBError() (Test, error) {
 	return Test{}, &BError{} // want "j.BError is missing field msg"
 }
 
-func shouldPassEmptyStructWithFilledBError() (Test, error) {
-	return Test{}, &BError{msg: "error message"}
+func shouldFailEmptyStructWithNilConcreteError() (Test, *BError) {
+	return Test{}, nil // want "j.Test is missing field A"
 }
 
-func shouldPassEmptyStructWithFilledAError() (Test, error) {
-	return Test{}, &AError{}
+func shouldPassEmptyStructWithFmtError() (Test, error) {
+	return Test{}, fmt.Errorf("error message")
 }
 
-func shouldFailEmptyStructWithNilError() (Test, error) {
-	return Test{}, nil // want "j.Test is missing fields A, B, C, D"
+func shouldPassStaticError() (Test, error) {
+	return Test{}, os.ErrNotExist
 }
 
-func shouldPassFilledStructWithNilError() (Test, error) {
-	return Test{"", 0, 0.0, false, ""}, nil
+func shouldPassAnonymousFunctionReturningError() (Test, error) {
+	return Test{}, func() error { return nil }()
 }
 
-func shouldPassFilledStructWithNilErrorUsingLambda() (Test, error) {
-	f := func() (Test, error) {
-		return Test{"", 0, 0.0, false, ""}, nil
-	}
-	return f()
+func shouldFailAnonymousFunctionReturningEmptyError() (Test, error) {
+	fn := func() error { return &BError{} } // want "j.BError is missing field msg"
+
+	return Test{}, fn()
 }
 
-func shouldFailEmptyStructWithNilErrorUsingLambda() (Test, error) {
-	f := func() (Test, error) {
-		return Test{}, nil // want "j.Test is missing fields A, B, C, D"
-	}
-	return f()
-}
-
-func shouldFailEmptyStructWithEmptyErrorUsingLambda() (Test, error) {
-	f := func() (Test, error) {
-		return Test{}, &BError{} // want "j.BError is missing field msg"
-	}
-	return f()
-}
-
-func shouldPassEmptyStructWithEmptyErrorUsingLambda() (Test, error) {
-	f := func() (Test, error) {
-		return Test{}, &AError{}
-	}
-	return f()
+func shouldFailEmptyNestedStructWithNonNilErr() ([]Test, error) {
+	return []Test{{}}, os.ErrNotExist // want "j.Test is missing field A"
 }

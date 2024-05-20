@@ -99,8 +99,12 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 		}
 
 		if len(lit.Elts) == 0 {
-			if litIsInUnhappyPathReturn(pass, stack, lit) {
-				return true
+			if ret, ok := stackParentIsReturn(stack); ok {
+				if returnContainsNonNilError(pass, ret, n) {
+					// it is okay to return uninitialized structure in case struct's direct parent is
+					// a return statement containing non-nil error
+					return true
+				}
 			}
 		}
 
@@ -114,37 +118,6 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 
 		return true
 	}
-}
-
-// litIsInUnhappyPathReturn reports whenever the "lit" is located in the
-// return statement with etiher a non-nil value of [error] interface type or a
-// struct which corresponding result type in the function declaration is the [error]
-// interface type.
-func litIsInUnhappyPathReturn(pass *analysis.Pass, stack []ast.Node, lit *ast.CompositeLit) bool {
-	ret, ok := stackParentIsReturn(stack)
-	if !ok {
-		return false
-	}
-
-	if containsErrorIfaceValue(pass, ret) {
-		return true
-	}
-
-	fnType, ok := stackNearestFuncType(stack)
-	if !ok {
-		// Only possible in case of a bad expression, because we have a literal in
-		// the "ret" without corresponding function type.
-		return false
-	}
-
-	if errLit, ok := containsValUnderErrorIface(pass, ret, fnType); ok {
-		if errLit != lit {
-			// we want to process composite literals of custom error types as well.
-			return true
-		}
-	}
-
-	return false
 }
 
 // getCompositeLitRelatedComments returns all comments that are related to checked node. We
@@ -208,94 +181,52 @@ func getStructType(pass *analysis.Pass, lit *ast.CompositeLit) (*types.Struct, *
 
 func stackParentIsReturn(stack []ast.Node) (*ast.ReturnStmt, bool) {
 	// it is safe to skip boundary check, since stack always has at least one element
-	// - whole file.
-	ret, ok := stack[len(stack)-2].(*ast.ReturnStmt)
+	// we also have no reason to check the first element, since it is always a file
+	for i := len(stack) - 2; i > 0; i-- {
+		switch st := stack[i].(type) {
+		case *ast.ReturnStmt:
+			return st, true
 
-	return ret, ok
+		case *ast.UnaryExpr:
+			// in case we're dealing with pointers - it is still viable to check pointer's
+			// parent for return statement
+			continue
+
+		default:
+			return nil, false
+		}
+	}
+
+	return nil, false
 }
 
-func typeName(pass *analysis.Pass, e ast.Expr) string {
-	return pass.TypesInfo.TypeOf(e).String()
-}
+// errorIface is a type that represents [error] interface and all types will be
+// compared against.
+var errorIface = types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
 
-// containsErrorIfaceValue reports if "ret" contains value of type [error].
-func containsErrorIfaceValue(pass *analysis.Pass, ret *ast.ReturnStmt) bool {
+func returnContainsNonNilError(pass *analysis.Pass, ret *ast.ReturnStmt, except ast.Node) bool {
 	// errors are mostly located at the end of return statement, so we're starting
 	// from the end.
 	for i := len(ret.Results) - 1; i >= 0; i-- {
-		expr := ret.Results[i]
+		ri := ret.Results[i]
 
-		if typeName(pass, expr) == "error" {
+		// skip current node
+		if ri == except {
+			continue
+		}
+
+		if un, ok := ri.(*ast.UnaryExpr); ok {
+			if un.X == except {
+				continue
+			}
+		}
+
+		if types.Implements(pass.TypesInfo.TypeOf(ri), errorIface) {
 			return true
 		}
 	}
 
 	return false
-}
-
-// stackNearestFuncType returns nearest [ast.FuncType] on the stack if any.
-// Returned [ast.FuncType] belongs to either a lambda function - [ast.FuncLit]
-// or a global function - [ast.FuncDecl].
-func stackNearestFuncType(stack []ast.Node) (*ast.FuncType, bool) {
-	for i := len(stack) - 1; i >= 0; i-- {
-		n := stack[i]
-		switch fd := n.(type) {
-		case *ast.FuncDecl:
-			return fd.Type, true
-
-		case *ast.FuncLit:
-			return fd.Type, true
-
-		default:
-		}
-	}
-
-	return nil, false
-}
-
-// containsValUnderErrorIface returns expr from the "ret" which
-// corresponding type in "fnType" is [error] if any.
-func containsValUnderErrorIface(
-	pass *analysis.Pass,
-	ret *ast.ReturnStmt,
-	fnType *ast.FuncType,
-) (ast.Expr, bool) {
-	if fnType.Results == nil {
-		// "fnType" must have results to match one of them as the [error] interface
-		// type.
-		return nil, false
-	}
-
-	fnTypeExprs := fnType.Results.List
-	retExprs := ret.Results
-
-	if len(retExprs) != len(fnTypeExprs) {
-		// "ret" doesn't belong to the "fnType"
-		return nil, false
-	}
-
-	// errors are mostly located at the end of return statement, so we're starting
-	// from the end.
-	for i := len(retExprs) - 1; i >= 0; i-- {
-		expr := retExprs[i]
-		tname := typeName(pass, expr)
-
-		if tname == "untyped nil" {
-			continue
-		}
-
-		if typeName(pass, fnTypeExprs[i].Type) == "error" {
-			// expr is returned under the position of the [error] interface type. If
-			// expr type doesn't actually implement the [error], then the Go
-			// compiler will throw [InvalidIFaceAssign], so we should only care
-			// about the fact that expr is intended to be returned as [error].
-			//
-			// See: https://pkg.go.dev/golang.org/x/tools/internal/typesinternal#InvalidIfaceAssign
-			return expr, true
-		}
-	}
-
-	return nil, false
 }
 
 func (a *analyzer) processStruct(
