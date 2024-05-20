@@ -99,3 +99,40 @@ var b Shape = a.Shape{
 	Length: 5,
 }
 ```
+
+### Errors handling
+
+In order to avoid unnecessary noise, when dealing with non-pointer types returned along with errors - `exhaustruct` will
+ignore non-error types, checking only structures satisfying `error` interface.
+
+```go
+package main
+
+import "errors"
+
+type Shape struct {
+	Length int
+	Width  int
+}
+
+func NewShape() (Shape, error) {
+	return Shape{}, errors.New("error") // will not raise an error
+}
+
+type MyError struct {
+	Err error
+}
+
+func (e MyError) Error() string {
+    return e.Err.Error()
+}
+
+func NewSquare() (Shape, error) {
+    return Shape{}, MyError{Err: errors.New("error")} // will not raise an error
+}
+
+func NewCircle() (Shape, error) {
+    return Shape{}, MyError{} // will raise "main.MyError is missing field Err"
+}
+
+```
