@@ -1,6 +1,7 @@
 package structure_test
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"testing"
@@ -51,6 +52,10 @@ func (s *InfoSuite) SetupSuite() {
 
 	s.infoParser = structure.NewInfoParser(&structure.InfoCache{}, pkgs[0].Types, ac, pkgs[0].TypesInfo)
 	s.scope = pkgs[0].Syntax[0].Scope
+
+	for name, _ := range s.scope.Objects {
+		fmt.Println(name)
+	}
 }
 
 func (s *InfoSuite) Test_NamedTypeStruct() {

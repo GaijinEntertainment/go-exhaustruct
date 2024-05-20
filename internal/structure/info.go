@@ -118,7 +118,7 @@ func (p InfoParser) byNamedType(named *types.Named, typ *types.Struct) (Info, er
 			return Info{}, err //nolint:wrapcheck
 		}
 
-		dir = parseDirectives(relatedComments)
+		dir = parseStructDirectives(relatedComments)
 	}
 
 	pkg := obj.Pkg()
@@ -163,7 +163,7 @@ func (p InfoParser) byIdent(ident *ast.Ident, typ *types.Struct) (Info, error) {
 		Name:        ident.Name,
 		PackageName: pkg.Name(),
 		PackagePath: pkg.Path(),
-		Directives:  parseDirectives(relatedComments),
+		Directives:  parseStructDirectives(relatedComments),
 		Type:        typ,
 		Fields:      NewFields(typ),
 	}
@@ -182,13 +182,29 @@ func (p InfoParser) byAstStruct(astStruct *ast.StructType, typ *types.Struct) (I
 		Name:        "<anonymous>",
 		PackageName: p.pkg.Name(),
 		PackagePath: p.pkg.Path(),
-		Directives:  parseDirectives(relatedComments),
+		Directives:  parseStructDirectives(relatedComments),
 		Type:        typ,
 		Fields:      NewFields(typ),
 	}, nil
 }
 
-func parseDirectives(comments []*ast.CommentGroup) (d Directives) {
+func (p InfoParser) parseStructFields(strct *types.Struct) Fields {
+	sf := make(Fields, 0, strct.NumFields())
+
+	for i := 0; i < strct.NumFields(); i++ {
+		f := strct.Field(i)
+
+		sf = append(sf, Field{
+			Name:     f.Name(),
+			Exported: f.Exported(),
+			Optional: HasOptionalTag(strct.Tag(i)),
+		})
+	}
+
+	return sf
+}
+
+func parseStructDirectives(comments []*ast.CommentGroup) (d Directives) {
 	if len(comments) == 0 {
 		return d
 	}

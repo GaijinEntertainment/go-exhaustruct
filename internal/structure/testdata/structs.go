@@ -83,3 +83,18 @@ var (
 	//exhaustruct:enforce
 	_AnonymousTestTypeVariable2 = struct{}{}
 )
+
+func someFunc() (any, any) {
+	type LocalType struct {
+		//exhaustruct:ignore
+		Foo string
+		//exhaustruct:enforce
+		Bar string
+	}
+
+	_LocalTypeVariable := LocalType{}
+
+	_AnonymousTypeVariable := struct{}{}
+
+	return _LocalTypeVariable, _AnonymousTypeVariable
+}
