@@ -2,8 +2,6 @@
 package i
 
 import (
-	"errors"
-
 	"e"
 )
 
@@ -62,18 +60,6 @@ func shouldFailRequiredOmitted() {
 		B: 0,
 		C: 0.0,
 	}
-}
-
-func shouldPassEmptyStructWithNonNilErr() (Test, error) {
-	return Test{}, errors.New("some error")
-}
-
-func shouldFailEmptyStructWithNilErr() (Test, error) {
-	return Test{}, nil // want "i.Test is missing fields A, B, C, D"
-}
-
-func shouldFailEmptyNestedStructWithNonNilErr() ([]Test, error) {
-	return []Test{{}}, nil // want "i.Test is missing fields A, B, C, D"
 }
 
 func shouldPassUnnamed() {
