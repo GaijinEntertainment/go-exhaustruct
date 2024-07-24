@@ -23,22 +23,43 @@ go get -u github.com/GaijinEntertainment/go-exhaustruct/v3/cmd/exhaustruct
 ### Usage
 
 ```
-exhaustruct [-flag] [package]
+exhaustruct: Checks if all structure fields are initialized
+
+Usage: exhaustruct [-flag] [package]
+
 
 Flags:
-  -i value
-        Regular expression to match type names, can receive multiple flags.
-        Anonymous structs can be matched by '<anonymous>' alias.
-        4ex:
-                github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.<anonymous>
-                github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo
-        
+  -V    print version and exit
+  -c int
+        display offending line with this many lines of context (default -1)
+  -cpuprofile string
+        write CPU profile to this file
+  -debug string
+        debug flags, any subset of "fpstv"
   -e value
         Regular expression to exclude type names, can receive multiple flags.
         Anonymous structs can be matched by '<anonymous>' alias.
         4ex:
                 github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.<anonymous>
                 github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo
+  -fix
+        apply all suggested fixes
+  -flags
+        print analyzer flags in JSON
+  -i value
+        Regular expression to match type names, can receive multiple flags.
+        Anonymous structs can be matched by '<anonymous>' alias.
+        4ex:
+                github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.<anonymous>
+                github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo
+  -json
+        emit JSON output
+  -memprofile string
+        write memory profile to this file
+  -test
+        indicates whether test files should be analyzed, too (default true)
+  -trace string
+        write trace log to this file
 ```
 
 #### Comment directives
