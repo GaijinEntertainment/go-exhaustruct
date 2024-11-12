@@ -12,9 +12,9 @@ import (
 	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/ast/inspector"
 
-	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/comment"
-	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/pattern"
-	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/structure"
+	"dev.gaijin.team/go/go-exhaustruct/v4/internal/comment"
+	"dev.gaijin.team/go/go-exhaustruct/v4/internal/pattern"
+	"dev.gaijin.team/go/go-exhaustruct/v4/internal/structure"
 )
 
 type analyzer struct {
@@ -61,13 +61,13 @@ func (a *analyzer) newFlagSet() flag.FlagSet {
 	fs.Var(&a.include, "i", `Regular expression to match type names, can receive multiple flags.
 Anonymous structs can be matched by '<anonymous>' alias.
 4ex: 
-	github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.<anonymous>
-	github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo`)
+	dev.gaijin.team/go/go-exhaustruct/v4/analyzer\.<anonymous>
+	dev.gaijin.team/go/go-exhaustruct/v4/analyzer\.TypeInfo`)
 	fs.Var(&a.exclude, "e", `Regular expression to exclude type names, can receive multiple flags.
 Anonymous structs can be matched by '<anonymous>' alias.
 4ex: 
-	github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.<anonymous>
-	github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo`)
+	dev.gaijin.team/go/go-exhaustruct/v4/analyzer\.<anonymous>
+	dev.gaijin.team/go/go-exhaustruct/v4/analyzer\.TypeInfo`)
 
 	return *fs
 }

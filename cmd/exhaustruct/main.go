@@ -5,7 +5,7 @@ import (
 
 	"golang.org/x/tools/go/analysis/singlechecker"
 
-	"github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer"
+	"dev.gaijin.team/go/go-exhaustruct/v4/analyzer"
 )
 
 func main() {

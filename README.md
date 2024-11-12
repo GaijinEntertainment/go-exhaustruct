@@ -17,7 +17,7 @@
 ### Installation
 
 ```shell
-go get -u github.com/GaijinEntertainment/go-exhaustruct/v3/cmd/exhaustruct
+go get -u dev.gaijin.team/go/go-exhaustruct/v4/cmd/exhaustruct
 ```
 
 ### Usage
@@ -30,15 +30,15 @@ Flags:
         Regular expression to match type names, can receive multiple flags.
         Anonymous structs can be matched by '<anonymous>' alias.
         4ex:
-                github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.<anonymous>
-                github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo
+                dev.gaijin.team/go/go-exhaustruct/v4/analyzer\.<anonymous>
+                dev.gaijin.team/go/go-exhaustruct/v4/analyzer\.TypeInfo
         
   -e value
         Regular expression to exclude type names, can receive multiple flags.
         Anonymous structs can be matched by '<anonymous>' alias.
         4ex:
-                github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.<anonymous>
-                github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo
+                dev.gaijin.team/go/go-exhaustruct/v4/analyzer\.<anonymous>
+                dev.gaijin.team/go/go-exhaustruct/v4/analyzer\.TypeInfo
 ```
 
 #### Comment directives
