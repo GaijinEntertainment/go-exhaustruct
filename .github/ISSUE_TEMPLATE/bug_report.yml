@@ -1,0 +1,25 @@
+name: Bug Report
+description: Report a bug
+type: "bug"
+
+body:
+  - type: textarea
+    attributes:
+      label: What happened?
+      description: Please provide as much information as possible, this helps us address the issue.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: How can we reproduce it (as minimally and precisely as possible)?
+      description: Please provide steps to reproduce. Provide code that can be run if possible.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Any additional info you think would be helpful for fixing this bug
