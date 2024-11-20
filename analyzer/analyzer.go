@@ -18,8 +18,9 @@ import (
 )
 
 type analyzer struct {
-	include pattern.List `exhaustruct:"optional"`
-	exclude pattern.List `exhaustruct:"optional"`
+	include           pattern.List `exhaustruct:"optional"`
+	exclude           pattern.List `exhaustruct:"optional"`
+	allowEmptyStructs bool         `exhaustruct:"optional"`
 
 	structFields structure.FieldsCache `exhaustruct:"optional"`
 	comments     comment.Cache         `exhaustruct:"optional"`
@@ -28,10 +29,11 @@ type analyzer struct {
 	typeProcessingNeedMu sync.RWMutex `exhaustruct:"optional"`
 }
 
-func NewAnalyzer(include, exclude []string) (*analysis.Analyzer, error) {
+func NewAnalyzer(include, exclude []string, allowEmptyStructs bool) (*analysis.Analyzer, error) {
 	a := analyzer{
 		typeProcessingNeed: make(map[string]bool),
 		comments:           comment.Cache{},
+		allowEmptyStructs:  allowEmptyStructs,
 	}
 
 	var err error
@@ -68,6 +70,7 @@ Anonymous structs can be matched by '<anonymous>' alias.
 4ex: 
 	github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.<anonymous>
 	github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo`)
+	fs.BoolVar(&a.allowEmptyStructs, "allow-empty", a.allowEmptyStructs, `If set, analyzer will not report structs initialized as empty.`)
 
 	return *fs
 }
@@ -99,6 +102,10 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 		}
 
 		if len(lit.Elts) == 0 {
+			if a.allowEmptyStructs {
+				return true
+			}
+
 			if ret, ok := stackParentIsReturn(stack); ok {
 				if returnContainsNonNilError(pass, ret, n) {
 					// it is okay to return uninitialized structure in case struct's direct parent is
