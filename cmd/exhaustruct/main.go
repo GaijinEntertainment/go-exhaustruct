@@ -11,7 +11,7 @@ import (
 func main() {
 	flag.Bool("unsafeptr", false, "")
 
-	a, err := analyzer.NewAnalyzer(nil, nil)
+	a, err := analyzer.NewAnalyzer(nil, nil, false)
 	if err != nil {
 		panic(err)
 	}

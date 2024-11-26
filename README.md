@@ -39,6 +39,9 @@ Flags:
         4ex:
                 github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.<anonymous>
                 github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo
+
+  -allow-empty
+        If set, analyzer will not report structs initialized as empty.
 ```
 
 #### Comment directives
