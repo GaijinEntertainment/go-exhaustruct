@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"dev.gaijin.team/go/go-exhaustruct/v4/internal/files"
+	"dev.gaijin.team/go/go-exhaustruct/v4/internal/_old/files"
 )
 
 func TestCommentsCache(t *testing.T) {
