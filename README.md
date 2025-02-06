@@ -41,6 +41,17 @@ Flags:
                 github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo
 ```
 
+If you are using [golangci-lint](https://golangci-lint.run/), you can configure these flags as follows:
+
+```yaml
+linters-settings:
+  exhaustruct:
+    include:
+      - '.*gorm\.Config.*'
+    exclude:
+      - '.*openai\.ChatCompletionRequest.*'
+```
+
 #### Comment directives
 
 `exhaustruct` supports comment directives to mark individual structures as ignored during linting or enforce it's check
