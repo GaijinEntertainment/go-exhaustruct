@@ -223,3 +223,28 @@ func shouldFailExternalTypeAliases() {
 	_ = TestExternalAliasAlias{}    // want "i.TestExternalAliasAlias is missing fields A, B"
 	_ = TestExternalExcludedAlias{} // want "i.TestExternalExcludedAlias is missing fields A, B"
 }
+
+type TestSynonym = Test
+type TestSynonymSynonym = TestSynonym
+type TestSynonymAlias TestSynonym
+type TestSynonymExcluded = Test
+
+func shouldFailTypeSynonyms() {
+	_ = TestSynonym{}         // want "i.Test is missing fields A, B, C, D"
+	_ = TestSynonymSynonym{}  // want "i.Test is missing fields A, B, C, D"
+	_ = TestSynonymAlias{}    // want "i.TestSynonymAlias is missing fields A, B, C, D"
+	_ = TestSynonymExcluded{} // want "i.Test is missing fields A, B, C, D"
+}
+
+type TestExternalSynonym = e.External
+type TestExternalSynonymSynonym = TestExternalSynonym
+type TestExternalExcludedSynonym = e.ExternalExcluded
+
+func shouldFailExternalTypeSynonyms() {
+	_ = TestExternalSynonym{}        // want "e.External is missing fields A, B"
+	_ = TestExternalSynonymSynonym{} // want "e.External is missing fields A, B"
+}
+
+func shouldSucceedExcludedSynonyms() {
+	_ = TestExternalExcludedSynonym{}
+}
