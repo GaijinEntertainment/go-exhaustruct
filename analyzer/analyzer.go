@@ -113,7 +113,7 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 		pos, msg := a.processStruct(pass, lit, structTyp, typeInfo, rc)
 
 		if pos != nil {
-			pass.Reportf(*pos, msg)
+			pass.Reportf(*pos, "%s", msg)
 		}
 
 		return true
