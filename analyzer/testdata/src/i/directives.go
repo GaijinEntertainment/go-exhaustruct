@@ -1,17 +1,11 @@
 package i
 
+import (
+	"e"
+)
+
 func excludedConsumer(e TestExcluded) string {
 	return e.A
-}
-
-type TestIncludedEmbedded struct {
-	A string
-	Embedded
-}
-
-type TestExcludedEmbedded struct {
-	A string
-	Embedded
 }
 
 func shouldNotFailOnIgnoreDirective() (Test, error) {
@@ -34,13 +28,6 @@ func shouldNotFailOnIgnoreDirective() (Test, error) {
 		B: 0,
 	} //exhaustruct:ignore
 
-	// directive on embedded struct
-	_ = TestIncludedEmbedded{
-		A: "",
-		//exhaustruct:ignore
-		Embedded: Embedded{},
-	}
-
 	//exhaustruct:ignore
 	return Test{}, nil
 }
@@ -53,25 +40,26 @@ func shouldFailOnExcludedButEnforced() {
 	// initially excluded, but enforced
 	//exhaustruct:enforce
 	_ = TestExcluded{} // want "i.TestExcluded is missing fields A, B"
-
-	// directive on embedded and parent struct
-	//exhaustruct:enforce
-	_ = TestExcludedEmbedded{ // want "i.TestExcludedEmbedded is missing field A"
-		//exhaustruct:enforce
-		Embedded: Embedded{}, // want "i.Embedded is missing fields E, F, g, H"
-	}
-
-	// directive on embedded struct
-	_ = TestExcludedEmbedded{
-		A: "",
-		//exhaustruct:enforce
-		Embedded: Embedded{}, // want "i.Embedded is missing fields E, F, g, H"
-	}
-
 }
 
 func shouldFailOnMisappliedDirectives() {
 	// wrong directive name
 	//exhaustive:enforce
 	_ = TestExcluded{B: 0}
+}
+
+func shouldHandleDirectivesOnEmbedded() {
+	_ = Test2{
+		//exhaustruct:ignore
+		External: e.External{},
+		//exhaustruct:enforce
+		Embedded: Embedded{}, // want "i.Embedded is missing fields E, F, g, H"
+	}
+
+	_ = Test2{
+		//exhaustruct:ignore
+		External: e.External{},
+		//exhaustruct:ignore
+		Embedded: Embedded{},
+	}
 }
