@@ -41,16 +41,7 @@ Flags:
                 github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo
 ```
 
-If you are using [golangci-lint](https://golangci-lint.run/), you can configure these flags as follows:
-
-```yaml
-linters-settings:
-  exhaustruct:
-    include:
-      - '.*gorm\.Config.*'
-    exclude:
-      - '.*openai\.ChatCompletionRequest.*'
-```
+If you're using [golangci-lint](https://golangci-lint.run/), refer to the [linters settings](https://golangci-lint.run/usage/linters/#exhaustruct) for the most up-to-date configuration guidance.
 
 #### Comment directives
 
