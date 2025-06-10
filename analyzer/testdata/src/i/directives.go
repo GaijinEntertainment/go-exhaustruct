@@ -1,5 +1,9 @@
 package i
 
+import (
+	"e"
+)
+
 func excludedConsumer(e TestExcluded) string {
 	return e.A
 }
@@ -42,4 +46,20 @@ func shouldFailOnMisappliedDirectives() {
 	// wrong directive name
 	//exhaustive:enforce
 	_ = TestExcluded{B: 0}
+}
+
+func shouldHandleDirectivesOnEmbedded() {
+	_ = Test2{
+		//exhaustruct:ignore
+		External: e.External{},
+		//exhaustruct:enforce
+		Embedded: Embedded{}, // want "i.Embedded is missing fields E, F, g, H"
+	}
+
+	_ = Test2{
+		//exhaustruct:ignore
+		External: e.External{},
+		//exhaustruct:ignore
+		Embedded: Embedded{},
+	}
 }
