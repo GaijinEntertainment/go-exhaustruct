@@ -41,6 +41,8 @@ Flags:
                 github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo
 ```
 
+If you're using [golangci-lint](https://golangci-lint.run/), refer to the [linters settings](https://golangci-lint.run/usage/linters/#exhaustruct) for the most up-to-date configuration guidance.
+
 #### Comment directives
 
 `exhaustruct` supports comment directives to mark individual structures as ignored during linting or enforce it's check
