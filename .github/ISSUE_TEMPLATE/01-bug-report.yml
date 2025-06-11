@@ -1,0 +1,97 @@
+name: Bug Report
+description: File a bug report for exhaustruct analyzer
+title: "[Bug]: "
+labels: ["bug", "triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report! Please provide as much detail as possible to help us understand and reproduce the issue.
+
+  - type: dropdown
+    id: usage-method
+    attributes:
+      label: Usage Method
+      description: How are you using exhaustruct?
+      options:
+        - Command line tool
+        - golangci-lint integration
+        - Direct analyzer usage
+      multiple: true
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug. What did you expect to happen vs what actually happened?
+      placeholder: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this issue?
+      placeholder: |
+        1. Create a Go file with...
+        2. Run exhaustruct with flags...
+        3. Expected result vs actual result...
+    validations:
+      required: true
+
+  - type: textarea
+    id: code-sample
+    attributes:
+      label: Code Sample
+      description: Please provide a minimal reproducible Go code example
+      placeholder: |
+        ```go
+        package main
+
+        type Example struct {
+            Field1 string
+            Field2 int
+        }
+
+        func main() {
+            // Your code here
+        }
+        ```
+      render: go
+    validations:
+      required: false
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Configuration
+      description: Please share your exhaustruct configuration (command flags, .golangci.yml section, etc.)
+      placeholder: |
+        Command line flags used:
+        -i "pattern1" -e "pattern2"
+
+        Or golangci-lint configuration:
+        ```yaml
+        linters-settings:
+          exhaustruct:
+            include:
+              - pattern1
+            exclude:
+              - pattern2
+        ```
+      render: yaml
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem here
+      placeholder: Screenshots, environment details, related issues, etc.
+    validations:
+      required: false
