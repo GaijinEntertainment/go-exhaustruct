@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: GitHub Discussions
+    url: https://github.com/GaijinEntertainment/go-exhaustruct/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: golangci-lint Documentation
+    url: https://golangci-lint.run/usage/linters/#exhaustruct
+    about: Check the official golangci-lint documentation for configuration help
