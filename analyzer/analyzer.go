@@ -129,16 +129,21 @@ func getCompositeLitRelatedComments(stack []ast.Node, cm ast.CommentMap) []*ast.
 	for i := len(stack) - 1; i >= 0; i-- {
 		node := stack[i]
 
-		switch node.(type) {
-		case *ast.CompositeLit, // stack[len(stack)-1]
-			*ast.ReturnStmt,    // return ...
-			*ast.IndexExpr,     // map[enum]...{...}[key]
-			*ast.CallExpr,      // myfunc(map...)
-			*ast.UnaryExpr,     // &map...
-			*ast.AssignStmt,    // variable assignment (without var keyword)
-			*ast.DeclStmt,      // var declaration, parent of *ast.GenDecl
-			*ast.GenDecl,       // var declaration, parent of *ast.ValueSpec
-			*ast.ValueSpec,     // var declaration
+		switch tn := node.(type) {
+		case *ast.CompositeLit:
+			// comments on the lines prior to literal
+			comments = append(comments, cm[node]...)
+			// comments on the same line as literal type definition
+			// worth noting that event "typeless" literals have a type
+			comments = append(comments, cm[tn.Type]...)
+		case *ast.ReturnStmt, // return ...
+			*ast.IndexExpr,    // map[enum]...{...}[key]
+			*ast.CallExpr,     // myfunc(map...)
+			*ast.UnaryExpr,    // &map...
+			*ast.AssignStmt,   // variable assignment (without var keyword)
+			*ast.DeclStmt,     // var declaration, parent of *ast.GenDecl
+			*ast.GenDecl,      // var declaration, parent of *ast.ValueSpec
+			*ast.ValueSpec,    // var declaration
 			*ast.KeyValueExpr: // field declaration
 			comments = append(comments, cm[node]...)
 

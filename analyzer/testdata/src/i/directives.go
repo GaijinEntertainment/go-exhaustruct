@@ -28,6 +28,25 @@ func shouldNotFailOnIgnoreDirective() (Test, error) {
 		B: 0,
 	} //exhaustruct:ignore
 
+	// directive in a slice with type
+	_ = []any{
+		Test{}, // want "i.Test is missing fields A, B, C, D"
+		Test{}, //exhaustruct:ignore
+		Test{}, // want "i.Test is missing fields A, B, C, D"
+	}
+	// directive in a slice without type
+	_ = []Test{
+		{}, // want "i.Test is missing fields A, B, C, D"
+		{}, //exhaustruct:ignore
+		{}, // want "i.Test is missing fields A, B, C, D"
+	}
+	// directive in a map
+	_ = map[string]any{
+		"a": Test{}, // want "i.Test is missing fields A, B, C, D"
+		"b": Test{}, //exhaustruct:ignore
+		"c": Test{}, // want "i.Test is missing fields A, B, C, D"
+	}
+
 	//exhaustruct:ignore
 	return Test{}, nil
 }
