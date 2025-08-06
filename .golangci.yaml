@@ -1,98 +1,261 @@
+version: "2"
+
 run:
-  timeout: 10s
-  allow-parallel-runners: true
-
-linters:
-  enable-all: true
-  disable:
-    - depguard
-    - gci
-    - godox
-    - gofmt
-    - gofumpt
-    - goheader
-    - goimports
-    - varnamelen
-    - exhaustivestruct # deprecated
-    - nonamedreturns # we're using named returns quite often
-    - errname # naming is too strict and is not observed in many places
-    - golint # deprecated
-    - importas # may be useful later, requires configuration
-    - interfacer # deprecated
-    - maligned # deprecated
-    - misspell # we have IDE speller
-    - scopelint # obsoleted, replaced by other linters
-    - govet # invoked by the goland internally
-    - tagliatelle # it isn't very handy to have such linter in a monorepo with a lot of different coding standards
-    - nlreturn # there is wsl linter what implements the same checks
-    - ifshort # deprecated in 1.48
-    - structcheck # deprecated 1.49
-    - varcheck # deprecated 1.49
-    - nosnakecase # deprecated 1.48
-    - deadcode # deprecated 1.49
-    - lll # disabled in favor of revive
-    - funlen # disabled in favor of revive
-    - gocognit # disabled in favor of revive
-    - cyclop # disabled in favor of revive
-    - gocyclo # disabled in favor of revive
-
-linters-settings:
-  wsl:
-    force-case-trailing-whitespace: 1
-
-  revive:
-    enable-all-rules: true
-    confidence: 0.8
-    rules:
-      - name: comment-spacings
-        severity: warning
-        disabled: false
-        arguments: [ "nolint" ]
-      - name: function-length
-        severity: warning
-        disabled: false
-        arguments: [ 50, 0 ]
-      - name: function-result-limit
-        severity: warning
-        disabled: false
-        arguments: [ 3 ]
-      - name: cognitive-complexity
-        severity: warning
-        disabled: false
-        arguments: [ 20 ]
-      - name: cyclomatic
-        severity: warning
-        disabled: false
-        arguments: [ 10 ]
-      - name: line-length-limit
-        severity: warning
-        disabled: false
-        arguments: [ 110 ]
-      - name: argument-limit
-        severity: warning
-        disabled: false
-        arguments: [ 6 ]
-      # disabled rules
-      - name: unchecked-type-assertion # forcetypeassert is already used
-        disabled: true
-      - name: max-public-structs # quite annoying rule
-        disabled: true
-      - name: banned-characters # we don't have banned chars
-        disabled: true
-      - name: file-header # we don't have a file headers
-        disabled: true
-      - name: flag-parameter # extremely annoying linter, it is absolutely okay to have boolean args
-        disabled: true
-      - name: struct-tag # false-positive on tags implemented by other linters
-        disabled: true
-      - name: unhandled-error # dont have proper exclusions list ToDo: make a PR
-        disabled: true
-      - name: add-constant # dont have exclusions list ToDo: make a PR
-        disabled: true
-      - name: empty-lines # it false-positives on one-liners ToDo: make a PR
-        disabled: true
-
+  modules-download-mode: readonly
 
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
+
+linters:
+  default: all
+  disable:
+    - funcorder
+    - cyclop
+    - depguard
+    - errname
+    - godox
+    - goheader
+    - govet
+    - importas
+    - intrange
+    - ireturn
+    - misspell
+    - nlreturn
+    - nonamedreturns
+    - tagalign
+    - tagliatelle
+    - varnamelen
+    - whitespace
+    - zerologlint
+    - sloglint
+  settings:
+    lll:
+      line-length: 120
+      tab-width: 2
+    funlen:
+      lines: 0
+      ignore-comments: true
+      statements: 50
+    gocognit:
+      min-complexity: 20
+    gocyclo:
+      min-complexity: 10
+    errcheck:
+      exclude-functions:
+        - (*github.com/gin-gonic/gin.Context).Error
+        - (*github.com/gin-gonic/gin.Context).AbortWithError
+        - (*github.com/gin-gonic/gin.Error).SetType
+        - (*github.com/gin-gonic/gin.Error).SetMeta
+        - (*bytes.Buffer).Write
+        - (*bytes.Buffer).WriteByte
+        - (*bytes.Buffer).WriteRune
+        - (*bytes.Buffer).WriteString
+        - (*strings.Builder).Write
+        - (*strings.Builder).WriteByte
+        - (*strings.Builder).WriteRune
+        - (*strings.Builder).WriteString
+        - (*os.File).Close
+    exhaustruct:
+      exclude:
+        - github\.com/spf13/cobra\.Command
+        - net/http\.Transport
+        - net/http\.Server
+        - net/http\.Client
+        - net/url\.URL
+        - crypto/tls\.Config
+        - testing/fstest\.MapFile
+        - github\.com/docker/docker/api/types\..*Options
+        - github\.com/prometheus/client_golang/prometheus/collectors\..*Opts
+        - github\.com/prometheus/client_golang/prometheus\..*Opts
+        - github\.com/aws/aws-sdk-go-v2/service/s3/types\..*
+        - go\.mongodb\.org/mongo-driver/mongo/options/FindOptions
+        - github\.com/sashabaranov/go-openai\.ChatCompletion.*
+        - github\.com/sashabaranov/go-openai\..*Message
+        - github\.com/nukosuke/go-zendesk/zendesk\..*Options
+    forbidigo:
+      forbid:
+        - pattern: (?i)(^|\.)print(f|ln)?$
+    gomoddirectives:
+      replace-local: true
+    mnd:
+      ignored-functions:
+        - os\.(OpenFile|WriteFile|Chmod),p?flag\..*
+        - strconv\.(Format|Parse|Append).*
+    revive:
+      confidence: 0.8
+      enable-all-rules: true
+      rules:
+        # ========== ACTIVE REVIVE RULES ==========
+        - name: argument-limit
+          arguments:
+            - 6
+          severity: warning
+          disabled: false
+        - name: atomic
+          disabled: false
+        - name: blank-imports
+          disabled: false
+        - name: bool-literal-in-expr
+          disabled: false
+        - name: call-to-gc
+          disabled: false
+        - name: confusing-naming
+          disabled: false
+        - name: confusing-results
+          disabled: false
+        - name: constant-logical-expr
+          disabled: false
+        - name: context-keys-type
+          disabled: false
+        - name: deep-exit
+          disabled: false
+        - name: defer
+          disabled: false
+        - name: dot-imports
+          disabled: false
+        - name: duplicated-imports
+          disabled: false
+        - name: early-return
+          disabled: false
+        - name: empty-block
+          disabled: false
+        - name: error-naming
+          disabled: false
+        - name: error-return
+          disabled: false
+        - name: error-strings
+          disabled: false
+        - name: errorf
+          disabled: false
+        - name: function-result-limit
+          arguments:
+            - 3
+          severity: warning
+          disabled: false
+        - name: get-return
+          disabled: false
+        - name: identical-branches
+          disabled: false
+        - name: if-return
+          disabled: false
+        - name: imports-blocklist
+          disabled: false
+        - name: increment-decrement
+          disabled: false
+        - name: indent-error-flow
+          disabled: false
+        - name: modifies-parameter
+          disabled: false
+        - name: modifies-value-receiver
+          disabled: false
+        - name: nested-structs
+          disabled: false
+        - name: optimize-operands-order
+          disabled: false
+        - name: range
+          disabled: false
+        - name: range-val-address
+          disabled: false
+        - name: receiver-naming
+          disabled: false
+        - name: string-of-int
+          disabled: false
+        - name: superfluous-else
+          disabled: false
+        - name: time-equal
+          disabled: false
+        - name: time-naming
+          disabled: false
+        - name: unexported-naming
+          disabled: false
+        - name: unexported-return
+          disabled: false
+        - name: unnecessary-stmt
+          disabled: false
+        - name: unreachable-code
+          disabled: false
+        - name: unused-receiver
+          disabled: false
+        - name: use-any
+          disabled: false
+        - name: useless-break
+          disabled: false
+        - name: var-declaration
+          disabled: false
+        - name: var-naming
+          disabled: false
+        - name: waitgroup-by-value
+          disabled: false
+
+        # ========== DISABLED - REPLACED BY STANDALONE LINTERS ==========
+        - name: add-constant # can be replaced by goconst
+          disabled: true
+        - name: banned-characters # can be replaced by asciicheck
+          disabled: true
+        - name: cognitive-complexity # replaced by gocognit
+          disabled: true
+        - name: comment-spacings # can be replaced by whitespace
+          disabled: true
+        - name: context-as-argument # replaced by contextcheck
+          disabled: true
+        - name: cyclomatic # replaced by gocyclo
+          disabled: true
+        - name: empty-lines # replaced by wsl
+          disabled: true
+        - name: file-header # can be replaced by goheader
+          disabled: true
+        - name: function-length # replaced by funlen
+          disabled: true
+        - name: import-shadowing # can be replaced by gocritic
+          disabled: true
+        - name: line-length-limit # replaced by lll
+          disabled: true
+        - name: range-val-in-closure # can be replaced by copyloopvar
+          disabled: true
+        - name: redefines-builtin-id # replaced by predeclared
+          disabled: true
+        - name: string-format # replaced by staticcheck
+          disabled: true
+        - name: struct-tag # can be replaced by tagliatelle
+          disabled: true
+        - name: unhandled-error # replaced by errcheck
+          disabled: true
+        - name: unused-parameter # replaced by unparam
+          disabled: true
+
+        # ========== DISABLED - PROJECT SPECIFIC REASONS ==========
+        - name: exported # overall annoying linter, maybe configure and re-enable later
+          disabled: true
+        - name: flag-parameter
+          disabled: true
+        - name: max-public-structs
+          disabled: true
+        - name: package-comments # interferes with file-level nolint rules
+          disabled: true
+        - name: unchecked-type-assertion
+          disabled: true
+    testifylint:
+      disable:
+        - require-error
+    wrapcheck:
+      ignore-sig-regexps:
+        - OnInitComplete
+        - OnSetupDone
+        - ProcessInitComplete
+        - ProcessSetupDone
+        - ReadInConfig
+        - google\.golang\.org/grpc/status\.Error.*\(
+    wsl:
+      force-case-trailing-whitespace: 1
+      allow-trailing-comment: true
+      allow-separated-leading-comment: true
+
+  exclusions:
+    rules:
+      - path: "_test\\.go"
+        linters:
+          - funlen
+    paths:
+      - vendor/.* # ignore vendor
+      - .*\.gen\.go$ # ignore generated files
