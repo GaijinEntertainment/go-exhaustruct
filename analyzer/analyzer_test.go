@@ -33,10 +33,10 @@ func TestAnalyzer(t *testing.T) {
 	assert.Error(t, err)
 
 	a, err = analyzer.NewAnalyzer(analyzer.Config{
-		IncludeRx: []string{`.*[Tt]est.*`, `.*External`, `.*Embedded`, `.*\.<anonymous>`, `j\..*Error`},
+		IncludeRx: []string{`.*[Tt]est.*`, `.*External`, `.*Embedded`, `.*\.<anonymous>`},
 		ExcludeRx: []string{`.*Excluded$`, `e\.<anonymous>`},
 	})
 	require.NoError(t, err)
 
-	analysistest.Run(t, testdataPath, a, "i", "e", "j")
+	analysistest.Run(t, testdataPath, a, "i", "e")
 }

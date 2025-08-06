@@ -257,5 +257,6 @@ linters:
         linters:
           - funlen
     paths:
+      - testdata/.*
       - vendor/.* # ignore vendor
       - .*\.gen\.go$ # ignore generated files

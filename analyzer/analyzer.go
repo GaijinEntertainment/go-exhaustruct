@@ -73,14 +73,8 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 			return true
 		}
 
-		if len(lit.Elts) == 0 {
-			if ret, ok := stackParentIsReturn(stack); ok {
-				if returnContainsNonNilError(pass, ret, n) {
-					// it is okay to return uninitialized structure in case struct's direct parent is
-					// a return statement containing non-nil error
-					return true
-				}
-			}
+		if len(lit.Elts) == 0 && a.checkEmptyStructAllowed(pass, stack, typeInfo) {
+			return true
 		}
 
 		file := a.comments.Get(pass.Fset, stack[0].(*ast.File)) //nolint:forcetypeassert
@@ -93,6 +87,150 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 
 		return true
 	}
+}
+
+func (a *analyzer) checkEmptyStructAllowed(pass *analysis.Pass, stack []ast.Node, typeInfo *TypeInfo) bool {
+	// empty structs are globally allowed
+	if a.config.AllowEmpty {
+		return true
+	}
+
+	// some structs are allowed to be empty, basing on pattern
+	if a.config.allowEmptyPatterns.MatchFullString(typeInfo.String()) {
+		return true
+	}
+
+	if ret, ok := getParentReturnStmt(stack); ok {
+		// empty structures are allowed in all return statements
+		if a.config.AllowEmptyReturns {
+			return true
+		}
+
+		// empty structures are allowed in error returns
+		if isErrorReturnStatement(pass, ret, stack[len(stack)-1]) {
+			return true
+		}
+	}
+
+	// empty structures are allowed in variable declarations
+	if isChildOfVariableDeclaration(stack) && a.config.AllowEmptyDeclarations {
+		return true
+	}
+
+	return false
+}
+
+// isPartOfVariableDeclaration checks if the node is direct part of variable
+// declaration, meaning that it is a first-level RHS child of `:=` or `var`
+// declaration.
+func isChildOfVariableDeclaration(stack []ast.Node) bool {
+	if len(stack) < 2 { //nolint:mnd // stack for sure contains at leas current node and its parent (file)
+		return false
+	}
+
+	// Start from composite literal and go up the stack
+	for i := len(stack) - 1; i > 0; i-- {
+		parent := stack[i-1]
+
+		switch p := parent.(type) {
+		case *ast.AssignStmt:
+			if p.Tok == token.DEFINE {
+				return true
+			}
+
+		case *ast.ValueSpec:
+			return true
+
+		case *ast.UnaryExpr:
+			// Only allow pointer taking (&)
+			if p.Op == token.AND {
+				continue
+			}
+
+			return false
+
+		default:
+			return false
+		}
+	}
+
+	return false
+}
+
+// getParentReturnStmt checks if the direct parent of the current node is a
+// return statement and returns it if so.
+func getParentReturnStmt(stack []ast.Node) (*ast.ReturnStmt, bool) {
+	if len(stack) < 2 { //nolint:mnd // stack for sure contains at leas current node and its parent (file)
+		return nil, false
+	}
+
+	// Start from composite literal and go up the stack
+	for i := len(stack) - 1; i > 0; i-- {
+		parent := stack[i-1]
+
+		switch p := parent.(type) {
+		case *ast.ReturnStmt:
+			return p, true
+
+		case *ast.UnaryExpr:
+			// Only allow pointer taking (&)
+			if p.Op == token.AND {
+				continue
+			}
+
+			return nil, false
+
+		default:
+			return nil, false
+		}
+	}
+
+	return nil, false
+}
+
+// errorIface is an interface type of the [error] interface.
+//
+//nolint:forcetypeassert,gochecknoglobals
+var errorIface = types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
+
+// isErrorReturnStatement checks if the return statement is an error return
+// statement, meaning that it contains a non-nil value that implements [error].
+func isErrorReturnStatement(pass *analysis.Pass, n *ast.ReturnStmt, currentNode ast.Node) bool {
+	if len(n.Results) == 0 {
+		return false
+	}
+
+	// iterate backwards, since idiomatic position of error is at the end
+	for i := len(n.Results) - 1; i >= 0; i-- {
+		ri := n.Results[i]
+
+		// Skip the current node, since it is already being checked
+		if ri == currentNode {
+			continue
+		}
+
+		switch ri := ri.(type) {
+		case *ast.Ident:
+			// Skip nil values
+			if ri.Name == "nil" {
+				continue
+			}
+
+		case *ast.UnaryExpr:
+			// Current node might be under the unary expression
+			if ri.X == currentNode {
+				continue
+			}
+		}
+
+		// Check if the type implements error interface
+		resultType := pass.TypesInfo.TypeOf(ri)
+		if resultType != nil && types.Implements(resultType, errorIface) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // getCompositeLitRelatedComments returns all comments that are related to checked node. We
@@ -161,56 +299,6 @@ func getStructType(pass *analysis.Pass, lit *ast.CompositeLit) (*types.Struct, *
 	}
 }
 
-func stackParentIsReturn(stack []ast.Node) (*ast.ReturnStmt, bool) {
-	// it is safe to skip boundary check, since stack always has at least one element
-	// we also have no reason to check the first element, since it is always a file
-	for i := len(stack) - 2; i > 0; i-- {
-		switch st := stack[i].(type) {
-		case *ast.ReturnStmt:
-			return st, true
-
-		case *ast.UnaryExpr:
-			// in case we're dealing with pointers - it is still viable to check pointer's
-			// parent for return statement
-			continue
-
-		default:
-			return nil, false
-		}
-	}
-
-	return nil, false
-}
-
-// errorIface is a type that represents [error] interface and all types will be
-// compared against.
-var errorIface = types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
-
-func returnContainsNonNilError(pass *analysis.Pass, ret *ast.ReturnStmt, except ast.Node) bool {
-	// errors are mostly located at the end of return statement, so we're starting
-	// from the end.
-	for i := len(ret.Results) - 1; i >= 0; i-- {
-		ri := ret.Results[i]
-
-		// skip current node
-		if ri == except {
-			continue
-		}
-
-		if un, ok := ri.(*ast.UnaryExpr); ok {
-			if un.X == except {
-				continue
-			}
-		}
-
-		if types.Implements(pass.TypesInfo.TypeOf(ri), errorIface) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (a *analyzer) processStruct(
 	pass *analysis.Pass,
 	lit *ast.CompositeLit,
@@ -260,6 +348,7 @@ func (a *analyzer) shouldProcessType(info *TypeInfo) bool {
 
 	if !ok {
 		a.typeProcessingNeedMu.Lock()
+
 		res = true
 
 		if a.config.includePatterns != nil && !a.config.includePatterns.MatchFullString(name) {

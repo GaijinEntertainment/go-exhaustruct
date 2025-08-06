@@ -108,7 +108,7 @@ func (c *Config) BindToFlagSet(fs *flag.FlagSet) *flag.FlagSet {
 			"Example: `.*/http\\.Cookie`. Can be used multiple times.")
 	fs.Var(stringSliceFlag{&c.ExcludeRx}, "e", "Short form of -exclude")
 
-	fs.BoolVar(&c.AllowEmpty, "allow-empty", false,
+	fs.BoolVar(&c.AllowEmpty, "allow-empty", c.AllowEmpty,
 		"Allow empty structures, effectively excluding them from the check")
 
 	fs.Var(stringSliceFlag{&c.AllowEmptyRx}, "allow-empty-include",
@@ -117,10 +117,10 @@ func (c *Config) BindToFlagSet(fs *flag.FlagSet) *flag.FlagSet {
 			"Each regex must match the full type name including package path. "+
 			"Example: `.*/http\\.Cookie`. Can be used multiple times.")
 
-	fs.BoolVar(&c.AllowEmptyReturns, "allow-empty-returns", false,
+	fs.BoolVar(&c.AllowEmptyReturns, "allow-empty-returns", c.AllowEmptyReturns,
 		"Allow empty structures in return statements")
 
-	fs.BoolVar(&c.AllowEmptyDeclarations, "allow-empty-declarations", false,
+	fs.BoolVar(&c.AllowEmptyDeclarations, "allow-empty-declarations", c.AllowEmptyDeclarations,
 		"Allow empty structures in variable declarations")
 
 	return fs
