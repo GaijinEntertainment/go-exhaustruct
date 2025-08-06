@@ -13,13 +13,11 @@ import (
 	"golang.org/x/tools/go/ast/inspector"
 
 	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/comment"
-	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/pattern"
 	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/structure"
 )
 
 type analyzer struct {
-	include pattern.List `exhaustruct:"optional"`
-	exclude pattern.List `exhaustruct:"optional"`
+	config Config
 
 	structFields structure.FieldsCache `exhaustruct:"optional"`
 	comments     comment.Cache         `exhaustruct:"optional"`
@@ -28,22 +26,16 @@ type analyzer struct {
 	typeProcessingNeedMu sync.RWMutex `exhaustruct:"optional"`
 }
 
-func NewAnalyzer(include, exclude []string) (*analysis.Analyzer, error) {
+func NewAnalyzer(config Config) (*analysis.Analyzer, error) {
+	err := config.Prepare()
+	if err != nil {
+		return nil, err
+	}
+
 	a := analyzer{
+		config:             config,
 		typeProcessingNeed: make(map[string]bool),
 		comments:           comment.Cache{},
-	}
-
-	var err error
-
-	a.include, err = pattern.NewList(include...)
-	if err != nil {
-		return nil, err //nolint:wrapcheck
-	}
-
-	a.exclude, err = pattern.NewList(exclude...)
-	if err != nil {
-		return nil, err //nolint:wrapcheck
 	}
 
 	return &analysis.Analyzer{ //nolint:exhaustruct
@@ -51,25 +43,8 @@ func NewAnalyzer(include, exclude []string) (*analysis.Analyzer, error) {
 		Doc:      "Checks if all structure fields are initialized",
 		Run:      a.run,
 		Requires: []*analysis.Analyzer{inspect.Analyzer},
-		Flags:    a.newFlagSet(),
+		Flags:    *a.config.BindToFlagSet(flag.NewFlagSet("", flag.PanicOnError)),
 	}, nil
-}
-
-func (a *analyzer) newFlagSet() flag.FlagSet {
-	fs := flag.NewFlagSet("", flag.PanicOnError)
-
-	fs.Var(&a.include, "i", `Regular expression to match type names, can receive multiple flags.
-Anonymous structs can be matched by '<anonymous>' alias.
-4ex: 
-	github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.<anonymous>
-	github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo`)
-	fs.Var(&a.exclude, "e", `Regular expression to exclude type names, can receive multiple flags.
-Anonymous structs can be matched by '<anonymous>' alias.
-4ex: 
-	github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.<anonymous>
-	github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer\.TypeInfo`)
-
-	return *fs
 }
 
 func (a *analyzer) run(pass *analysis.Pass) (any, error) {
@@ -136,6 +111,7 @@ func getCompositeLitRelatedComments(stack []ast.Node, cm ast.CommentMap) []*ast.
 			// comments on the same line as literal type definition
 			// worth noting that event "typeless" literals have a type
 			comments = append(comments, cm[tn.Type]...)
+
 		case *ast.ReturnStmt, // return ...
 			*ast.IndexExpr,    // map[enum]...{...}[key]
 			*ast.CallExpr,     // myfunc(map...)
@@ -272,7 +248,7 @@ func (a *analyzer) processStruct(
 // shouldProcessType returns true if type should be processed basing off include
 // and exclude patterns, defined though constructor and\or flags.
 func (a *analyzer) shouldProcessType(info *TypeInfo) bool {
-	if len(a.include) == 0 && len(a.exclude) == 0 {
+	if len(a.config.includePatterns) == 0 && len(a.config.excludePatterns) == 0 {
 		return true
 	}
 
@@ -286,11 +262,11 @@ func (a *analyzer) shouldProcessType(info *TypeInfo) bool {
 		a.typeProcessingNeedMu.Lock()
 		res = true
 
-		if a.include != nil && !a.include.MatchFullString(name) {
+		if a.config.includePatterns != nil && !a.config.includePatterns.MatchFullString(name) {
 			res = false
 		}
 
-		if res && a.exclude != nil && a.exclude.MatchFullString(name) {
+		if res && a.config.excludePatterns != nil && a.config.excludePatterns.MatchFullString(name) {
 			res = false
 		}
 
