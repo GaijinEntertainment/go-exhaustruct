@@ -94,24 +94,24 @@ func (s stringSliceFlag) Set(value string) error {
 
 // BindToFlagSet binds the config fields to the provided flag set.
 func (c *Config) BindToFlagSet(fs *flag.FlagSet) *flag.FlagSet {
-	fs.Var(stringSliceFlag{&c.IncludeRx}, "include",
+	fs.Var(stringSliceFlag{&c.IncludeRx}, "include-rx",
 		"Regular expression to match type names that should be processed. "+
 			"Anonymous structs can be matched by '<anonymous>' alias. "+
 			"Each regex must match the full type name including package path. "+
 			"Example: `.*/http\\.Cookie`. Can be used multiple times.")
-	fs.Var(stringSliceFlag{&c.IncludeRx}, "i", "Short form of -include")
+	fs.Var(stringSliceFlag{&c.IncludeRx}, "i", "Short form of -include-rx")
 
-	fs.Var(stringSliceFlag{&c.ExcludeRx}, "exclude",
+	fs.Var(stringSliceFlag{&c.ExcludeRx}, "exclude-rx",
 		"Regular expression to exclude type names from processing, has precedence over -include. "+
 			"Anonymous structs can be matched by '<anonymous>' alias. "+
 			"Each regex must match the full type name including package path. "+
 			"Example: `.*/http\\.Cookie`. Can be used multiple times.")
-	fs.Var(stringSliceFlag{&c.ExcludeRx}, "e", "Short form of -exclude")
+	fs.Var(stringSliceFlag{&c.ExcludeRx}, "e", "Short form of -exclude-rx")
 
 	fs.BoolVar(&c.AllowEmpty, "allow-empty", c.AllowEmpty,
 		"Allow empty structures, effectively excluding them from the check")
 
-	fs.Var(stringSliceFlag{&c.AllowEmptyRx}, "allow-empty-include",
+	fs.Var(stringSliceFlag{&c.AllowEmptyRx}, "allow-empty-rx",
 		"Regular expression to match type names that should be allowed to be empty. "+
 			"Anonymous structs can be matched by '<anonymous>' alias. "+
 			"Each regex must match the full type name including package path. "+

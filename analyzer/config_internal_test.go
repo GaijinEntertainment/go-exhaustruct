@@ -100,8 +100,8 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 
 		// Check that flags are registered
 		expectedFlags := []string{
-			"include", "i", "exclude", "e",
-			"allow-empty", "allow-empty-include",
+			"include-rx", "i", "exclude-rx", "e",
+			"allow-empty", "allow-empty-rx",
 			"allow-empty-returns", "allow-empty-declarations",
 		}
 
@@ -117,7 +117,7 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		config := Config{}
 		fs := config.BindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
 
-		args := []string{"-include", ".*Test.*", "-i", ".*Mock.*"}
+		args := []string{"-include-rx", ".*Test.*", "-i", ".*Mock.*"}
 		err := fs.Parse(args)
 		require.NoError(t, err)
 
@@ -130,7 +130,7 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		config := Config{}
 		fs := config.BindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
 
-		args := []string{"-exclude", ".*Exclude.*", "-e", ".*Skip.*"}
+		args := []string{"-exclude-rx", ".*Exclude.*", "-e", ".*Skip.*"}
 		err := fs.Parse(args)
 		require.NoError(t, err)
 
@@ -152,13 +152,13 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		assert.True(t, config.AllowEmptyDeclarations)
 	})
 
-	t.Run("flag parsing allow-empty-include patterns", func(t *testing.T) {
+	t.Run("flag parsing allow-empty-rx patterns", func(t *testing.T) {
 		t.Parallel()
 
 		config := Config{}
 		fs := config.BindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
 
-		args := []string{"-allow-empty-include", ".*Empty.*"}
+		args := []string{"-allow-empty-rx", ".*Empty.*"}
 		err := fs.Parse(args)
 		require.NoError(t, err)
 
@@ -210,10 +210,10 @@ func TestConfig_Integration(t *testing.T) {
 
 		// Simulate command line arguments
 		args := []string{
-			"-include", ".*Test.*",
-			"-exclude", ".*Skip.*",
+			"-include-rx", ".*Test.*",
+			"-exclude-rx", ".*Skip.*",
 			"-allow-empty",
-			"-allow-empty-include", ".*Empty.*",
+			"-allow-empty-rx", ".*Empty.*",
 			"-allow-empty-returns",
 		}
 		err := fs.Parse(args)
@@ -278,7 +278,7 @@ func TestConfig_ProgrammaticDefaults(t *testing.T) {
 		fs := config.BindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
 
 		// Use flags to explicitly set to false (using the "false" value for boolean flags)
-		// Note: boolean flags in Go can't be set to false via command line easily, 
+		// Note: boolean flags in Go can't be set to false via command line easily,
 		// so we test the case where they are not provided vs provided
 		args := []string{"-allow-empty", "-allow-empty-returns"} // Only set two flags
 		err := fs.Parse(args)
@@ -304,9 +304,9 @@ func TestConfig_ProgrammaticDefaults(t *testing.T) {
 		fs := config.BindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
 
 		args := []string{
-			"-include", ".*Flag.*",          // Override programmatic include
-			"-allow-empty-returns",          // Override programmatic false to true
-			"-allow-empty-include", ".*Pattern.*", // Add allow empty pattern
+			"-include-rx", ".*Flag.*", // Override programmatic include
+			"-allow-empty-returns",           // Override programmatic false to true
+			"-allow-empty-rx", ".*Pattern.*", // Add allow empty pattern
 		}
 		err := fs.Parse(args)
 		require.NoError(t, err)
@@ -340,7 +340,7 @@ func TestNewAnalyzer_ConfigPreservation(t *testing.T) {
 		assert.NotNil(t, analyzer)
 
 		// The analyzer should have been created successfully without modifying the config values
-		// Since we can't directly access the internal config in the analyzer, 
+		// Since we can't directly access the internal config in the analyzer,
 		// we verify that the analyzer creation succeeded, which implies the config was preserved.
 		assert.Equal(t, "exhaustruct", analyzer.Name)
 		assert.NotEmpty(t, analyzer.Doc)
