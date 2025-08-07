@@ -10,10 +10,10 @@ import (
 )
 
 func BenchmarkAnalyzer(b *testing.B) {
-	a, err := analyzer.NewAnalyzer(
-		[]string{`.*[Tt]est.*`, `.*External`, `.*Embedded`, `.*\.<anonymous>`},
-		[]string{`.*Excluded$`, `e\.<anonymous>`},
-	)
+	a, err := analyzer.NewAnalyzer(analyzer.Config{
+		IncludeRx: []string{`.*[Tt]est.*`, `.*External`, `.*Embedded`, `.*\.<anonymous>`},
+		ExcludeRx: []string{`.*Excluded$`, `e\.<anonymous>`},
+	})
 	require.NoError(b, err)
 
 	b.ResetTimer()
