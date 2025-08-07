@@ -1,4 +1,4 @@
-module github.com/GaijinEntertainment/go-exhaustruct/v4
+module dev.gaijin.team/go/exhaustruct/v4
 
 go 1.24
 

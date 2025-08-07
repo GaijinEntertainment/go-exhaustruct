@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/GaijinEntertainment/go-exhaustruct/v4/internal/pattern"
+	"dev.gaijin.team/go/exhaustruct/v4/internal/pattern"
 )
 
 func TestNewList(t *testing.T) {

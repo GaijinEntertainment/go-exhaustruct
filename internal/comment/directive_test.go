@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/GaijinEntertainment/go-exhaustruct/v4/internal/comment"
+	"dev.gaijin.team/go/exhaustruct/v4/internal/comment"
 )
 
 func TestParseDirective(t *testing.T) {

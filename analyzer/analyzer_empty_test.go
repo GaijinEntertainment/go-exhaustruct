@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/analysis/analysistest"
 
-	"github.com/GaijinEntertainment/go-exhaustruct/v4/analyzer"
+	"dev.gaijin.team/go/exhaustruct/v4/analyzer"
 )
 
 func TestAnalyzerEmpty(t *testing.T) {
