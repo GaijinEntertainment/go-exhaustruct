@@ -12,8 +12,8 @@ import (
 	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/ast/inspector"
 
-	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/comment"
-	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/structure"
+	"github.com/GaijinEntertainment/go-exhaustruct/v4/internal/comment"
+	"github.com/GaijinEntertainment/go-exhaustruct/v4/internal/structure"
 )
 
 type analyzer struct {

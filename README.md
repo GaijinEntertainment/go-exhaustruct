@@ -13,10 +13,14 @@
 
 `exhaustruct` is a golang analyzer that finds structures with uninitialized fields
 
+## RENAME WARNING
+
+Package being renamed to `dev.gaijin.team/go/exhaustruct/v4` and all further updates will be published under this name.
+
 ### Installation
 
 ```shell
-go get -u github.com/GaijinEntertainment/go-exhaustruct/v3/cmd/exhaustruct
+go get -u github.com/GaijinEntertainment/go-exhaustruct/v4/cmd/exhaustruct
 ```
 
 ### Usage
@@ -77,22 +81,22 @@ By default, linter will check all structures and report if any accessible field 
 
 ```go
 type Config struct {
-	Host     string
-	Port     int
-	Database string
+Host     string
+Port     int
+Database string
 }
 
 // Without any flags - requires all fields
 func createConfig() Config {
-	return Config{} // ERROR: missing fields Host, Port, Database
+return Config{} // ERROR: missing fields Host, Port, Database
 }
 
 func createValidConfig() Config {
-	return Config{
-		Host:     "localhost",
-		Port:     5432,
-		Database: "mydb",
-	}
+return Config{
+Host:     "localhost",
+Port:     5432,
+Database: "mydb",
+}
 }
 ```
 
@@ -110,13 +114,13 @@ exhaustruct -allow-empty ./...
 ```go
 // With -allow-empty: ALL empty structs are allowed
 func createConfig() Config {
-	return Config{} // OK: empty structs allowed globally
+return Config{} // OK: empty structs allowed globally
 }
 
 var globalConfig = Config{} // OK: empty structs allowed globally
 
 func processConfigs() []Config {
-	return []Config{{}} // OK: empty structs allowed globally
+return []Config{{}} // OK: empty structs allowed globally
 }
 ```
 
@@ -133,16 +137,16 @@ exhaustruct -allow-empty-returns ./...
 ```go
 // With -allow-empty-returns: empty structs allowed only in return statements
 func createConfig() Config {
-	return Config{} // OK: empty struct in return statement
+return Config{} // OK: empty struct in return statement
 }
 
 func initializeConfig() {
-	var config = Config{} // ERROR: empty struct in variable declaration
-	_ = config
+var config = Config{} // ERROR: empty struct in variable declaration
+_ = config
 }
 
 func processConfigs() []Config {
-	return []Config{{}} // ERROR: empty struct in slice literal (not direct child of return statement)
+return []Config{{}} // ERROR: empty struct in slice literal (not direct child of return statement)
 }
 ```
 
@@ -159,19 +163,19 @@ exhaustruct -allow-empty-declarations ./...
 ```go
 // With -allow-empty-declarations: empty structs allowed in variable declarations
 func initializeConfig() {
-	var config = Config{}  // OK: empty struct in variable declaration
-	config := Config{}     // OK: empty struct in short variable declaration
-	ptr := &Config{}       // OK: empty struct in pointer declaration
-	_ = config
-	_ = ptr
+var config = Config{}  // OK: empty struct in variable declaration
+config := Config{}     // OK: empty struct in short variable declaration
+ptr := &Config{}       // OK: empty struct in pointer declaration
+_ = config
+_ = ptr
 }
 
 func createConfig() Config {
-	return Config{} // ERROR: empty struct in return statement
+return Config{} // ERROR: empty struct in return statement
 }
 
 func processConfigs() []Config {
-	return []Config{{}} // ERROR: empty struct in slice literal
+return []Config{{}} // ERROR: empty struct in slice literal
 }
 ```
 
@@ -186,33 +190,33 @@ exhaustruct -allow-empty-include ".*Config.*" -allow-empty-include ".*Options.*"
 
 ```go
 type DatabaseConfig struct {
-	Host string
-	Port int
+Host string
+Port int
 }
 
 type ServerOptions struct {
-	Timeout int
-	MaxConns int
+Timeout int
+MaxConns int
 }
 
 type UserData struct {
-	Name string
-	Email string
+Name string
+Email string
 }
 
 func example() {
-	// OK: matches .*Config.* pattern
-	config := DatabaseConfig{}
+// OK: matches .*Config.* pattern
+config := DatabaseConfig{}
 
-	// OK: matches .*Options.* pattern
-	opts := ServerOptions{}
+// OK: matches .*Options.* pattern
+opts := ServerOptions{}
 
-	// ERROR: doesn't match any pattern
-	user := UserData{}
+// ERROR: doesn't match any pattern
+user := UserData{}
 
-	_ = config
-	_ = opts
-	_ = user
+_ = config
+_ = opts
+_ = user
 }
 ```
 
@@ -223,28 +227,28 @@ ignore non-error types, in case return statement contains non-nil value that sat
 
 ```go
 type Shape struct {
-	Length int
-	Width  int
+Length int
+Width  int
 }
 
 func NewShape() (Shape, error) {
-	return Shape{}, errors.New("error") // will not raise an error
+return Shape{}, errors.New("error") // will not raise an error
 }
 
 type MyError struct {
-	Err error
+Err error
 }
 
 func (e MyError) Error() string {
-	return e.Err.Error()
+return e.Err.Error()
 }
 
 func NewSquare() (Shape, error) {
-	return Shape{}, &MyError{Err: errors.New("error")} // will not raise an error
+return Shape{}, &MyError{Err: errors.New("error")} // will not raise an error
 }
 
 func NewCircle() (Shape, error) {
-	return Shape{}, &MyError{} // will raise "main.MyError is missing field Err"
+return Shape{}, &MyError{} // will raise "main.MyError is missing field Err"
 }
 
 ```

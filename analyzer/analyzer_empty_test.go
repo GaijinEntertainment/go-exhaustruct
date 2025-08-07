@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/analysis/analysistest"
 
-	"github.com/GaijinEntertainment/go-exhaustruct/v3/analyzer"
+	"github.com/GaijinEntertainment/go-exhaustruct/v4/analyzer"
 )
 
 func TestAnalyzerEmpty(t *testing.T) {
@@ -46,9 +46,9 @@ func TestAnalyzerEmpty(t *testing.T) {
 			testPackage: "empty_patterns",
 		},
 		{
-			name: "error returns behavior",
+			name:   "error returns behavior",
 			config: analyzer.Config{
-				// Test error returns without any special allowances - 
+				// Test error returns without any special allowances -
 				// structures should be allowed in error returns by default
 			},
 			testPackage: "empty_error_returns",

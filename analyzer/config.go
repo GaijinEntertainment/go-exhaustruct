@@ -6,7 +6,7 @@ import (
 
 	"dev.gaijin.team/go/golib/e"
 
-	"github.com/GaijinEntertainment/go-exhaustruct/v3/internal/pattern"
+	"github.com/GaijinEntertainment/go-exhaustruct/v4/internal/pattern"
 )
 
 type Config struct {
