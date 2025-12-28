@@ -248,3 +248,44 @@ func shouldFailExternalTypeSynonyms() {
 func shouldSucceedExcludedSynonyms() {
 	_ = TestExternalExcludedSynonym{}
 }
+
+// Tests for issue #144: False negative when slice element type is omitted
+// https://github.com/GaijinEntertainment/go-exhaustruct/issues/144
+
+type Pointers []*Test3
+
+func shouldPassSliceOfPointers() {
+	_ = []*Test3{
+		{A: "a"},
+		&Test3{A: "b"},
+	}
+	_ = Pointers{
+		{A: "a"},
+		&Test3{A: "b"},
+	}
+}
+
+func shouldFailSliceOfPointers() {
+	_ = []*Test3{
+		{},            // want "i.Test3 is missing field A"
+		&Test3{B: 123}, // want "i.Test3 is missing field A"
+	}
+	_ = Pointers{
+		{},            // want "i.Test3 is missing field A"
+		&Test3{B: 123}, // want "i.Test3 is missing field A"
+	}
+}
+
+func shouldPassMapOfPointers() {
+	_ = map[string]*Test3{
+		"a": {A: "a"},
+		"b": &Test3{A: "b"},
+	}
+}
+
+func shouldFailMapOfPointers() {
+	_ = map[string]*Test3{
+		"a": {},            // want "i.Test3 is missing field A"
+		"b": &Test3{B: 123}, // want "i.Test3 is missing field A"
+	}
+}
