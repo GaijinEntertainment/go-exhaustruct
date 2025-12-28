@@ -22,28 +22,28 @@ func TestAnalyzerEmpty(t *testing.T) {
 			config: analyzer.Config{
 				AllowEmpty: true,
 			},
-			testPackage: "empty_global",
+			testPackage: "testdata/config/allow_empty/global",
 		},
 		{
 			name: "allow empty returns",
 			config: analyzer.Config{
 				AllowEmptyReturns: true,
 			},
-			testPackage: "empty_returns",
+			testPackage: "testdata/config/allow_empty/returns",
 		},
 		{
 			name: "allow empty declarations",
 			config: analyzer.Config{
 				AllowEmptyDeclarations: true,
 			},
-			testPackage: "empty_declarations",
+			testPackage: "testdata/config/allow_empty/declarations",
 		},
 		{
 			name: "allow empty by pattern",
 			config: analyzer.Config{
 				AllowEmptyRx: []string{".*Allowed.*", ".*Nested.*"},
 			},
-			testPackage: "empty_patterns",
+			testPackage: "testdata/config/allow_empty/patterns",
 		},
 		{
 			name:   "error returns behavior",
@@ -51,7 +51,7 @@ func TestAnalyzerEmpty(t *testing.T) {
 				// Test error returns without any special allowances -
 				// structures should be allowed in error returns by default
 			},
-			testPackage: "empty_error_returns",
+			testPackage: "testdata/config/allow_empty/error_returns",
 		},
 	}
 
