@@ -66,7 +66,7 @@ Bug reproductions and fixes are documented in dedicated files:
 ```
 types/derived/
 ├── derived.go      # Core derived type behavior
-└── issue_139.go    # Bug: external derived types + unexported fields
+└── issue_xxx.go    # Example: bug-specific test (e.g., external derived types + unexported fields)
 ```
 
 This approach:
