@@ -70,7 +70,7 @@ func shouldFailEnforceOnExcluded() {
 	_ = TestExcluded{B: 0} // want "directives.TestExcluded is missing field A"
 }
 
-func shouldPassWrongDirectiveName() {
+func shouldPassMisspelledDirective() {
 	// Misspelled directive is ignored
 	//exhaustive:enforce
 	_ = TestExcluded{}
