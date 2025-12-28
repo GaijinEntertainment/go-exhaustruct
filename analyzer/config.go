@@ -49,6 +49,11 @@ type Config struct {
 
 	// AllowEmptyDeclarations allows empty structures in variable declarations.
 	AllowEmptyDeclarations bool `exhaustruct:"optional"`
+
+	// ReportFullTypePath enables full package path in error messages instead of
+	// short package name. This helps when configuring include/exclude patterns,
+	// as import aliases can make short names ambiguous.
+	ReportFullTypePath bool `exhaustruct:"optional"`
 }
 
 // Prepare compiles all regular expression patterns into pattern lists for
@@ -122,6 +127,10 @@ func (c *Config) BindToFlagSet(fs *flag.FlagSet) *flag.FlagSet {
 
 	fs.BoolVar(&c.AllowEmptyDeclarations, "allow-empty-declarations", c.AllowEmptyDeclarations,
 		"Allow empty structures in variable declarations")
+
+	fs.BoolVar(&c.ReportFullTypePath, "report-full-type-path", c.ReportFullTypePath,
+		"Report full package path in error messages (e.g., 'net/http.Cookie' instead of 'http.Cookie'). "+
+			"Useful for identifying types when configuring include/exclude patterns.")
 
 	return fs
 }

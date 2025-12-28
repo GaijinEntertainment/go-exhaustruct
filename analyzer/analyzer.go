@@ -323,11 +323,16 @@ func (a *analyzer) processStruct(
 	if f := a.litSkippedFields(lit, structTyp, !isSamePackage); len(f) > 0 {
 		pos := lit.Pos()
 
-		if len(f) == 1 {
-			return &pos, fmt.Sprintf("%s is missing field %s", info.ShortString(), f.String())
+		typeName := info.ShortString()
+		if a.config.ReportFullTypePath {
+			typeName = info.String()
 		}
 
-		return &pos, fmt.Sprintf("%s is missing fields %s", info.ShortString(), f.String())
+		if len(f) == 1 {
+			return &pos, fmt.Sprintf("%s is missing field %s", typeName, f.String())
+		}
+
+		return &pos, fmt.Sprintf("%s is missing fields %s", typeName, f.String())
 	}
 
 	return nil, ""

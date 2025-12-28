@@ -40,3 +40,14 @@ func TestAnalyzer(t *testing.T) {
 
 	analysistest.Run(t, testdataPath, a, "i", "e")
 }
+
+func TestAnalyzerReportFullTypePath(t *testing.T) {
+	t.Parallel()
+
+	a, err := analyzer.NewAnalyzer(analyzer.Config{
+		ReportFullTypePath: true,
+	})
+	require.NoError(t, err)
+
+	analysistest.Run(t, testdataPath, a, "full_type_path")
+}
