@@ -21,13 +21,13 @@ jobs:
       pull-requests: read
       contents: read
     steps:
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go }}
           check-latest: true
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: "Lint"
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           only-new-issues: true
           args: --timeout 5m --issues-exit-code 0
@@ -41,8 +41,8 @@ jobs:
         os: [ "ubuntu-latest", "windows-latest", "macos-latest" ]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go-version }}
           check-latest: true
@@ -63,6 +63,6 @@ jobs:
       pull-requests: write
       contents: write
     steps:
-      - uses: fastify/github-action-merge-dependabot@v3.11.0
+      - uses: fastify/github-action-merge-dependabot@v3.11.2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
