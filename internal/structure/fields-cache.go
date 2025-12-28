@@ -14,7 +14,9 @@ type FieldsCache struct {
 // not found, it creates a new one from type definition.
 func (c *FieldsCache) Get(typ *types.Struct) Fields {
 	c.mu.RLock()
+
 	fields, ok := c.fields[typ]
+
 	c.mu.RUnlock()
 
 	if ok {
@@ -29,6 +31,7 @@ func (c *FieldsCache) Get(typ *types.Struct) Fields {
 	}
 
 	fields = NewFields(typ)
+
 	c.fields[typ] = fields
 
 	return fields

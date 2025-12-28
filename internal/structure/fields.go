@@ -46,7 +46,7 @@ func HasOptionalTag(tags string) bool {
 func (sf Fields) String() string {
 	b := strings.Builder{}
 
-	for i := 0; i < len(sf); i++ {
+	for i := range len(sf) {
 		if b.Len() != 0 {
 			b.WriteString(", ")
 		}
@@ -60,7 +60,7 @@ func (sf Fields) String() string {
 // Skipped returns a list of fields that are not present in the given
 // literal, but expected to.
 //
-//revive:disable-next-line:cyclomatic
+//nolint:gocyclo // complexity is justified by the multiple edge cases
 func (sf Fields) Skipped(lit *ast.CompositeLit, onlyExported bool) Fields {
 	if len(lit.Elts) != 0 && !isNamedLiteral(lit) {
 		if len(lit.Elts) == len(sf) {
@@ -87,7 +87,7 @@ func (sf Fields) Skipped(lit *ast.CompositeLit, onlyExported bool) Fields {
 		em[k.Name] = true
 	}
 
-	for i := 0; i < len(sf); i++ {
+	for i := range len(sf) {
 		if em[sf[i].Name] || (!sf[i].Exported && onlyExported) || sf[i].Optional {
 			continue
 		}
@@ -105,7 +105,7 @@ func (sf Fields) Skipped(lit *ast.CompositeLit, onlyExported bool) Fields {
 func (sf Fields) existenceMap() map[string]bool {
 	m := make(map[string]bool, len(sf))
 
-	for i := 0; i < len(sf); i++ {
+	for i := range len(sf) {
 		m[sf[i].Name] = false
 	}
 

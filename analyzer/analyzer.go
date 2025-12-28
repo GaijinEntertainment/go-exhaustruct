@@ -343,7 +343,9 @@ func (a *analyzer) shouldProcessType(info *TypeInfo) bool {
 	name := info.String()
 
 	a.typeProcessingNeedMu.RLock()
+
 	res, ok := a.typeProcessingNeed[name]
+
 	a.typeProcessingNeedMu.RUnlock()
 
 	if !ok {

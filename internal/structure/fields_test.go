@@ -28,7 +28,7 @@ func TestStructFields(t *testing.T) {
 type StructFieldsSuite struct {
 	suite.Suite
 
-	scope *ast.Scope
+	scope *ast.Scope //nolint:staticcheck // deprecated but still works for tests
 	pkg   *packages.Package
 }
 
@@ -62,8 +62,8 @@ func (s *StructFieldsSuite) getReferenceStructFields() structure.Fields {
 func (s *StructFieldsSuite) TestNewStructFields() {
 	sf := s.getReferenceStructFields()
 
-	s.Assert().Len(sf, 4)
-	s.Assert().Equal(structure.Fields{
+	s.Len(sf, 4)
+	s.Equal(structure.Fields{
 		{
 			Name:     "ExportedRequired",
 			Exported: true,
@@ -90,7 +90,7 @@ func (s *StructFieldsSuite) TestNewStructFields() {
 func (s *StructFieldsSuite) TestStructFields_String() {
 	sf := s.getReferenceStructFields()
 
-	s.Assert().Equal(
+	s.Equal(
 		"ExportedRequired, unexportedRequired, ExportedOptional, unexportedOptional",
 		sf.String(),
 	)
@@ -100,19 +100,19 @@ func (s *StructFieldsSuite) TestStructFields_SkippedFields_Unnamed() {
 	sf := s.getReferenceStructFields()
 
 	unnamed := s.scope.Lookup("_unnamed")
-	if s.Assert().NotNil(unnamed) {
+	if s.NotNil(unnamed) {
 		lit := unnamed.Decl.(*ast.ValueSpec).Values[0].(*ast.CompositeLit) //nolint:forcetypeassert
-		if s.Assert().NotNil(lit) {
-			s.Assert().Nil(sf.Skipped(lit, true))
-			s.Assert().Nil(sf.Skipped(lit, false))
+		if s.NotNil(lit) {
+			s.Nil(sf.Skipped(lit, true))
+			s.Nil(sf.Skipped(lit, false))
 		}
 	}
 
 	unnamedIncomplete := s.scope.Lookup("_unnamedIncomplete")
-	if s.Assert().NotNil(unnamedIncomplete) {
+	if s.NotNil(unnamedIncomplete) {
 		lit := unnamedIncomplete.Decl.(*ast.ValueSpec).Values[0].(*ast.CompositeLit) //nolint:forcetypeassert
-		if s.Assert().NotNil(lit) {
-			s.Assert().Equal(structure.Fields{
+		if s.NotNil(lit) {
+			s.Equal(structure.Fields{
 				{"unexportedRequired", false, false},
 				{"ExportedOptional", true, true},
 				{"unexportedOptional", false, true},
@@ -125,33 +125,33 @@ func (s *StructFieldsSuite) TestStructFields_SkippedFields_Named() {
 	sf := s.getReferenceStructFields()
 
 	named := s.scope.Lookup("_named")
-	if s.Assert().NotNil(named) {
+	if s.NotNil(named) {
 		lit := named.Decl.(*ast.ValueSpec).Values[0].(*ast.CompositeLit) //nolint:forcetypeassert
-		if s.Assert().NotNil(lit) {
-			s.Assert().Nil(sf.Skipped(lit, true))
-			s.Assert().Nil(sf.Skipped(lit, false))
+		if s.NotNil(lit) {
+			s.Nil(sf.Skipped(lit, true))
+			s.Nil(sf.Skipped(lit, false))
 		}
 	}
 
 	namedIncomplete1 := s.scope.Lookup("_namedIncomplete1")
-	if s.Assert().NotNil(namedIncomplete1) {
+	if s.NotNil(namedIncomplete1) {
 		lit := namedIncomplete1.Decl.(*ast.ValueSpec).Values[0].(*ast.CompositeLit) //nolint:forcetypeassert
-		if s.Assert().NotNil(lit) {
-			s.Assert().Nil(sf.Skipped(lit, true))
-			s.Assert().Equal(structure.Fields{
+		if s.NotNil(lit) {
+			s.Nil(sf.Skipped(lit, true))
+			s.Equal(structure.Fields{
 				{"unexportedRequired", false, false},
 			}, sf.Skipped(lit, false))
 		}
 	}
 
 	namedIncomplete2 := s.scope.Lookup("_namedIncomplete2")
-	if s.Assert().NotNil(namedIncomplete2) {
+	if s.NotNil(namedIncomplete2) {
 		lit := namedIncomplete2.Decl.(*ast.ValueSpec).Values[0].(*ast.CompositeLit) //nolint:forcetypeassert
-		if s.Assert().NotNil(lit) {
-			s.Assert().Equal(structure.Fields{
+		if s.NotNil(lit) {
+			s.Equal(structure.Fields{
 				{"ExportedRequired", true, false},
 			}, sf.Skipped(lit, true))
-			s.Assert().Equal(structure.Fields{
+			s.Equal(structure.Fields{
 				{"ExportedRequired", true, false},
 				{"unexportedRequired", false, false},
 			}, sf.Skipped(lit, false))

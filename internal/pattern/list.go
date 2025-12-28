@@ -42,7 +42,7 @@ func NewList(patterns ...string) (List, error) {
 // For example, if a List contains the pattern "test", it will match "test"
 // but not "testing" or "contest".
 func (l List) MatchFullString(str string) bool {
-	for i := 0; i < len(l); i++ {
+	for i := range len(l) {
 		if m := l[i].FindStringSubmatch(str); len(m) > 0 && m[0] == str {
 			return true
 		}
