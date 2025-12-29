@@ -337,11 +337,9 @@ func (a *analyzer) processStruct(
 		return nil, ""
 	}
 
-	// Unnamed structures are only defined in same package, along with types that have
-	// prefix identical to current package name.
-	isSamePackage := info.PackagePath == pass.Pkg.Path()
+	canAccessUnexported := structFieldsInPackage(structTyp, pass.Pkg)
 
-	if f := a.litSkippedFields(lit, structTyp, !isSamePackage); len(f) > 0 {
+	if f := a.litSkippedFields(lit, structTyp, !canAccessUnexported); len(f) > 0 {
 		pos := lit.Pos()
 
 		typeName := info.ShortString()
@@ -400,6 +398,22 @@ func (a *analyzer) litSkippedFields(
 	onlyExported bool,
 ) structure.Fields {
 	return a.structFields.Get(typ).Skipped(lit, onlyExported)
+}
+
+// structFieldsInPackage returns true if the struct's fields are defined in the
+// given package. For derived types like `type Bar foo.Foo`, returns false if
+// fields are from another package.
+//
+// We treat structs with zero fields as defined in the package, since there
+// are no fields to access.
+func structFieldsInPackage(structTyp *types.Struct, pkg *types.Package) bool {
+	if structTyp.NumFields() == 0 {
+		return true
+	}
+
+	fieldPkg := structTyp.Field(0).Pkg()
+
+	return fieldPkg == nil || fieldPkg == pkg
 }
 
 type TypeInfo struct {

@@ -18,3 +18,13 @@ type Excluded struct {
 	B int
 	c string
 }
+
+// Empty is an empty struct for edge case testing.
+type Empty struct{}
+
+// OnlyUnexported has only unexported fields.
+// When used from another package, no fields should be required.
+type OnlyUnexported struct {
+	a string
+	b int
+}
