@@ -54,6 +54,9 @@ type Config struct {
 	// short package name. This helps when configuring include/exclude patterns,
 	// as import aliases can make short names ambiguous.
 	ReportFullTypePath bool `exhaustruct:"optional"`
+
+	// DebugCacheMetrics enables printing cache hit/miss metrics to stderr.
+	DebugCacheMetrics bool `exhaustruct:"optional"`
 }
 
 // Prepare compiles all regular expression patterns into pattern lists for
@@ -131,6 +134,9 @@ func (c *Config) BindToFlagSet(fs *flag.FlagSet) *flag.FlagSet {
 	fs.BoolVar(&c.ReportFullTypePath, "report-full-type-path", c.ReportFullTypePath,
 		"Report full package path in error messages (e.g., 'net/http.Cookie' instead of 'http.Cookie'). "+
 			"Useful for identifying types when configuring include/exclude patterns.")
+
+	fs.BoolVar(&c.DebugCacheMetrics, "debug-cache-metrics", c.DebugCacheMetrics,
+		"Print cache hit/miss metrics to stderr after each package analysis")
 
 	return fs
 }

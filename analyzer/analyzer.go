@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"os"
 	"sync"
 
 	"golang.org/x/tools/go/analysis"
@@ -51,6 +52,18 @@ func (a *analyzer) run(pass *analysis.Pass) (any, error) {
 	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector) //nolint:forcetypeassert
 
 	insp.WithStack([]ast.Node{(*ast.CompositeLit)(nil)}, a.newVisitor(pass))
+
+	if a.config.DebugCacheMetrics {
+		hits, misses := a.structFields.Stats()
+		hitRate := float64(0)
+
+		if total := hits + misses; total > 0 {
+			hitRate = float64(hits) / float64(total) * 100 //nolint:mnd
+		}
+
+		_, _ = fmt.Fprintf(os.Stderr, "[%s] cache: struct-fields: hits=%d misses=%d (%.2f%%)\n",
+			pass.Pkg.Path(), hits, misses, hitRate)
+	}
 
 	return nil, nil //nolint:nilnil
 }
