@@ -186,3 +186,52 @@ func Test_Fields_Skipped_EmptyStruct(t *testing.T) {
 	require.Nil(t, emptyFields.Skipped(lit, true))
 	require.Nil(t, emptyFields.Skipped(lit, false))
 }
+
+func Test_FieldsCache_Stats(t *testing.T) {
+	t.Parallel()
+
+	pkgs, err := packages.Load(&packages.Config{ //nolint:exhaustruct
+		Mode: packages.NeedTypes,
+		Dir:  "testdata",
+	}, "")
+	require.NoError(t, err)
+	require.Len(t, pkgs, 1)
+
+	pkg := pkgs[0]
+	obj := pkg.Types.Scope().Lookup("testStruct")
+	require.NotNil(t, obj)
+
+	strct := obj.Type().Underlying().(*types.Struct) //nolint:forcetypeassert
+
+	var cache structure.FieldsCache
+
+	{
+		hits, misses := cache.Stats()
+		assert.Equal(t, uint64(0), hits)
+		assert.Equal(t, uint64(0), misses)
+	}
+
+	{
+		_ = cache.Get(strct)
+
+		hits, misses := cache.Stats()
+		assert.Equal(t, uint64(0), hits)
+		assert.Equal(t, uint64(1), misses)
+	}
+
+	{
+		_ = cache.Get(strct)
+
+		hits, misses := cache.Stats()
+		assert.Equal(t, uint64(1), hits)
+		assert.Equal(t, uint64(1), misses)
+	}
+
+	{
+		_ = cache.Get(strct)
+
+		hits, misses := cache.Stats()
+		assert.Equal(t, uint64(2), hits)
+		assert.Equal(t, uint64(1), misses)
+	}
+}
