@@ -324,7 +324,7 @@ func (a *analyzer) processStruct(
 		return nil, ""
 	}
 
-	// unnamed structures are only defined in same package, along with types that has
+	// Unnamed structures are only defined in same package, along with types that have
 	// prefix identical to current package name.
 	isSamePackage := info.PackagePath == pass.Pkg.Path()
 
