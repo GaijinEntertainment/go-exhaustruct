@@ -12,12 +12,16 @@ const (
 	optionalTagValue = "optional"
 )
 
+// Field represents a single struct field with its metadata.
 type Field struct {
 	Name     string
 	Exported bool
 	Optional bool
 }
 
+// Fields is a collection of struct fields. It contains metadata about each field
+// in order of declaration. It is crucial to keep the order, since non-named init
+// relies on it.
 type Fields []*Field
 
 // NewFields creates a new [Fields] from a given struct type.
@@ -25,7 +29,7 @@ type Fields []*Field
 func NewFields(strct *types.Struct) Fields {
 	sf := make(Fields, 0, strct.NumFields())
 
-	for i := 0; i < strct.NumFields(); i++ {
+	for i := range strct.NumFields() {
 		f := strct.Field(i)
 
 		sf = append(sf, &Field{
@@ -38,6 +42,7 @@ func NewFields(strct *types.Struct) Fields {
 	return sf
 }
 
+// HasOptionalTag checks if the given struct tag contains exhaustruct:"optional".
 func HasOptionalTag(tags string) bool {
 	return reflect.StructTag(tags).Get(tagName) == optionalTagValue
 }
@@ -46,12 +51,12 @@ func HasOptionalTag(tags string) bool {
 func (sf Fields) String() string {
 	b := strings.Builder{}
 
-	for i := range len(sf) {
+	for _, f := range sf {
 		if b.Len() != 0 {
 			b.WriteString(", ")
 		}
 
-		b.WriteString(sf[i].Name)
+		b.WriteString(f.Name)
 	}
 
 	return b.String()
@@ -59,8 +64,6 @@ func (sf Fields) String() string {
 
 // Skipped returns a list of fields that are not present in the given
 // literal, but expected to.
-//
-//nolint:gocyclo // complexity is justified by the multiple edge cases
 func (sf Fields) Skipped(lit *ast.CompositeLit, onlyExported bool) Fields {
 	if len(lit.Elts) != 0 && !isNamedLiteral(lit) {
 		if len(lit.Elts) == len(sf) {
@@ -70,29 +73,15 @@ func (sf Fields) Skipped(lit *ast.CompositeLit, onlyExported bool) Fields {
 		return sf[len(lit.Elts):]
 	}
 
-	em := sf.existenceMap()
-	res := make(Fields, 0, len(sf))
+	present := presentNamedFields(lit)
+	res := make(Fields, 0, len(sf)-len(present))
 
-	for i := 0; i < len(lit.Elts); i++ {
-		kv, ok := lit.Elts[i].(*ast.KeyValueExpr)
-		if !ok {
+	for _, f := range sf {
+		if present[f.Name] || f.Optional || (!f.Exported && onlyExported) {
 			continue
 		}
 
-		k, ok := kv.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-
-		em[k.Name] = true
-	}
-
-	for i := range len(sf) {
-		if em[sf[i].Name] || (!sf[i].Exported && onlyExported) || sf[i].Optional {
-			continue
-		}
-
-		res = append(res, sf[i])
+		res = append(res, f)
 	}
 
 	if len(res) == 0 {
@@ -102,26 +91,34 @@ func (sf Fields) Skipped(lit *ast.CompositeLit, onlyExported bool) Fields {
 	return res
 }
 
-func (sf Fields) existenceMap() map[string]bool {
-	m := make(map[string]bool, len(sf))
+// presentNamedFields returns a map of field names that are present in the literal.
+func presentNamedFields(lit *ast.CompositeLit) map[string]bool {
+	m := make(map[string]bool, len(lit.Elts))
 
-	for i := range len(sf) {
-		m[sf[i].Name] = false
+	for _, elt := range lit.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+
+		k, ok := kv.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+
+		m[k.Name] = true
 	}
 
 	return m
 }
 
-// isNamedLiteral returns true if the given literal is unnamed.
+// isNamedLiteral returns true if the given literal uses named fields.
 //
-// The logic is basing on the principle that literal is named or unnamed,
-// therefore is literal's first element is a [ast.KeyValueExpr], it is named.
+// The logic is based on the principle that a literal is either named or positional,
+// therefore if the first element is a [ast.KeyValueExpr], it is named.
 //
 // Method will panic if the given literal is empty.
 func isNamedLiteral(lit *ast.CompositeLit) bool {
-	if _, ok := lit.Elts[0].(*ast.KeyValueExpr); !ok {
-		return false
-	}
-
-	return true
+	_, ok := lit.Elts[0].(*ast.KeyValueExpr)
+	return ok
 }

@@ -27,4 +27,5 @@ var (
 		ExportedOptional:   3,
 		unexportedOptional: 4,
 	}
+	_empty = testStruct{}
 )

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/tools/go/packages"
 
@@ -17,6 +18,15 @@ func Test_HasOptionalTag(t *testing.T) {
 
 	assert.True(t, structure.HasOptionalTag(`exhaustruct:"optional"`))
 	assert.False(t, structure.HasOptionalTag(`exhaustruct:"required"`))
+	assert.False(t, structure.HasOptionalTag(``))
+	assert.False(t, structure.HasOptionalTag(`json:"name"`))
+}
+
+func Test_Fields_String_Empty(t *testing.T) {
+	t.Parallel()
+
+	var empty structure.Fields
+	assert.Empty(t, empty.String())
 }
 
 func TestStructFields(t *testing.T) {
@@ -28,7 +38,9 @@ func TestStructFields(t *testing.T) {
 type StructFieldsSuite struct {
 	suite.Suite
 
-	scope *ast.Scope //nolint:staticcheck // deprecated but still works for tests
+	// Note: ast.Scope is deprecated but there's no direct replacement for looking up
+	// AST declarations by name. Loaded package still provides it.
+	scope *ast.Scope //nolint:staticcheck
 	pkg   *packages.Package
 }
 
@@ -47,7 +59,7 @@ func (s *StructFieldsSuite) SetupSuite() {
 	s.Require().NotNil(s.scope)
 }
 
-func (s *StructFieldsSuite) getReferenceStructFields() structure.Fields {
+func (s *StructFieldsSuite) getStructFields() structure.Fields {
 	s.T().Helper()
 
 	obj := s.scope.Lookup("testStruct")
@@ -59,36 +71,32 @@ func (s *StructFieldsSuite) getReferenceStructFields() structure.Fields {
 	return structure.NewFields(typ.Underlying().(*types.Struct)) //nolint:forcetypeassert
 }
 
+func (s *StructFieldsSuite) getLiteral(name string) *ast.CompositeLit {
+	s.T().Helper()
+
+	obj := s.scope.Lookup(name)
+	s.Require().NotNil(obj, "literal %q not found", name)
+
+	lit := obj.Decl.(*ast.ValueSpec).Values[0].(*ast.CompositeLit) //nolint:forcetypeassert
+	s.Require().NotNil(lit)
+
+	return lit
+}
+
 func (s *StructFieldsSuite) TestNewStructFields() {
-	sf := s.getReferenceStructFields()
+	sf := s.getStructFields()
 
 	s.Len(sf, 4)
 	s.Equal(structure.Fields{
-		{
-			Name:     "ExportedRequired",
-			Exported: true,
-			Optional: false,
-		},
-		{
-			Name:     "unexportedRequired",
-			Exported: false,
-			Optional: false,
-		},
-		{
-			Name:     "ExportedOptional",
-			Exported: true,
-			Optional: true,
-		},
-		{
-			Name:     "unexportedOptional",
-			Exported: false,
-			Optional: true,
-		},
+		{"ExportedRequired", true, false},
+		{"unexportedRequired", false, false},
+		{"ExportedOptional", true, true},
+		{"unexportedOptional", false, true},
 	}, sf)
 }
 
 func (s *StructFieldsSuite) TestStructFields_String() {
-	sf := s.getReferenceStructFields()
+	sf := s.getStructFields()
 
 	s.Equal(
 		"ExportedRequired, unexportedRequired, ExportedOptional, unexportedOptional",
@@ -96,65 +104,85 @@ func (s *StructFieldsSuite) TestStructFields_String() {
 	)
 }
 
-func (s *StructFieldsSuite) TestStructFields_SkippedFields_Unnamed() {
-	sf := s.getReferenceStructFields()
+func (s *StructFieldsSuite) TestSkipped_Positional_Complete() {
+	sf := s.getStructFields()
+	lit := s.getLiteral("_unnamed")
 
-	unnamed := s.scope.Lookup("_unnamed")
-	if s.NotNil(unnamed) {
-		lit := unnamed.Decl.(*ast.ValueSpec).Values[0].(*ast.CompositeLit) //nolint:forcetypeassert
-		if s.NotNil(lit) {
-			s.Nil(sf.Skipped(lit, true))
-			s.Nil(sf.Skipped(lit, false))
-		}
-	}
-
-	unnamedIncomplete := s.scope.Lookup("_unnamedIncomplete")
-	if s.NotNil(unnamedIncomplete) {
-		lit := unnamedIncomplete.Decl.(*ast.ValueSpec).Values[0].(*ast.CompositeLit) //nolint:forcetypeassert
-		if s.NotNil(lit) {
-			s.Equal(structure.Fields{
-				{"unexportedRequired", false, false},
-				{"ExportedOptional", true, true},
-				{"unexportedOptional", false, true},
-			}, sf.Skipped(lit, true))
-		}
-	}
+	s.Nil(sf.Skipped(lit, true))
+	s.Nil(sf.Skipped(lit, false))
 }
 
-func (s *StructFieldsSuite) TestStructFields_SkippedFields_Named() {
-	sf := s.getReferenceStructFields()
+func (s *StructFieldsSuite) TestSkipped_Positional_Incomplete() {
+	sf := s.getStructFields()
+	lit := s.getLiteral("_unnamedIncomplete")
 
-	named := s.scope.Lookup("_named")
-	if s.NotNil(named) {
-		lit := named.Decl.(*ast.ValueSpec).Values[0].(*ast.CompositeLit) //nolint:forcetypeassert
-		if s.NotNil(lit) {
-			s.Nil(sf.Skipped(lit, true))
-			s.Nil(sf.Skipped(lit, false))
-		}
-	}
+	// Positional literals return remaining fields regardless of export status
+	s.Equal(structure.Fields{
+		{"unexportedRequired", false, false},
+		{"ExportedOptional", true, true},
+		{"unexportedOptional", false, true},
+	}, sf.Skipped(lit, true))
+}
 
-	namedIncomplete1 := s.scope.Lookup("_namedIncomplete1")
-	if s.NotNil(namedIncomplete1) {
-		lit := namedIncomplete1.Decl.(*ast.ValueSpec).Values[0].(*ast.CompositeLit) //nolint:forcetypeassert
-		if s.NotNil(lit) {
-			s.Nil(sf.Skipped(lit, true))
-			s.Equal(structure.Fields{
-				{"unexportedRequired", false, false},
-			}, sf.Skipped(lit, false))
-		}
-	}
+func (s *StructFieldsSuite) TestSkipped_Named_Complete() {
+	sf := s.getStructFields()
+	lit := s.getLiteral("_named")
 
-	namedIncomplete2 := s.scope.Lookup("_namedIncomplete2")
-	if s.NotNil(namedIncomplete2) {
-		lit := namedIncomplete2.Decl.(*ast.ValueSpec).Values[0].(*ast.CompositeLit) //nolint:forcetypeassert
-		if s.NotNil(lit) {
-			s.Equal(structure.Fields{
-				{"ExportedRequired", true, false},
-			}, sf.Skipped(lit, true))
-			s.Equal(structure.Fields{
-				{"ExportedRequired", true, false},
-				{"unexportedRequired", false, false},
-			}, sf.Skipped(lit, false))
-		}
-	}
+	s.Nil(sf.Skipped(lit, true))
+	s.Nil(sf.Skipped(lit, false))
+}
+
+func (s *StructFieldsSuite) TestSkipped_Named_MissingUnexported() {
+	sf := s.getStructFields()
+	lit := s.getLiteral("_namedIncomplete1")
+
+	// onlyExported=true: unexported fields are not required
+	s.Nil(sf.Skipped(lit, true))
+
+	// onlyExported=false: unexported fields are required
+	s.Equal(structure.Fields{
+		{"unexportedRequired", false, false},
+	}, sf.Skipped(lit, false))
+}
+
+func (s *StructFieldsSuite) TestSkipped_Named_MissingExported() {
+	sf := s.getStructFields()
+	lit := s.getLiteral("_namedIncomplete2")
+
+	// onlyExported=true: only exported required fields reported
+	s.Equal(structure.Fields{
+		{"ExportedRequired", true, false},
+	}, sf.Skipped(lit, true))
+
+	// onlyExported=false: both exported and unexported required fields reported
+	s.Equal(structure.Fields{
+		{"ExportedRequired", true, false},
+		{"unexportedRequired", false, false},
+	}, sf.Skipped(lit, false))
+}
+
+func (s *StructFieldsSuite) TestSkipped_Empty() {
+	sf := s.getStructFields()
+	lit := s.getLiteral("_empty")
+
+	// Empty literal: all required fields are missing
+	s.Equal(structure.Fields{
+		{"ExportedRequired", true, false},
+	}, sf.Skipped(lit, true))
+
+	s.Equal(structure.Fields{
+		{"ExportedRequired", true, false},
+		{"unexportedRequired", false, false},
+	}, sf.Skipped(lit, false))
+}
+
+func Test_Fields_Skipped_EmptyStruct(t *testing.T) {
+	t.Parallel()
+
+	var emptyFields structure.Fields
+
+	lit := &ast.CompositeLit{Elts: []ast.Expr{}} //nolint:exhaustruct
+
+	require.Nil(t, emptyFields.Skipped(lit, true))
+	require.Nil(t, emptyFields.Skipped(lit, false))
 }
