@@ -20,8 +20,8 @@ import (
 type analyzer struct {
 	config Config
 
-	structFields structure.FieldsCache `exhaustruct:"optional"`
-	comments     comment.Cache         `exhaustruct:"optional"`
+	structFields   structure.FieldsCache       `exhaustruct:"optional"`
+	fileDirectives comment.FileDirectivesCache `exhaustruct:"optional"`
 
 	typeProcessingNeed   map[string]bool
 	typeProcessingNeedMu sync.RWMutex `exhaustruct:"optional"`
@@ -36,7 +36,6 @@ func NewAnalyzer(config Config) (*analysis.Analyzer, error) {
 	a := analyzer{
 		config:             config,
 		typeProcessingNeed: make(map[string]bool),
-		comments:           comment.Cache{},
 	}
 
 	return &analysis.Analyzer{ //nolint:exhaustruct
@@ -82,9 +81,18 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 			return true
 		}
 
-		file := a.comments.Get(pass.Fset, stack[0].(*ast.File)) //nolint:forcetypeassert
-		rc := getCompositeLitRelatedComments(stack, file)
-		pos, msg := a.processStruct(pass, lit, structTyp, typeInfo, rc)
+		astFile := stack[0].(*ast.File) //nolint:forcetypeassert
+
+		fd, parseDiags := a.fileDirectives.Get(pass.Fset, astFile)
+		for _, d := range parseDiags {
+			pass.Reportf(astFile.Pos(), "%s", d.Message)
+		}
+
+		litLine := pass.Fset.Position(lit.Pos()).Line
+
+		directive := fd.Lookup(litLine)
+
+		pos, msg := a.processStruct(pass, lit, structTyp, typeInfo, directive)
 
 		if pos != nil {
 			pass.Reportf(*pos, "%s", msg)
@@ -238,42 +246,6 @@ func isErrorReturnStatement(pass *analysis.Pass, n *ast.ReturnStmt, currentNode 
 	return false
 }
 
-// getCompositeLitRelatedComments returns all comments that are related to checked node. We
-// have to traverse the stack manually as ast do not associate comments with
-// [ast.CompositeLit].
-func getCompositeLitRelatedComments(stack []ast.Node, cm ast.CommentMap) []*ast.CommentGroup {
-	comments := make([]*ast.CommentGroup, 0)
-
-	for i := len(stack) - 1; i >= 0; i-- {
-		node := stack[i]
-
-		switch tn := node.(type) {
-		case *ast.CompositeLit:
-			// comments on the lines prior to literal
-			comments = append(comments, cm[node]...)
-			// comments on the same line as literal type definition
-			// worth noting that event "typeless" literals have a type
-			comments = append(comments, cm[tn.Type]...)
-
-		case *ast.ReturnStmt, // return ...
-			*ast.IndexExpr,    // map[enum]...{...}[key]
-			*ast.CallExpr,     // myfunc(map...)
-			*ast.UnaryExpr,    // &map...
-			*ast.AssignStmt,   // variable assignment (without var keyword)
-			*ast.DeclStmt,     // var declaration, parent of *ast.GenDecl
-			*ast.GenDecl,      // var declaration, parent of *ast.ValueSpec
-			*ast.ValueSpec,    // var declaration
-			*ast.KeyValueExpr: // field declaration
-			comments = append(comments, cm[node]...)
-
-		default:
-			return comments
-		}
-	}
-
-	return comments
-}
-
 func getStructType(pass *analysis.Pass, lit *ast.CompositeLit) (*types.Struct, *TypeInfo, bool) {
 	typ := types.Unalias(pass.TypesInfo.TypeOf(lit))
 
@@ -317,15 +289,15 @@ func (a *analyzer) processStruct(
 	lit *ast.CompositeLit,
 	structTyp *types.Struct,
 	info *TypeInfo,
-	comments []*ast.CommentGroup,
+	directive comment.Directive,
 ) (*token.Pos, string) {
 	shouldProcess := a.shouldProcessType(info)
 
-	if shouldProcess && comment.HasDirective(comments, comment.DirectiveIgnore) {
+	if shouldProcess && directive == comment.DirectiveIgnore {
 		return nil, ""
 	}
 
-	if !shouldProcess && !comment.HasDirective(comments, comment.DirectiveEnforce) {
+	if !shouldProcess && directive != comment.DirectiveEnforce {
 		return nil, ""
 	}
 
@@ -394,20 +366,20 @@ func (a *analyzer) litSkippedFields(
 
 func (a *analyzer) printCacheStats(pkgPath string) {
 	sfHits, sfMisses := a.structFields.Stats()
-	printCacheLine(pkgPath, "struct-fields", sfHits, sfMisses)
+	printCacheLine(pkgPath, "struct-fields", sfHits, sfMisses, 0)
 
-	cHits, cMisses := a.comments.Stats()
-	printCacheLine(pkgPath, "comments", cHits, cMisses)
+	fdHits, fdMisses, fdSize := a.fileDirectives.Stats()
+	printCacheLine(pkgPath, "file-directives", fdHits, fdMisses, fdSize)
 }
 
-func printCacheLine(pkgPath, name string, hits, misses uint64) {
+func printCacheLine(pkgPath, name string, hits, misses, size uint64) {
 	hitRate := float64(0)
 	if total := hits + misses; total > 0 {
 		hitRate = float64(hits) / float64(total) * 100 //nolint:mnd
 	}
 
-	_, _ = fmt.Fprintf(os.Stderr, "[%s] cache: %s: hits=%d misses=%d (%.2f%%)\n",
-		pkgPath, name, hits, misses, hitRate)
+	_, _ = fmt.Fprintf(os.Stderr, "[%s] cache: %s: hits=%d misses=%d size=%d (%.2f%%)\n",
+		pkgPath, name, hits, misses, size, hitRate)
 }
 
 // structFieldsInPackage returns true if the struct's fields are defined in the

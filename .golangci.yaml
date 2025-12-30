@@ -63,6 +63,9 @@ linters:
       ignored-functions:
         - os\.(OpenFile|WriteFile|Chmod),p?flag\..*
         - strconv\.(Format|Parse|Append).*
+    exhaustruct:
+      exclude:
+        - golang\.org/x/tools/go/analysis\.Diagnostic
     revive:
       confidence: 0.8
       enable-all-rules: true
