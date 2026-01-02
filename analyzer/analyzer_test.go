@@ -115,7 +115,7 @@ func TestAnalyzerTypes(t *testing.T) {
 		{
 			name: "directives",
 			config: analyzer.Config{
-				IncludeRx: []string{`.*\.(Test|Embedded|Simple).*`},
+				IncludeRx: []string{`.*\.(Test|Embedded|Simple|WithOptionalDirective).*`},
 				ExcludeRx: []string{`.*Excluded.*`},
 			},
 			testPackage: "testdata/types/directives",

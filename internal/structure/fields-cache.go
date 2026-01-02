@@ -18,7 +18,9 @@ type FieldsCache struct {
 const fieldsCachePreallocSize = 64
 
 // Get returns [Fields] for a given type, creating and caching them if needed.
-func (c *FieldsCache) Get(typ *types.Struct) Fields {
+// The lookup is used to check for optional directives on fields when the entry
+// is not cached. It may be nil if directive checking is not needed.
+func (c *FieldsCache) Get(typ *types.Struct, lookup DirectiveLookup) Fields {
 	c.mu.RLock()
 
 	fields, ok := c.fields[typ]
@@ -47,7 +49,7 @@ func (c *FieldsCache) Get(typ *types.Struct) Fields {
 
 	c.misses.Add(1)
 
-	fields = NewFields(typ)
+	fields = NewFieldsWithDirectives(typ, lookup)
 	c.fields[typ] = fields
 
 	return fields

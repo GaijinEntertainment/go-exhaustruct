@@ -3,9 +3,18 @@ package directive
 import (
 	"go/ast"
 	"go/token"
+	"slices"
 	"strings"
 
+	"dev.gaijin.team/go/golib/e"
 	"golang.org/x/tools/go/analysis"
+)
+
+// Parse errors.
+var (
+	ErrEmptyDirective      = e.New("empty directive")
+	ErrUnknownDirective    = e.New("unknown directive")
+	ErrDuplicateDirectives = e.New("duplicate directives")
 )
 
 // Directive represents an exhaustruct directive type.
@@ -20,40 +29,84 @@ const (
 	Optional Directive = "optional"
 )
 
-// directivePrefix is the exact prefix for exhaustruct directives.
-// Format: //exhaustruct:<directive> [optional comment].
-const directivePrefix = "//exhaustruct:"
-
-// Parse parses the directive from comment text if present.
-// Returns (directive, true) if valid directive found.
-// Returns ("", true) if prefix found but directive is invalid.
-// Returns ("", false) if no directive prefix found.
-func Parse(text string) (Directive, bool) {
-	directive, found := strings.CutPrefix(text, directivePrefix)
-	if !found {
-		return "", false
-	}
-
-	// Get just the directive word (stop at space or end)
-	if idx := strings.IndexAny(directive, " \t\n"); idx > 0 {
-		directive = directive[:idx]
-	}
-
-	switch Directive(directive) {
+// Validate returns true if the directive is a known valid directive.
+func (d Directive) Validate() bool {
+	switch d {
 	case Ignore, Enforce, Optional:
-		return Directive(directive), true
+		return true
 
 	default:
-		return "", true
+		return false
 	}
 }
 
-// File holds directives found in a single file, indexed by line number.
-type File map[int]Directive
+// Directives represents a collection of directives for a single line.
+// Multiple directives can be specified comma-separated: //exhaustruct:enforce,optional.
+type Directives []Directive
 
-// Lookup returns the directive associated with the given line.
+// Contains reports whether the directive d is present in the collection.
+func (ds Directives) Contains(d Directive) bool {
+	return slices.Contains(ds, d)
+}
+
+// directivePrefix is the exact prefix for exhaustruct directives.
+// Format: //exhaustruct:<directives> [optional comment].
+const directivePrefix = "//exhaustruct:"
+
+func Parse(text string) (found bool, result Directives, errs []error) {
+	text, found = strings.CutPrefix(directivePrefix, text)
+	if !found {
+		return false, nil, nil
+	}
+
+	if idx := strings.IndexAny(text, " \t\n"); idx > 0 {
+		text = text[:idx]
+	}
+
+	if text == "" {
+		return true, nil, []error{ErrEmptyDirective}
+	}
+
+	parts := strings.Split(text, ",")
+
+	result = make(Directives, 0, len(parts))
+
+	var hasDups bool
+
+	for _, part := range parts {
+		d := Directive(part)
+
+		if !d.Validate() {
+			errs = append(errs, ErrUnknownDirective.WithField("directive", d))
+			continue
+		}
+
+		// giving the resulting size, linear search would be most efficient
+		if slices.Contains(result, d) {
+			hasDups = true
+			continue
+		}
+
+		result = append(result, d)
+	}
+
+	if hasDups {
+		errs = append(errs, ErrDuplicateDirectives)
+	}
+
+	if len(result) == 0 {
+		result = nil
+	}
+
+	return true, result, errs
+}
+
+// File holds directives found in a single file, indexed by line number.
+type File map[int]Directives
+
+// Lookup returns the directives associated with the given line.
 // Directives are pre-indexed by the line they apply to during parsing.
-func (f File) Lookup(line int) Directive {
+func (f File) Lookup(line int) Directives {
 	return f[line]
 }
 
@@ -87,7 +140,7 @@ func NewFile(fset *token.FileSet, file *ast.File) (File, []analysis.Diagnostic) 
 	for line, d := range directives {
 		_, exists := result[d.forLine]
 		if !exists {
-			result[d.forLine] = d.directive
+			result[d.forLine] = d.directives
 			continue
 		}
 
@@ -95,7 +148,7 @@ func NewFile(fset *token.FileSet, file *ast.File) (File, []analysis.Diagnostic) 
 
 		// directives from block comments win over inline comments
 		if line != d.forLine {
-			result[d.forLine] = d.directive
+			result[d.forLine] = d.directives
 			pos = directives[d.forLine].pos
 		}
 
@@ -109,9 +162,9 @@ func NewFile(fset *token.FileSet, file *ast.File) (File, []analysis.Diagnostic) 
 }
 
 type parsedDirective struct {
-	pos       token.Pos
-	forLine   int
-	directive Directive
+	pos        token.Pos
+	forLine    int
+	directives Directives
 }
 
 func parseDirectives(
@@ -127,19 +180,21 @@ func parseDirectives(
 		hasDirective := false
 
 		for _, comment := range cg.List {
-			directive, found := Parse(comment.Text)
+			found, parsed, errs := Parse(comment.Text)
 			if !found {
 				continue
 			}
 
 			pos := comment.Pos()
 
-			if directive == "" {
+			for _, err := range errs {
 				diagnostics = append(diagnostics, analysis.Diagnostic{
 					Pos:     pos,
-					Message: "invalid exhaustruct directive",
+					Message: err.Error(),
 				})
+			}
 
+			if len(parsed) == 0 {
 				continue
 			}
 
@@ -154,9 +209,9 @@ func parseDirectives(
 
 			hasDirective = true
 			directives[fset.Position(pos).Line] = parsedDirective{
-				pos:       pos,
-				forLine:   fset.Position(cg.End()).Line + 1,
-				directive: directive,
+				pos:        pos,
+				forLine:    fset.Position(cg.End()).Line + 1,
+				directives: parsed,
 			}
 		}
 	}

@@ -66,14 +66,14 @@ func (c *FileCache) Add(fset *token.FileSet, files ...*ast.File) []analysis.Diag
 	return allDiagnostics
 }
 
-// Lookup returns the directive at the given source position and any diagnostics.
+// Lookup returns the directives at the given source position and any diagnostics.
 // If the file is not cached, it is parsed using the stored parser.
-// Returns empty Directive if the position is invalid, file cannot be parsed,
+// Returns nil if the position is invalid, file cannot be parsed,
 // or no directive exists at that position.
 // Diagnostics are returned on cache miss (from directive parsing or parse errors).
-func (c *FileCache) Lookup(fset *token.FileSet, pos token.Position) (Directive, []analysis.Diagnostic) {
+func (c *FileCache) Lookup(fset *token.FileSet, pos token.Position) (Directives, []analysis.Diagnostic) {
 	if pos.Filename == "" {
-		return "", nil
+		return nil, nil
 	}
 
 	c.mu.RLock()
@@ -106,7 +106,7 @@ func (c *FileCache) Lookup(fset *token.FileSet, pos token.Position) (Directive, 
 
 	file, err := c.parser.ParseFile(fset, pos.Filename)
 	if err != nil {
-		return "", []analysis.Diagnostic{{
+		return nil, []analysis.Diagnostic{{
 			Pos:     token.NoPos,
 			Message: "failed to parse file '" + pos.Filename + "': " + err.Error(),
 		}}

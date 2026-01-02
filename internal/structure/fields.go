@@ -2,9 +2,12 @@ package structure
 
 import (
 	"go/ast"
+	"go/token"
 	"go/types"
 	"reflect"
 	"strings"
+
+	"dev.gaijin.team/go/exhaustruct/v4/internal/directive"
 )
 
 const (
@@ -12,10 +15,16 @@ const (
 	optionalTagValue = "optional"
 )
 
-// Field represents a single struct field with its metadata.
+// Field represents a single struct field with its analysis metadata.
 type Field struct {
-	Name     string
+	// Name is the field name.
+	Name string
+	// Exported indicates whether the field is exported (starts with uppercase).
 	Exported bool
+
+	// Enforced indicates the field must be initialized even if struct is optional.
+	Enforced bool
+	// Optional indicates the field can be omitted from initialization.
 	Optional bool
 }
 
@@ -24,18 +33,38 @@ type Field struct {
 // relies on it.
 type Fields []*Field
 
+// DirectiveLookup provides position-based directive lookup for struct fields.
+// Implementations resolve the source position to check for comment directives.
+type DirectiveLookup interface {
+	// Lookup returns the directives at the given source position.
+	Lookup(pos token.Pos) directive.Directives
+}
+
 // NewFields creates a new [Fields] from a given struct type.
 // Fields items are listed in order they appear in the struct.
+// Optional fields are determined only by struct tags.
 func NewFields(strct *types.Struct) Fields {
+	return NewFieldsWithDirectives(strct, nil)
+}
+
+// NewFieldsWithDirectives creates a new [Fields] from a given struct type,
+// using both struct tags and comment directives to determine optionality.
+// The lookup is used to check for //exhaustruct:optional directives at field positions.
+func NewFieldsWithDirectives(strct *types.Struct, lookup DirectiveLookup) Fields {
 	sf := make(Fields, 0, strct.NumFields())
 
 	for i := range strct.NumFields() {
 		f := strct.Field(i)
 
-		sf = append(sf, &Field{
+		optional := HasOptionalTag(strct.Tag(i))
+		if !optional && lookup != nil {
+			optional = lookup.Lookup(f.Pos()).Contains(directive.Optional)
+		}
+
+		sf = append(sf, &Field{ //nolint:exhaustruct // Enforced is computed later
 			Name:     f.Name(),
 			Exported: f.Exported(),
-			Optional: HasOptionalTag(strct.Tag(i)),
+			Optional: optional,
 		})
 	}
 

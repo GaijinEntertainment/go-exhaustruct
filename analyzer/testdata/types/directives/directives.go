@@ -1,5 +1,5 @@
 // Package directives tests comment directive behavior.
-// Directives: //exhaustruct:ignore, //exhaustruct:enforce
+// Directives: //exhaustruct:ignore, //exhaustruct:enforce, //exhaustruct:optional
 package directives
 
 import (
@@ -12,6 +12,24 @@ type Test struct {
 	B int
 	C float32
 	D bool
+}
+
+// TestWithOptionalFields has some fields marked as optional via comment directives.
+type TestWithOptionalFields struct {
+	Required string
+	//exhaustruct:optional
+	OptionalDoc    string
+	OptionalInline int //exhaustruct:optional
+	AlsoRequired   bool
+}
+
+// TestMixedOptional has both tag-based and comment-based optional fields.
+type TestMixedOptional struct {
+	Required string
+	//exhaustruct:optional
+	OptionalByDirective string
+	OptionalByTag       string `exhaustruct:"optional"`
+	AlsoRequired        int
 }
 
 // TestExcluded matches exclusion patterns.
@@ -90,4 +108,77 @@ func shouldHandleDirectivesOnFields() {
 		//exhaustruct:ignore
 		Embedded: Embedded{},
 	}
+}
+
+// === Tests for field optionality via comment directives ===
+
+func shouldPassOptionalFieldsViaDirective() {
+	// Only required fields are present - optional fields are skipped
+	_ = TestWithOptionalFields{
+		Required:     "value",
+		AlsoRequired: true,
+	}
+
+	// All fields present is also valid
+	_ = TestWithOptionalFields{
+		Required:       "value",
+		OptionalDoc:    "doc",
+		OptionalInline: 42,
+		AlsoRequired:   true,
+	}
+}
+
+func shouldFailMissingRequiredWithOptionalDirectives() {
+	// Missing Required field
+	_ = TestWithOptionalFields{ // want "directives.TestWithOptionalFields is missing fields Required, AlsoRequired"
+		OptionalDoc:    "doc",
+		OptionalInline: 42,
+	}
+
+	// Missing AlsoRequired field
+	_ = TestWithOptionalFields{ // want "directives.TestWithOptionalFields is missing field AlsoRequired"
+		Required: "value",
+	}
+}
+
+func shouldPassMixedOptional() {
+	// Both tag-based and directive-based optional fields work
+	_ = TestMixedOptional{
+		Required:     "value",
+		AlsoRequired: 42,
+	}
+
+	// Can also provide optional fields
+	_ = TestMixedOptional{
+		Required:            "value",
+		OptionalByDirective: "directive",
+		OptionalByTag:       "tag",
+		AlsoRequired:        42,
+	}
+}
+
+func shouldFailMixedOptionalMissingRequired() {
+	_ = TestMixedOptional{ // want "directives.TestMixedOptional is missing field Required"
+		AlsoRequired: 42,
+	}
+}
+
+// === Tests for external types with optional directive ===
+
+func shouldPassExternalOptionalDirective() {
+	// External type with optional directive should work
+	_ = external.WithOptionalDirective{
+		Required: "value",
+	}
+
+	// Can also provide optional fields
+	_ = external.WithOptionalDirective{
+		Required:            "value",
+		OptionalByDirective: "directive",
+		OptionalByTag:       "tag",
+	}
+}
+
+func shouldFailExternalMissingRequired() {
+	_ = external.WithOptionalDirective{} // want "external.WithOptionalDirective is missing field Required"
 }

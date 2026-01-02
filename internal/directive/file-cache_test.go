@@ -82,13 +82,13 @@ func Test_FileCache_Add_MultipleFiles(t *testing.T) {
 	// Lookup should find directives from added files
 	pos1 := token.Position{Filename: "file1.go", Line: 3} //nolint:exhaustruct // only Filename and Line needed
 	d, diags := cache.Lookup(fset, pos1)
-	assert.Equal(t, directive.Ignore, d)
+	assert.Equal(t, directive.Directives{directive.Ignore}, d)
 	assert.Nil(t, diags) // cache hit, no diagnostics
 
 	pos2 := token.Position{Filename: "file2.go", Line: 3} //nolint:exhaustruct // only Filename and Line needed
 
 	d, diags = cache.Lookup(fset, pos2)
-	assert.Equal(t, directive.Enforce, d)
+	assert.Equal(t, directive.Directives{directive.Enforce}, d)
 	assert.Nil(t, diags)
 }
 
@@ -108,7 +108,7 @@ func Test_FileCache_Lookup(t *testing.T) {
 
 	// First call: cache miss, parses file
 	d, diags := cache.Lookup(fset, pos)
-	assert.Equal(t, directive.Optional, d)
+	assert.Equal(t, directive.Directives{directive.Optional}, d)
 	assert.Nil(t, diags) // no invalid directives in this file
 
 	hits, misses, _ := cache.Stats()
@@ -117,7 +117,7 @@ func Test_FileCache_Lookup(t *testing.T) {
 
 	// Second call: cache hit
 	d, diags = cache.Lookup(fset, pos)
-	assert.Equal(t, directive.Optional, d)
+	assert.Equal(t, directive.Directives{directive.Optional}, d)
 	assert.Nil(t, diags)
 
 	hits, misses, _ = cache.Stats()
@@ -136,7 +136,7 @@ func Test_FileCache_Lookup_EmptyFilename(t *testing.T) {
 	pos := token.Position{} //nolint:exhaustruct // testing empty filename
 
 	d, diags := cache.Lookup(fset, pos)
-	assert.Equal(t, directive.Directive(""), d)
+	assert.Nil(t, d)
 	assert.Nil(t, diags)
 
 	// Should not increment stats
@@ -157,7 +157,7 @@ func Test_FileCache_Lookup_ParseError(t *testing.T) {
 	pos := token.Position{Filename: "nonexistent.go", Line: 1} //nolint:exhaustruct // only Filename and Line needed
 
 	d, diags := cache.Lookup(fset, pos)
-	assert.Equal(t, directive.Directive(""), d)
+	assert.Nil(t, d)
 	require.Len(t, diags, 1)
 	assert.Contains(t, diags[0].Message, "failed to parse file 'nonexistent.go'")
 
@@ -182,7 +182,7 @@ func Test_FileCache_Lookup_NoDirectiveAtLine(t *testing.T) {
 	// Line 1 has no directive
 	pos := token.Position{Filename: "test.go", Line: 1} //nolint:exhaustruct // only Filename and Line needed
 	d, _ := cache.Lookup(fset, pos)
-	assert.Equal(t, directive.Directive(""), d)
+	assert.Nil(t, d)
 }
 
 func Test_FileCache_Lookup_AfterAdd(t *testing.T) {
@@ -208,7 +208,7 @@ func Test_FileCache_Lookup_AfterAdd(t *testing.T) {
 	// Lookup should hit cache
 	pos := token.Position{Filename: "shared.go", Line: 3} //nolint:exhaustruct // only Filename and Line needed
 	d, diags := cache.Lookup(fset, pos)
-	assert.Equal(t, directive.Enforce, d)
+	assert.Equal(t, directive.Directives{directive.Enforce}, d)
 	assert.Nil(t, diags) // cache hit, no diagnostics
 
 	// Should have 1 hit (from Lookup), 0 misses (Add doesn't count)
@@ -234,12 +234,12 @@ func Test_FileCache_Lookup_ReturnsDiagnosticsOnMiss(t *testing.T) {
 
 	// First call: cache miss, parses file, returns diagnostics
 	d, diags := cache.Lookup(fset, pos)
-	assert.Equal(t, directive.Directive(""), d) // invalid directive is empty
+	assert.Nil(t, d) // invalid directive returns nil
 	require.NotEmpty(t, diags)
-	assert.Contains(t, diags[0].Message, "invalid exhaustruct directive")
+	assert.Contains(t, diags[0].Message, "unknown directive")
 
 	// Second call: cache hit, no diagnostics
 	d, diags = cache.Lookup(fset, pos)
-	assert.Equal(t, directive.Directive(""), d)
+	assert.Nil(t, d)
 	assert.Nil(t, diags)
 }

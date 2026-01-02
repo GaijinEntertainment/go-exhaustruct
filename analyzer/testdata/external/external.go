@@ -12,6 +12,15 @@ type Simple struct {
 	d string // unexported, inaccessible from other packages
 }
 
+// WithOptionalDirective has optional fields marked via comment directive.
+// When used from another package, only Required should be required.
+type WithOptionalDirective struct {
+	Required string
+	//exhaustruct:optional
+	OptionalByDirective string
+	OptionalByTag       string `exhaustruct:"optional"`
+}
+
 // Excluded matches exclusion patterns (.*Excluded.*).
 type Excluded struct {
 	A string

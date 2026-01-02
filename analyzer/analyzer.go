@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"go/types"
 	"os"
@@ -13,15 +14,15 @@ import (
 	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/ast/inspector"
 
-	"dev.gaijin.team/go/exhaustruct/v4/internal/comment"
+	"dev.gaijin.team/go/exhaustruct/v4/internal/directive"
 	"dev.gaijin.team/go/exhaustruct/v4/internal/structure"
 )
 
 type analyzer struct {
 	config Config
 
-	structFields   structure.FieldsCache       `exhaustruct:"optional"`
-	fileDirectives comment.FileDirectivesCache `exhaustruct:"optional"`
+	structFields   structure.FieldsCache `exhaustruct:"optional"`
+	fileDirectives *directive.FileCache  `exhaustruct:"optional"`
 
 	typeProcessingNeed   map[string]bool
 	typeProcessingNeedMu sync.RWMutex `exhaustruct:"optional"`
@@ -35,6 +36,7 @@ func NewAnalyzer(config Config) (*analysis.Analyzer, error) {
 
 	a := analyzer{
 		config:             config,
+		fileDirectives:     directive.NewFileCache(&defaultParser{}),
 		typeProcessingNeed: make(map[string]bool),
 	}
 
@@ -49,6 +51,11 @@ func NewAnalyzer(config Config) (*analysis.Analyzer, error) {
 
 func (a *analyzer) run(pass *analysis.Pass) (any, error) {
 	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector) //nolint:forcetypeassert
+
+	// Pre-populate directive cache with files from this pass
+	for _, diag := range a.fileDirectives.Add(pass.Fset, pass.Files...) {
+		pass.Report(diag)
+	}
 
 	insp.WithStack([]ast.Node{(*ast.CompositeLit)(nil)}, a.newVisitor(pass))
 
@@ -81,18 +88,10 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 			return true
 		}
 
-		astFile := stack[0].(*ast.File) //nolint:forcetypeassert
+		litPos := pass.Fset.Position(lit.Pos())
+		dir, _ := a.fileDirectives.Lookup(pass.Fset, litPos)
 
-		fd, parseDiags := a.fileDirectives.Get(pass.Fset, astFile)
-		for _, d := range parseDiags {
-			pass.Reportf(astFile.Pos(), "%s", d.Message)
-		}
-
-		litLine := pass.Fset.Position(lit.Pos()).Line
-
-		directive := fd.Lookup(litLine)
-
-		pos, msg := a.processStruct(pass, lit, structTyp, typeInfo, directive)
+		pos, msg := a.processStruct(pass, lit, structTyp, typeInfo, dir)
 
 		if pos != nil {
 			pass.Reportf(*pos, "%s", msg)
@@ -289,21 +288,21 @@ func (a *analyzer) processStruct(
 	lit *ast.CompositeLit,
 	structTyp *types.Struct,
 	info *TypeInfo,
-	directive comment.Directive,
+	dirs directive.Directives,
 ) (*token.Pos, string) {
 	shouldProcess := a.shouldProcessType(info)
 
-	if shouldProcess && directive == comment.DirectiveIgnore {
+	if shouldProcess && dirs.Contains(directive.Ignore) {
 		return nil, ""
 	}
 
-	if !shouldProcess && directive != comment.DirectiveEnforce {
+	if !shouldProcess && !dirs.Contains(directive.Enforce) {
 		return nil, ""
 	}
 
 	canAccessUnexported := structFieldsInPackage(structTyp, pass.Pkg)
 
-	if f := a.litSkippedFields(lit, structTyp, !canAccessUnexported); len(f) > 0 {
+	if f := a.litSkippedFields(pass, lit, structTyp, !canAccessUnexported); len(f) > 0 {
 		pos := lit.Pos()
 
 		typeName := info.ShortString()
@@ -357,11 +356,56 @@ func (a *analyzer) shouldProcessType(info *TypeInfo) bool {
 }
 
 func (a *analyzer) litSkippedFields(
+	pass *analysis.Pass,
 	lit *ast.CompositeLit,
 	typ *types.Struct,
 	onlyExported bool,
 ) structure.Fields {
-	return a.structFields.Get(typ).Skipped(lit, onlyExported)
+	lookup := a.makeDirectiveLookup(pass, typ)
+
+	return a.structFields.Get(typ, lookup).Skipped(lit, onlyExported)
+}
+
+// directiveLookup implements structure.DirectiveLookup for field optionality checks.
+type directiveLookup struct {
+	fset  *token.FileSet
+	cache *directive.FileCache
+}
+
+// Lookup returns the directives at the given source position.
+func (d *directiveLookup) Lookup(pos token.Pos) directive.Directives {
+	resolved := d.fset.Position(pos)
+	dirs, _ := d.cache.Lookup(d.fset, resolved)
+
+	return dirs
+}
+
+// makeDirectiveLookup creates a DirectiveLookup for checking field directives.
+// It works for both local types (from pass.Files) and external types
+// (by parsing the source file via the cache on demand).
+func (a *analyzer) makeDirectiveLookup(pass *analysis.Pass, typ *types.Struct) structure.DirectiveLookup {
+	if typ.NumFields() == 0 {
+		return nil
+	}
+
+	firstFieldPos := typ.Field(0).Pos()
+	if !firstFieldPos.IsValid() {
+		return nil
+	}
+
+	return &directiveLookup{
+		fset:  pass.Fset,
+		cache: a.fileDirectives,
+	}
+}
+
+// defaultParser implements directive.FileParser using go/parser.
+type defaultParser struct{}
+
+// ParseFile parses a Go source file and returns its AST with comments.
+func (*defaultParser) ParseFile(fset *token.FileSet, filename string) (*ast.File, error) {
+	//nolint:wrapcheck // error context is added by caller
+	return parser.ParseFile(fset, filename, nil, parser.ParseComments)
 }
 
 func (a *analyzer) printCacheStats(pkgPath string) {

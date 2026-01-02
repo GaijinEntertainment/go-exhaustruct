@@ -2,6 +2,7 @@ package structure_test
 
 import (
 	"go/ast"
+	"go/token"
 	"go/types"
 	"testing"
 
@@ -10,8 +11,18 @@ import (
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/tools/go/packages"
 
+	"dev.gaijin.team/go/exhaustruct/v4/internal/directive"
 	"dev.gaijin.team/go/exhaustruct/v4/internal/structure"
 )
+
+// mockDirectiveLookup implements structure.DirectiveLookup for testing.
+type mockDirectiveLookup struct {
+	dirs directive.Directives
+}
+
+func (m *mockDirectiveLookup) Lookup(_ token.Pos) directive.Directives {
+	return m.dirs
+}
 
 func Test_HasOptionalTag(t *testing.T) {
 	t.Parallel()
@@ -88,10 +99,10 @@ func (s *StructFieldsSuite) TestNewStructFields() {
 
 	s.Len(sf, 4)
 	s.Equal(structure.Fields{
-		{"ExportedRequired", true, false},
-		{"unexportedRequired", false, false},
-		{"ExportedOptional", true, true},
-		{"unexportedOptional", false, true},
+		{"ExportedRequired", true, false, false},
+		{"unexportedRequired", false, false, false},
+		{"ExportedOptional", true, false, true},
+		{"unexportedOptional", false, false, true},
 	}, sf)
 }
 
@@ -118,9 +129,9 @@ func (s *StructFieldsSuite) TestSkipped_Positional_Incomplete() {
 
 	// Positional literals return remaining fields regardless of export status
 	s.Equal(structure.Fields{
-		{"unexportedRequired", false, false},
-		{"ExportedOptional", true, true},
-		{"unexportedOptional", false, true},
+		{"unexportedRequired", false, false, false},
+		{"ExportedOptional", true, false, true},
+		{"unexportedOptional", false, false, true},
 	}, sf.Skipped(lit, true))
 }
 
@@ -141,7 +152,7 @@ func (s *StructFieldsSuite) TestSkipped_Named_MissingUnexported() {
 
 	// onlyExported=false: unexported fields are required
 	s.Equal(structure.Fields{
-		{"unexportedRequired", false, false},
+		{"unexportedRequired", false, false, false},
 	}, sf.Skipped(lit, false))
 }
 
@@ -151,13 +162,13 @@ func (s *StructFieldsSuite) TestSkipped_Named_MissingExported() {
 
 	// onlyExported=true: only exported required fields reported
 	s.Equal(structure.Fields{
-		{"ExportedRequired", true, false},
+		{"ExportedRequired", true, false, false},
 	}, sf.Skipped(lit, true))
 
 	// onlyExported=false: both exported and unexported required fields reported
 	s.Equal(structure.Fields{
-		{"ExportedRequired", true, false},
-		{"unexportedRequired", false, false},
+		{"ExportedRequired", true, false, false},
+		{"unexportedRequired", false, false, false},
 	}, sf.Skipped(lit, false))
 }
 
@@ -167,12 +178,12 @@ func (s *StructFieldsSuite) TestSkipped_Empty() {
 
 	// Empty literal: all required fields are missing
 	s.Equal(structure.Fields{
-		{"ExportedRequired", true, false},
+		{"ExportedRequired", true, false, false},
 	}, sf.Skipped(lit, true))
 
 	s.Equal(structure.Fields{
-		{"ExportedRequired", true, false},
-		{"unexportedRequired", false, false},
+		{"ExportedRequired", true, false, false},
+		{"unexportedRequired", false, false, false},
 	}, sf.Skipped(lit, false))
 }
 
@@ -208,6 +219,65 @@ func Test_NewFields_EmptyStruct(t *testing.T) {
 	assert.Empty(t, fields.String())
 }
 
+func Test_NewFieldsWithDirectives(t *testing.T) {
+	t.Parallel()
+
+	pkgs, err := packages.Load(&packages.Config{ //nolint:exhaustruct
+		Mode: packages.NeedTypes,
+		Dir:  "testdata",
+	}, "")
+	require.NoError(t, err)
+	require.Len(t, pkgs, 1)
+
+	pkg := pkgs[0]
+	obj := pkg.Types.Scope().Lookup("testStruct")
+	require.NotNil(t, obj)
+
+	strct := obj.Type().Underlying().(*types.Struct) //nolint:forcetypeassert
+
+	t.Run("nil lookup", func(t *testing.T) {
+		t.Parallel()
+
+		// With nil lookup, should behave same as NewFields
+		fields := structure.NewFieldsWithDirectives(strct, nil)
+		assert.Equal(t, structure.Fields{
+			{"ExportedRequired", true, false, false},
+			{"unexportedRequired", false, false, false},
+			{"ExportedOptional", true, false, true},
+			{"unexportedOptional", false, false, true},
+		}, fields)
+	})
+
+	t.Run("directive makes field optional", func(t *testing.T) {
+		t.Parallel()
+
+		// Lookup that returns optional for all positions
+		lookup := &mockDirectiveLookup{dirs: directive.Directives{directive.Optional}}
+		fields := structure.NewFieldsWithDirectives(strct, lookup)
+
+		// All fields should be optional now
+		for _, f := range fields {
+			assert.True(t, f.Optional, "field %s should be optional", f.Name)
+		}
+	})
+
+	t.Run("directive does not override tag", func(t *testing.T) {
+		t.Parallel()
+
+		// Lookup that returns no directive
+		lookup := &mockDirectiveLookup{dirs: nil}
+		fields := structure.NewFieldsWithDirectives(strct, lookup)
+
+		// Tag-based optionality should still work
+		assert.Equal(t, structure.Fields{
+			{"ExportedRequired", true, false, false},
+			{"unexportedRequired", false, false, false},
+			{"ExportedOptional", true, false, true},    // still optional via tag
+			{"unexportedOptional", false, false, true}, // still optional via tag
+		}, fields)
+	})
+}
+
 func Test_FieldsCache_Stats(t *testing.T) {
 	t.Parallel()
 
@@ -233,7 +303,7 @@ func Test_FieldsCache_Stats(t *testing.T) {
 	}
 
 	{
-		_ = cache.Get(strct)
+		_ = cache.Get(strct, nil)
 
 		hits, misses := cache.Stats()
 		assert.Equal(t, uint64(0), hits)
@@ -241,7 +311,7 @@ func Test_FieldsCache_Stats(t *testing.T) {
 	}
 
 	{
-		_ = cache.Get(strct)
+		_ = cache.Get(strct, nil)
 
 		hits, misses := cache.Stats()
 		assert.Equal(t, uint64(1), hits)
@@ -249,7 +319,7 @@ func Test_FieldsCache_Stats(t *testing.T) {
 	}
 
 	{
-		_ = cache.Get(strct)
+		_ = cache.Get(strct, nil)
 
 		hits, misses := cache.Stats()
 		assert.Equal(t, uint64(2), hits)
