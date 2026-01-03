@@ -54,7 +54,7 @@ func (ds Directives) Contains(d Directive) bool {
 const directivePrefix = "//exhaustruct:"
 
 func Parse(text string) (found bool, result Directives, errs []error) {
-	text, found = strings.CutPrefix(directivePrefix, text)
+	text, found = strings.CutPrefix(text, directivePrefix)
 	if !found {
 		return false, nil, nil
 	}
