@@ -1,6 +1,7 @@
 package structs
 
 import (
+	"go/ast"
 	"go/token"
 	"go/types"
 	"slices"
@@ -12,6 +13,110 @@ import (
 
 // AnonymousName is the name used for anonymous structs.
 const AnonymousName = "<anonymous>"
+
+// SkippedFields returns fields that are missing from the literal but required.
+// For positional literals, returns remaining fields after the last provided element,
+// filtering by accessibility when externalPkg is true.
+// For named literals, applies requirement rules based on directives and accessibility.
+// The externalPkg flag indicates if the struct is from an external package
+// (unexported fields are inaccessible and thus not required).
+func (i *Info) SkippedFields(lit *ast.CompositeLit, externalPkg bool) Fields {
+	if len(lit.Elts) != 0 && !isNamedLiteral(lit) {
+		return i.skippedPositional(len(lit.Elts), externalPkg)
+	}
+
+	return i.skippedNamed(lit, externalPkg)
+}
+
+// skippedPositional returns remaining fields after the given count for positional literals.
+func (i *Info) skippedPositional(count int, externalPkg bool) Fields {
+	remaining := i.Fields[count:]
+
+	if !externalPkg {
+		if count >= len(i.Fields) {
+			return nil
+		}
+
+		return slices.Clone(i.Fields[count:])
+	}
+
+	res := make(Fields, 0, len(remaining))
+
+	for _, f := range remaining {
+		if f.Exported {
+			res = append(res, f)
+		}
+	}
+
+	if len(res) == 0 {
+		return nil
+	}
+
+	return res
+}
+
+// skippedNamed returns missing required fields for named literals.
+func (i *Info) skippedNamed(lit *ast.CompositeLit, externalPkg bool) Fields {
+	present := presentFields(lit)
+	res := make(Fields, 0, len(i.Fields)-len(present))
+
+	for _, f := range i.Fields {
+		if !present[f.Name] && i.isFieldRequired(f, externalPkg) {
+			res = append(res, f)
+		}
+	}
+
+	if len(res) == 0 {
+		return nil
+	}
+
+	return res
+}
+
+// isFieldRequired returns true if the field must be present in a literal.
+func (i *Info) isFieldRequired(f Field, externalPkg bool) bool {
+	if f.Enforced {
+		return true
+	}
+
+	if f.Optional || i.Optional {
+		return false
+	}
+
+	if externalPkg && !f.Exported {
+		return false
+	}
+
+	return true
+}
+
+// presentFields returns a set of field names present in the literal.
+func presentFields(lit *ast.CompositeLit) map[string]bool {
+	m := make(map[string]bool, len(lit.Elts))
+
+	for _, elt := range lit.Elts {
+		kv, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+
+		k, ok := kv.Key.(*ast.Ident)
+		if !ok {
+			continue
+		}
+
+		m[k.Name] = true
+	}
+
+	return m
+}
+
+// isNamedLiteral returns true if the literal uses named fields.
+// Panics if the literal is empty.
+func isNamedLiteral(lit *ast.CompositeLit) bool {
+	_, ok := lit.Elts[0].(*ast.KeyValueExpr)
+	return ok
+}
 
 // Info represents a struct type with its analysis metadata.
 type Info struct {

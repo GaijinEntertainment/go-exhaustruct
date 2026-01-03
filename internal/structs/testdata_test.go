@@ -113,3 +113,29 @@ func (td *testdata) getStructPos(t *testing.T, name string) token.Pos {
 
 	return token.NoPos
 }
+
+// getLiteral returns a named composite literal from testdata.
+func (td *testdata) getLiteral(t *testing.T, name string) *ast.CompositeLit {
+	t.Helper()
+
+	obj := td.file.Scope.Lookup(name)
+	if obj == nil {
+		t.Fatalf("literal %q not found", name)
+	}
+
+	vs, ok := obj.Decl.(*ast.ValueSpec)
+	if !ok {
+		t.Fatalf("literal %q is not a ValueSpec", name)
+	}
+
+	if len(vs.Values) == 0 {
+		t.Fatalf("literal %q has no values", name)
+	}
+
+	lit, ok := vs.Values[0].(*ast.CompositeLit)
+	if !ok {
+		t.Fatalf("literal %q is not a CompositeLit", name)
+	}
+
+	return lit
+}

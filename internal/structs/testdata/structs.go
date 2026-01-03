@@ -105,3 +105,34 @@ type WithUnexportedEmbedded struct {
 	unexported
 	Own string
 }
+
+// === LITERALS FOR SKIPPED TESTS ===
+
+// LiteralTest is used for testing Skipped method.
+type LiteralTest struct {
+	ExportedRequired   int
+	unexportedRequired int
+	//exhaustruct:optional
+	ExportedOptional   int
+	unexportedOptional int //exhaustruct:optional
+}
+
+//nolint:unused // used for AST inspection in tests
+var (
+	_positionalComplete = LiteralTest{1, 2, 3, 4}
+	_namedComplete      = LiteralTest{
+		ExportedRequired:   1,
+		unexportedRequired: 2,
+		ExportedOptional:   3,
+		unexportedOptional: 4,
+	}
+	_namedMissingUnexported = LiteralTest{
+		ExportedRequired: 1,
+		ExportedOptional: 3,
+	}
+	_namedMissingExported = LiteralTest{
+		ExportedOptional:   3,
+		unexportedOptional: 4,
+	}
+	_empty = LiteralTest{}
+)

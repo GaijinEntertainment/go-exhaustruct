@@ -1,6 +1,8 @@
 package structs_test
 
 import (
+	"go/ast"
+	"go/token"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -255,4 +257,125 @@ func Test_NewInfo(t *testing.T) {
 			assert.True(t, info.Fields[1].Exported)
 		})
 	})
+}
+
+func Test_Info_SkippedFields(t *testing.T) {
+	t.Parallel()
+
+	td := loadTestdata(t)
+
+	// Get info for LiteralTest struct with directive lookup
+	strct := td.getStruct(t, "LiteralTest")
+	pos := td.getStructPos(t, "LiteralTest")
+	info, _ := structs.NewInfo(td.fset, strct, "LiteralTest", td.pkg, pos, td.cache)
+
+	// Verify fields are parsed correctly
+	require.Len(t, info.Fields, 4)
+	assert.False(t, info.Fields[0].Optional) // ExportedRequired
+	assert.False(t, info.Fields[1].Optional) // unexportedRequired
+	assert.True(t, info.Fields[2].Optional)  // ExportedOptional
+	assert.True(t, info.Fields[3].Optional)  // unexportedOptional
+
+	t.Run("positional complete", func(t *testing.T) {
+		t.Parallel()
+
+		lit := td.getLiteral(t, "_positionalComplete")
+		assert.Nil(t, info.SkippedFields(lit, true))
+		assert.Nil(t, info.SkippedFields(lit, false))
+	})
+
+	t.Run("positional incomplete", func(t *testing.T) {
+		t.Parallel()
+
+		// Create AST manually - positional literals with fewer values are invalid Go
+		// but we still need to test the logic
+		lit := &ast.CompositeLit{ //nolint:exhaustruct
+			Elts: []ast.Expr{
+				&ast.BasicLit{Kind: token.INT, Value: "1"}, //nolint:exhaustruct
+			},
+		}
+
+		// externalPkg=false: returns all remaining fields
+		skipped := info.SkippedFields(lit, false)
+		require.Len(t, skipped, 3)
+		assert.Equal(t, "unexportedRequired", skipped[0].Name)
+		assert.Equal(t, "ExportedOptional", skipped[1].Name)
+		assert.Equal(t, "unexportedOptional", skipped[2].Name)
+
+		// externalPkg=true: returns only exported remaining fields
+		skipped = info.SkippedFields(lit, true)
+		require.Len(t, skipped, 1)
+		assert.Equal(t, "ExportedOptional", skipped[0].Name)
+	})
+
+	t.Run("named complete", func(t *testing.T) {
+		t.Parallel()
+
+		lit := td.getLiteral(t, "_namedComplete")
+		assert.Nil(t, info.SkippedFields(lit, true))
+		assert.Nil(t, info.SkippedFields(lit, false))
+	})
+
+	t.Run("named missing unexported", func(t *testing.T) {
+		t.Parallel()
+
+		lit := td.getLiteral(t, "_namedMissingUnexported")
+
+		// externalPkg=true: unexported not required (inaccessible)
+		assert.Nil(t, info.SkippedFields(lit, true))
+
+		// externalPkg=false: unexported required
+		skipped := info.SkippedFields(lit, false)
+		require.Len(t, skipped, 1)
+		assert.Equal(t, "unexportedRequired", skipped[0].Name)
+	})
+
+	t.Run("named missing exported", func(t *testing.T) {
+		t.Parallel()
+
+		lit := td.getLiteral(t, "_namedMissingExported")
+
+		// externalPkg=true: only exported required reported
+		skipped := info.SkippedFields(lit, true)
+		require.Len(t, skipped, 1)
+		assert.Equal(t, "ExportedRequired", skipped[0].Name)
+
+		// externalPkg=false: both required fields reported
+		skipped = info.SkippedFields(lit, false)
+		require.Len(t, skipped, 2)
+		assert.Equal(t, "ExportedRequired", skipped[0].Name)
+		assert.Equal(t, "unexportedRequired", skipped[1].Name)
+	})
+
+	t.Run("empty literal", func(t *testing.T) {
+		t.Parallel()
+
+		lit := td.getLiteral(t, "_empty")
+
+		// externalPkg=true: only exported required
+		skipped := info.SkippedFields(lit, true)
+		require.Len(t, skipped, 1)
+		assert.Equal(t, "ExportedRequired", skipped[0].Name)
+
+		// externalPkg=false: all required
+		skipped = info.SkippedFields(lit, false)
+		require.Len(t, skipped, 2)
+		assert.Equal(t, "ExportedRequired", skipped[0].Name)
+		assert.Equal(t, "unexportedRequired", skipped[1].Name)
+	})
+}
+
+func Test_Info_SkippedFields_EmptyStruct(t *testing.T) {
+	t.Parallel()
+
+	td := loadTestdata(t)
+
+	strct := td.getStruct(t, "Empty")
+	pos := td.getStructPos(t, "Empty")
+	info, _ := structs.NewInfo(td.fset, strct, "Empty", td.pkg, pos, nil)
+
+	lit := &ast.CompositeLit{Elts: []ast.Expr{}} //nolint:exhaustruct
+
+	assert.Nil(t, info.SkippedFields(lit, true))
+	assert.Nil(t, info.SkippedFields(lit, false))
 }
