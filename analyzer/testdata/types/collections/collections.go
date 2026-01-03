@@ -4,7 +4,7 @@ package collections
 // Test is a struct with optional field.
 type Test struct {
 	A string
-	B int `exhaustruct:"optional"`
+	B int //exhaustruct:optional
 }
 
 func shouldPassSlice() {

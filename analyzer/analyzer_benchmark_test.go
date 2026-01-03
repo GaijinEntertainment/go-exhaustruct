@@ -11,8 +11,8 @@ import (
 
 func BenchmarkAnalyzer(b *testing.B) {
 	a, err := analyzer.NewAnalyzer(analyzer.Config{
-		IncludeRx: []string{`.*[Tt]est.*`, `.*External`, `.*Embedded`, `.*\.<anonymous>`},
-		ExcludeRx: []string{`.*Excluded$`, `e\.<anonymous>`},
+		EnforceRx: []string{`.*[Tt]est.*`, `.*External`, `.*Embedded`, `.*\.<anonymous>`},
+		IgnoreRx:  []string{`.*Excluded$`, `e\.<anonymous>`},
 	})
 	require.NoError(b, err)
 

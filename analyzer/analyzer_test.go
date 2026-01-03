@@ -16,26 +16,26 @@ var testdataPath, _ = filepath.Abs("./testdata/") //nolint:gochecknoglobals
 func TestAnalyzer(t *testing.T) {
 	t.Parallel()
 
-	a, err := analyzer.NewAnalyzer(analyzer.Config{IncludeRx: []string{""}})
+	a, err := analyzer.NewAnalyzer(analyzer.Config{EnforceRx: []string{""}})
 	assert.Nil(t, a)
 	assert.Error(t, err)
 
-	a, err = analyzer.NewAnalyzer(analyzer.Config{IncludeRx: []string{"["}})
+	a, err = analyzer.NewAnalyzer(analyzer.Config{EnforceRx: []string{"["}})
 	assert.Nil(t, a)
 	assert.Error(t, err)
 
-	a, err = analyzer.NewAnalyzer(analyzer.Config{ExcludeRx: []string{""}})
+	a, err = analyzer.NewAnalyzer(analyzer.Config{IgnoreRx: []string{""}})
 	assert.Nil(t, a)
 	assert.Error(t, err)
 
-	a, err = analyzer.NewAnalyzer(analyzer.Config{ExcludeRx: []string{"["}})
+	a, err = analyzer.NewAnalyzer(analyzer.Config{IgnoreRx: []string{"["}})
 	assert.Nil(t, a)
 	assert.Error(t, err)
 
-	// Test excluded package behavior
+	// Test ignored package behavior
 	a, err = analyzer.NewAnalyzer(analyzer.Config{
-		IncludeRx: []string{`.*\.TestExcluded`, `.*\.<anonymous>`},
-		ExcludeRx: []string{`.*Excluded$`, `testdata/config/excluded\.<anonymous>`},
+		EnforceRx: []string{`.*\.TestExcluded`, `.*\.<anonymous>`},
+		IgnoreRx:  []string{`.*Excluded$`, `testdata/config/excluded\.<anonymous>`},
 	})
 	require.NoError(t, err)
 
@@ -64,67 +64,67 @@ func TestAnalyzerTypes(t *testing.T) {
 		{
 			name: "basic",
 			config: analyzer.Config{
-				IncludeRx: []string{`.*\.Test`},
+				EnforceRx: []string{`.*\.Test`},
 			},
 			testPackage: "testdata/types/basic",
 		},
 		{
 			name: "aliases",
 			config: analyzer.Config{
-				IncludeRx: []string{`.*\.(Base|Alias|Simple).*`},
-				ExcludeRx: []string{`.*Excluded.*`},
+				EnforceRx: []string{`.*\.(Base|Alias|Simple).*`},
+				IgnoreRx:  []string{`.*Excluded.*`},
 			},
 			testPackage: "testdata/types/aliases",
 		},
 		{
 			name: "derived",
 			config: analyzer.Config{
-				IncludeRx: []string{`.*\.(Base|Derived|External|Simple).*`},
-				ExcludeRx: []string{`.*Excluded.*`},
+				EnforceRx: []string{`.*\.(Base|Derived|External|Simple).*`},
+				IgnoreRx:  []string{`.*Excluded.*`},
 			},
 			testPackage: "testdata/types/derived",
 		},
 		{
 			name: "embedded",
 			config: analyzer.Config{
-				IncludeRx: []string{`.*\.(Embedded|TestEmbedded|Simple).*`},
+				EnforceRx: []string{`.*\.(Embedded|TestEmbedded|Simple).*`},
 			},
 			testPackage: "testdata/types/embedded",
 		},
 		{
 			name: "generics",
 			config: analyzer.Config{
-				IncludeRx: []string{`.*\.testGenericStruct`},
+				EnforceRx: []string{`.*\.testGenericStruct`},
 			},
 			testPackage: "testdata/types/generics",
 		},
 		{
 			name: "collections",
 			config: analyzer.Config{
-				IncludeRx: []string{`.*\.Test`},
+				EnforceRx: []string{`.*\.Test`},
 			},
 			testPackage: "testdata/types/collections",
 		},
 		{
 			name: "anonymous",
 			config: analyzer.Config{
-				IncludeRx: []string{`.*\.<anonymous>`},
+				EnforceRx: []string{`.*\.<anonymous>`},
 			},
 			testPackage: "testdata/types/anonymous",
 		},
 		{
 			name: "directives",
 			config: analyzer.Config{
-				IncludeRx: []string{`.*\.(Test|Embedded|Simple|WithOptionalDirective).*`},
-				ExcludeRx: []string{`.*Excluded.*`},
+				EnforceRx: []string{`.*\.(Test|Embedded|Simple|WithOptionalDirective).*`},
+				IgnoreRx:  []string{`.*Excluded.*`},
 			},
 			testPackage: "testdata/types/directives",
 		},
 		{
 			name: "filtering",
 			config: analyzer.Config{
-				IncludeRx: []string{`.*\.Test.*`},
-				ExcludeRx: []string{`.*Excluded.*`},
+				EnforceRx: []string{`.*\.Test.*`},
+				IgnoreRx:  []string{`.*Excluded.*`},
 			},
 			testPackage: "testdata/types/filtering",
 		},

@@ -8,7 +8,7 @@ package external
 type Simple struct {
 	A string
 	B int
-	C string `exhaustruct:"optional"`
+	C string //exhaustruct:optional
 	d string // unexported, inaccessible from other packages
 }
 
@@ -17,8 +17,8 @@ type Simple struct {
 type WithOptionalDirective struct {
 	Required string
 	//exhaustruct:optional
-	OptionalByDirective string
-	OptionalByTag       string `exhaustruct:"optional"`
+	OptionalFirst  string
+	OptionalSecond string //exhaustruct:optional
 }
 
 // Excluded matches exclusion patterns (.*Excluded.*).

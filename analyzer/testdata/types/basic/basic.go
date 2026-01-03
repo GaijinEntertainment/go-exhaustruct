@@ -7,7 +7,7 @@ type Test struct {
 	B int
 	C float32
 	D bool
-	E string `exhaustruct:"optional"`
+	E string //exhaustruct:optional
 }
 
 func shouldPassFullyDefined() {

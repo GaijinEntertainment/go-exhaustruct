@@ -21,8 +21,8 @@ import (
 type analyzer struct {
 	config Config
 
-	structFields   structure.FieldsCache `exhaustruct:"optional"`
-	fileDirectives *directive.FileCache  `exhaustruct:"optional"`
+	structCache    structure.Cache      `exhaustruct:"optional"`
+	fileDirectives *directive.FileCache `exhaustruct:"optional"`
 
 	typeProcessingNeed   map[string]bool
 	typeProcessingNeedMu sync.RWMutex `exhaustruct:"optional"`
@@ -79,19 +79,19 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 			return true
 		}
 
-		structTyp, typeInfo, ok := getStructType(pass, lit)
+		strct, pkg, typePos, ti, ok := getStructType(pass, lit)
 		if !ok {
 			return true
 		}
 
-		if len(lit.Elts) == 0 && a.checkEmptyStructAllowed(pass, stack, typeInfo) {
+		if len(lit.Elts) == 0 && a.checkEmptyStructAllowed(pass, stack, ti) {
 			return true
 		}
 
 		litPos := pass.Fset.Position(lit.Pos())
-		dir, _ := a.fileDirectives.Lookup(pass.Fset, litPos)
+		litDirs, _ := a.fileDirectives.Lookup(pass.Fset, litPos)
 
-		pos, msg := a.processStruct(pass, lit, structTyp, typeInfo, dir)
+		pos, msg := a.processStruct(pass, lit, strct, pkg, typePos, ti, litDirs)
 
 		if pos != nil {
 			pass.Reportf(*pos, "%s", msg)
@@ -245,7 +245,10 @@ func isErrorReturnStatement(pass *analysis.Pass, n *ast.ReturnStmt, currentNode 
 	return false
 }
 
-func getStructType(pass *analysis.Pass, lit *ast.CompositeLit) (*types.Struct, *TypeInfo, bool) {
+//nolint:revive // function-result-limit: 5 results needed for type resolution context
+func getStructType(pass *analysis.Pass, lit *ast.CompositeLit) (
+	*types.Struct, *types.Package, token.Pos, *TypeInfo, bool,
+) {
 	typ := types.Unalias(pass.TypesInfo.TypeOf(lit))
 
 	// Handle pointer types (e.g., implicit `{}` in `[]*Struct{...}`)
@@ -256,74 +259,114 @@ func getStructType(pass *analysis.Pass, lit *ast.CompositeLit) (*types.Struct, *
 
 	switch typ := typ.(type) {
 	case *types.Named: // named type
-		if structTyp, ok := typ.Underlying().(*types.Struct); ok {
+		if strct, ok := typ.Underlying().(*types.Struct); ok {
 			pkg := typ.Obj().Pkg()
-			ti := TypeInfo{
+			ti := &TypeInfo{
 				Name:        typ.Obj().Name(),
 				PackageName: pkg.Name(),
 				PackagePath: pkg.Path(),
 			}
 
-			return structTyp, &ti, true
+			return strct, pkg, typ.Obj().Pos(), ti, true
 		}
 
-		return nil, nil, false
+		return nil, nil, token.NoPos, nil, false
 
 	case *types.Struct: // anonymous struct
-		ti := TypeInfo{
-			Name:        "<anonymous>",
+		ti := &TypeInfo{
+			Name:        structure.AnonymousName,
 			PackageName: pass.Pkg.Name(),
 			PackagePath: pass.Pkg.Path(),
 		}
 
-		return typ, &ti, true
+		return typ, pass.Pkg, token.NoPos, ti, true
 
 	default:
-		return nil, nil, false
+		return nil, nil, token.NoPos, nil, false
 	}
 }
 
+//nolint:revive // argument-limit: 7 args needed for struct processing context
 func (a *analyzer) processStruct(
 	pass *analysis.Pass,
 	lit *ast.CompositeLit,
-	structTyp *types.Struct,
-	info *TypeInfo,
-	dirs directive.Directives,
+	strct *types.Struct,
+	pkg *types.Package,
+	typePos token.Pos,
+	ti *TypeInfo,
+	litDirs directive.Directives,
 ) (*token.Pos, string) {
-	shouldProcess := a.shouldProcessType(info)
+	// Get struct metadata with directives from cache
+	s, diags := a.structCache.Get(
+		pass.Fset,
+		strct,
+		ti.Name,
+		pkg,
+		typePos,
+		a.fileDirectives,
+	)
 
-	if shouldProcess && dirs.Contains(directive.Ignore) {
+	for _, diag := range diags {
+		pass.Report(diag)
+	}
+
+	if !a.shouldCheck(s, ti, litDirs) {
 		return nil, ""
 	}
 
-	if !shouldProcess && !dirs.Contains(directive.Enforce) {
+	// Apply optional-rx pattern if struct-level optional is not already set
+	// Priority: struct:optional (already in s) > flag:optional-rx
+	if !s.Optional && a.isTypeOptionalByPattern(ti) {
+		s.Optional = true
+	}
+
+	externalPkg := !structFieldsInPackage(strct, pass.Pkg)
+	f := s.SkippedFields(lit, externalPkg)
+
+	if len(f) == 0 {
 		return nil, ""
 	}
 
-	canAccessUnexported := structFieldsInPackage(structTyp, pass.Pkg)
+	pos := lit.Pos()
 
-	if f := a.litSkippedFields(pass, lit, structTyp, !canAccessUnexported); len(f) > 0 {
-		pos := lit.Pos()
-
-		typeName := info.ShortString()
-		if a.config.ReportFullTypePath {
-			typeName = info.String()
-		}
-
-		if len(f) == 1 {
-			return &pos, fmt.Sprintf("%s is missing field %s", typeName, f.String())
-		}
-
-		return &pos, fmt.Sprintf("%s is missing fields %s", typeName, f.String())
+	typeName := ti.ShortString()
+	if a.config.ReportFullTypePath {
+		typeName = ti.String()
 	}
 
-	return nil, ""
+	if len(f) == 1 {
+		return &pos, fmt.Sprintf("%s is missing field %s", typeName, f.String())
+	}
+
+	return &pos, fmt.Sprintf("%s is missing fields %s", typeName, f.String())
 }
 
-// shouldProcessType returns true if type should be processed basing off include
-// and exclude patterns, defined though constructor and\or flags.
+// shouldCheck implements v5 checking decision priority.
+// Priority: literal:ignore > literal:enforce > struct:ignore > struct:enforce > flag patterns.
+func (a *analyzer) shouldCheck(s *structure.Struct, ti *TypeInfo, litDirs directive.Directives) bool {
+	if litDirs.Contains(directive.Ignore) {
+		return false
+	}
+
+	if litDirs.Contains(directive.Enforce) {
+		return true
+	}
+
+	if s.Ignored {
+		return false
+	}
+
+	if s.Enforced {
+		return true
+	}
+
+	return a.shouldProcessType(ti)
+}
+
+// shouldProcessType returns true if type should be processed basing off enforce
+// and ignore patterns, defined though constructor and\or flags.
 func (a *analyzer) shouldProcessType(info *TypeInfo) bool {
-	if len(a.config.includePatterns) == 0 && len(a.config.excludePatterns) == 0 {
+	if len(a.config.enforcePatterns) == 0 && len(a.config.ignorePatterns) == 0 {
 		return true
 	}
 
@@ -340,11 +383,11 @@ func (a *analyzer) shouldProcessType(info *TypeInfo) bool {
 
 		res = true
 
-		if a.config.includePatterns != nil && !a.config.includePatterns.MatchFullString(name) {
+		if a.config.enforcePatterns != nil && !a.config.enforcePatterns.MatchFullString(name) {
 			res = false
 		}
 
-		if res && a.config.excludePatterns != nil && a.config.excludePatterns.MatchFullString(name) {
+		if res && a.config.ignorePatterns != nil && a.config.ignorePatterns.MatchFullString(name) {
 			res = false
 		}
 
@@ -355,48 +398,13 @@ func (a *analyzer) shouldProcessType(info *TypeInfo) bool {
 	return res
 }
 
-func (a *analyzer) litSkippedFields(
-	pass *analysis.Pass,
-	lit *ast.CompositeLit,
-	typ *types.Struct,
-	onlyExported bool,
-) structure.Fields {
-	lookup := a.makeDirectiveLookup(pass, typ)
-
-	return a.structFields.Get(typ, lookup).Skipped(lit, onlyExported)
-}
-
-// directiveLookup implements structure.DirectiveLookup for field optionality checks.
-type directiveLookup struct {
-	fset  *token.FileSet
-	cache *directive.FileCache
-}
-
-// Lookup returns the directives at the given source position.
-func (d *directiveLookup) Lookup(pos token.Pos) directive.Directives {
-	resolved := d.fset.Position(pos)
-	dirs, _ := d.cache.Lookup(d.fset, resolved)
-
-	return dirs
-}
-
-// makeDirectiveLookup creates a DirectiveLookup for checking field directives.
-// It works for both local types (from pass.Files) and external types
-// (by parsing the source file via the cache on demand).
-func (a *analyzer) makeDirectiveLookup(pass *analysis.Pass, typ *types.Struct) structure.DirectiveLookup {
-	if typ.NumFields() == 0 {
-		return nil
+// isTypeOptionalByPattern returns true if the type matches optional-rx patterns.
+func (a *analyzer) isTypeOptionalByPattern(info *TypeInfo) bool {
+	if len(a.config.optionalPatterns) == 0 {
+		return false
 	}
 
-	firstFieldPos := typ.Field(0).Pos()
-	if !firstFieldPos.IsValid() {
-		return nil
-	}
-
-	return &directiveLookup{
-		fset:  pass.Fset,
-		cache: a.fileDirectives,
-	}
+	return a.config.optionalPatterns.MatchFullString(info.String())
 }
 
 // defaultParser implements directive.FileParser using go/parser.
@@ -409,8 +417,8 @@ func (*defaultParser) ParseFile(fset *token.FileSet, filename string) (*ast.File
 }
 
 func (a *analyzer) printCacheStats(pkgPath string) {
-	sfHits, sfMisses := a.structFields.Stats()
-	printCacheLine(pkgPath, "struct-fields", sfHits, sfMisses, 0)
+	siHits, siMisses := a.structCache.Stats()
+	printCacheLine(pkgPath, "struct-infos", siHits, siMisses, 0)
 
 	fdHits, fdMisses, fdSize := a.fileDirectives.Stats()
 	printCacheLine(pkgPath, "file-directives", fdHits, fdMisses, fdSize)
@@ -442,16 +450,19 @@ func structFieldsInPackage(structTyp *types.Struct, pkg *types.Package) bool {
 	return fieldPkg == nil || fieldPkg == pkg
 }
 
+// TypeInfo holds display information for a struct type.
 type TypeInfo struct {
 	Name        string
 	PackageName string
 	PackagePath string
 }
 
+// String returns the full type path (e.g., "net/http.Request").
 func (t TypeInfo) String() string {
 	return t.PackagePath + "." + t.Name
 }
 
+// ShortString returns the short type name (e.g., "http.Request").
 func (t TypeInfo) ShortString() string {
 	return t.PackageName + "." + t.Name
 }

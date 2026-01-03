@@ -23,13 +23,14 @@ type TestWithOptionalFields struct {
 	AlsoRequired   bool
 }
 
-// TestMixedOptional has both tag-based and comment-based optional fields.
+// TestMixedOptional has multiple optional fields via comment directives.
 type TestMixedOptional struct {
 	Required string
 	//exhaustruct:optional
-	OptionalByDirective string
-	OptionalByTag       string `exhaustruct:"optional"`
-	AlsoRequired        int
+	OptionalFirst string
+	//exhaustruct:optional
+	OptionalSecond string
+	AlsoRequired   int
 }
 
 // TestExcluded matches exclusion patterns.
@@ -142,7 +143,7 @@ func shouldFailMissingRequiredWithOptionalDirectives() {
 }
 
 func shouldPassMixedOptional() {
-	// Both tag-based and directive-based optional fields work
+	// Multiple optional fields via comment directives work
 	_ = TestMixedOptional{
 		Required:     "value",
 		AlsoRequired: 42,
@@ -150,10 +151,10 @@ func shouldPassMixedOptional() {
 
 	// Can also provide optional fields
 	_ = TestMixedOptional{
-		Required:            "value",
-		OptionalByDirective: "directive",
-		OptionalByTag:       "tag",
-		AlsoRequired:        42,
+		Required:       "value",
+		OptionalFirst:  "first",
+		OptionalSecond: "second",
+		AlsoRequired:   42,
 	}
 }
 
@@ -173,9 +174,9 @@ func shouldPassExternalOptionalDirective() {
 
 	// Can also provide optional fields
 	_ = external.WithOptionalDirective{
-		Required:            "value",
-		OptionalByDirective: "directive",
-		OptionalByTag:       "tag",
+		Required:       "value",
+		OptionalFirst:  "first",
+		OptionalSecond: "second",
 	}
 }
 
