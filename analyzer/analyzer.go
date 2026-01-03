@@ -21,7 +21,7 @@ import (
 type analyzer struct {
 	config Config
 
-	structCache    structure.Cache      `exhaustruct:"optional"`
+	structCache    *structure.Cache     `exhaustruct:"optional"`
 	fileDirectives *directive.FileCache `exhaustruct:"optional"`
 
 	typeProcessingNeed   map[string]bool
@@ -36,6 +36,7 @@ func NewAnalyzer(config Config) (*analysis.Analyzer, error) {
 
 	a := analyzer{
 		config:             config,
+		structCache:        structure.NewCache(),
 		fileDirectives:     directive.NewFileCache(&defaultParser{}),
 		typeProcessingNeed: make(map[string]bool),
 	}

@@ -57,7 +57,16 @@ func (s *Struct) skippedPositional(count int, externalPkg bool) Fields {
 
 // skippedNamed returns missing required fields for named literals.
 func (s *Struct) skippedNamed(lit *ast.CompositeLit, externalPkg bool) Fields {
-	present := presentFields(lit)
+	present := make(map[string]bool, len(lit.Elts))
+
+	for _, elt := range lit.Elts {
+		if kv, ok := elt.(*ast.KeyValueExpr); ok {
+			if k, ok := kv.Key.(*ast.Ident); ok {
+				present[k.Name] = true
+			}
+		}
+	}
+
 	res := make(Fields, 0, len(s.Fields)-len(present))
 
 	for _, f := range s.Fields {
@@ -88,27 +97,6 @@ func (s *Struct) isFieldRequired(f Field, externalPkg bool) bool {
 	}
 
 	return true
-}
-
-// presentFields returns a set of field names present in the literal.
-func presentFields(lit *ast.CompositeLit) map[string]bool {
-	m := make(map[string]bool, len(lit.Elts))
-
-	for _, elt := range lit.Elts {
-		kv, ok := elt.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-
-		k, ok := kv.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-
-		m[k.Name] = true
-	}
-
-	return m
 }
 
 // isNamedLiteral returns true if the literal uses named fields.
@@ -151,7 +139,7 @@ func NewStruct(
 	name string,
 	pkg *types.Package,
 	pos token.Pos,
-	lookup DirectiveLookup,
+	lookup *directive.FileCache,
 ) (*Struct, []analysis.Diagnostic) {
 	res := Struct{
 		Name:        name,
@@ -177,11 +165,4 @@ func NewStruct(
 	res.Fields = fields
 
 	return &res, allDiags
-}
-
-// DirectiveLookup provides position-based directive lookup.
-// This interface is satisfied by [directive.FileCache].
-type DirectiveLookup interface {
-	// Lookup returns the directives at the given source position.
-	Lookup(fset *token.FileSet, pos token.Position) (directive.Directives, []analysis.Diagnostic)
 }

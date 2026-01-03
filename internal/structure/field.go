@@ -50,7 +50,7 @@ func (sf Fields) String() string {
 	return b.String()
 }
 
-func newFields(fset *token.FileSet, strct *types.Struct, lookup DirectiveLookup) (Fields, []analysis.Diagnostic) {
+func newFields(fset *token.FileSet, strct *types.Struct, lookup *directive.FileCache) (Fields, []analysis.Diagnostic) {
 	fields := make(Fields, 0, strct.NumFields())
 
 	var allDiags []analysis.Diagnostic

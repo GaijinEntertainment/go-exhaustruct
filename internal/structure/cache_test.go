@@ -17,7 +17,7 @@ func Test_Cache(t *testing.T) {
 	t.Run("miss", func(t *testing.T) {
 		t.Parallel()
 
-		cache := &structure.Cache{}
+		cache := structure.NewCache()
 
 		strct := td.getStruct(t, "SingleField")
 		pos := td.getStructPos(t, "SingleField")
@@ -36,7 +36,7 @@ func Test_Cache(t *testing.T) {
 	t.Run("hit", func(t *testing.T) {
 		t.Parallel()
 
-		cache := &structure.Cache{}
+		cache := structure.NewCache()
 
 		strct := td.getStruct(t, "SingleField")
 		pos := td.getStructPos(t, "SingleField")
@@ -55,7 +55,7 @@ func Test_Cache(t *testing.T) {
 	t.Run("different structs", func(t *testing.T) {
 		t.Parallel()
 
-		cache := &structure.Cache{}
+		cache := structure.NewCache()
 
 		strct1 := td.getStruct(t, "SingleField")
 		pos1 := td.getStructPos(t, "SingleField")
@@ -78,7 +78,7 @@ func Test_Cache(t *testing.T) {
 	t.Run("with directives", func(t *testing.T) {
 		t.Parallel()
 
-		cache := &structure.Cache{}
+		cache := structure.NewCache()
 
 		strct := td.getStruct(t, "IgnoredStruct")
 		pos := td.getStructPos(t, "IgnoredStruct")
