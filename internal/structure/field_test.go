@@ -1,11 +1,11 @@
-package structs_test
+package structure_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"dev.gaijin.team/go/exhaustruct/v4/internal/structs"
+	"dev.gaijin.team/go/exhaustruct/v4/internal/structure"
 )
 
 func Test_Fields_String(t *testing.T) {
@@ -13,24 +13,24 @@ func Test_Fields_String(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		fields structs.Fields
+		fields structure.Fields
 		want   string
 	}{
 		{
 			name:   "empty",
-			fields: structs.Fields{},
+			fields: structure.Fields{},
 			want:   "",
 		},
 		{
 			name: "single",
-			fields: structs.Fields{
+			fields: structure.Fields{
 				{Name: "Foo", Exported: true},
 			},
 			want: "Foo",
 		},
 		{
 			name: "multiple",
-			fields: structs.Fields{
+			fields: structure.Fields{
 				{Name: "Foo", Exported: true},
 				{Name: "Bar", Exported: true},
 				{Name: "Baz", Exported: true},

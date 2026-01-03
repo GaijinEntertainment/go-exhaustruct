@@ -1,4 +1,4 @@
-package structs_test
+package structure_test
 
 import (
 	"go/ast"
@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"dev.gaijin.team/go/exhaustruct/v4/internal/structs"
+	"dev.gaijin.team/go/exhaustruct/v4/internal/structure"
 )
 
-func Test_NewInfo(t *testing.T) {
+func Test_NewStruct(t *testing.T) {
 	t.Parallel()
 
 	td := loadTestdata(t)
@@ -38,7 +38,7 @@ func Test_NewInfo(t *testing.T) {
 				strct := td.getStruct(t, tt.structName)
 				pos := td.getStructPos(t, tt.structName)
 
-				info, diags := structs.NewInfo(td.fset, strct, tt.structName, td.pkg, pos, nil)
+				info, diags := structure.NewStruct(td.fset, strct, tt.structName, td.pkg, pos, nil)
 
 				require.NotNil(t, info)
 				assert.Empty(t, diags)
@@ -55,7 +55,7 @@ func Test_NewInfo(t *testing.T) {
 		strct := td.getStruct(t, "MixedExported")
 		pos := td.getStructPos(t, "MixedExported")
 
-		info, diags := structs.NewInfo(td.fset, strct, "MixedExported", td.pkg, pos, nil)
+		info, diags := structure.NewStruct(td.fset, strct, "MixedExported", td.pkg, pos, nil)
 
 		require.NotNil(t, info)
 		assert.Empty(t, diags)
@@ -94,7 +94,7 @@ func Test_NewInfo(t *testing.T) {
 				strct := td.getStruct(t, tt.structName)
 				pos := td.getStructPos(t, tt.structName)
 
-				info, diags := structs.NewInfo(td.fset, strct, tt.structName, td.pkg, pos, td.cache)
+				info, diags := structure.NewStruct(td.fset, strct, tt.structName, td.pkg, pos, td.cache)
 
 				require.NotNil(t, info)
 				assert.Empty(t, diags)
@@ -114,7 +114,7 @@ func Test_NewInfo(t *testing.T) {
 			strct := td.getStruct(t, "WithOptionalDoc")
 			pos := td.getStructPos(t, "WithOptionalDoc")
 
-			info, diags := structs.NewInfo(td.fset, strct, "WithOptionalDoc", td.pkg, pos, td.cache)
+			info, diags := structure.NewStruct(td.fset, strct, "WithOptionalDoc", td.pkg, pos, td.cache)
 
 			require.NotNil(t, info)
 			assert.Empty(t, diags)
@@ -133,7 +133,7 @@ func Test_NewInfo(t *testing.T) {
 			strct := td.getStruct(t, "WithOptionalInline")
 			pos := td.getStructPos(t, "WithOptionalInline")
 
-			info, diags := structs.NewInfo(td.fset, strct, "WithOptionalInline", td.pkg, pos, td.cache)
+			info, diags := structure.NewStruct(td.fset, strct, "WithOptionalInline", td.pkg, pos, td.cache)
 
 			require.NotNil(t, info)
 			assert.Empty(t, diags)
@@ -152,7 +152,7 @@ func Test_NewInfo(t *testing.T) {
 			strct := td.getStruct(t, "WithEnforcedField")
 			pos := td.getStructPos(t, "WithEnforcedField")
 
-			info, diags := structs.NewInfo(td.fset, strct, "WithEnforcedField", td.pkg, pos, td.cache)
+			info, diags := structure.NewStruct(td.fset, strct, "WithEnforcedField", td.pkg, pos, td.cache)
 
 			require.NotNil(t, info)
 			assert.Empty(t, diags)
@@ -171,7 +171,7 @@ func Test_NewInfo(t *testing.T) {
 			strct := td.getStruct(t, "WithMixedDirectives")
 			pos := td.getStructPos(t, "WithMixedDirectives")
 
-			info, diags := structs.NewInfo(td.fset, strct, "WithMixedDirectives", td.pkg, pos, td.cache)
+			info, diags := structure.NewStruct(td.fset, strct, "WithMixedDirectives", td.pkg, pos, td.cache)
 
 			require.NotNil(t, info)
 			assert.Empty(t, diags)
@@ -196,11 +196,11 @@ func Test_NewInfo(t *testing.T) {
 
 		strct := td.getStruct(t, "SingleField")
 
-		info, diags := structs.NewInfo(td.fset, strct, structs.AnonymousName, td.pkg, 0, nil)
+		info, diags := structure.NewStruct(td.fset, strct, structure.AnonymousName, td.pkg, 0, nil)
 
 		require.NotNil(t, info)
 		assert.Empty(t, diags)
-		assert.Equal(t, structs.AnonymousName, info.Name)
+		assert.Equal(t, structure.AnonymousName, info.Name)
 	})
 
 	t.Run("nil lookup", func(t *testing.T) {
@@ -209,7 +209,7 @@ func Test_NewInfo(t *testing.T) {
 		strct := td.getStruct(t, "IgnoredStruct")
 		pos := td.getStructPos(t, "IgnoredStruct")
 
-		info, diags := structs.NewInfo(td.fset, strct, "IgnoredStruct", td.pkg, pos, nil)
+		info, diags := structure.NewStruct(td.fset, strct, "IgnoredStruct", td.pkg, pos, nil)
 
 		require.NotNil(t, info)
 		assert.Empty(t, diags)
@@ -225,7 +225,7 @@ func Test_NewInfo(t *testing.T) {
 			strct := td.getStruct(t, "WithEmbedded")
 			pos := td.getStructPos(t, "WithEmbedded")
 
-			info, diags := structs.NewInfo(td.fset, strct, "WithEmbedded", td.pkg, pos, nil)
+			info, diags := structure.NewStruct(td.fset, strct, "WithEmbedded", td.pkg, pos, nil)
 
 			require.NotNil(t, info)
 			assert.Empty(t, diags)
@@ -244,7 +244,7 @@ func Test_NewInfo(t *testing.T) {
 			strct := td.getStruct(t, "WithUnexportedEmbedded")
 			pos := td.getStructPos(t, "WithUnexportedEmbedded")
 
-			info, diags := structs.NewInfo(td.fset, strct, "WithUnexportedEmbedded", td.pkg, pos, nil)
+			info, diags := structure.NewStruct(td.fset, strct, "WithUnexportedEmbedded", td.pkg, pos, nil)
 
 			require.NotNil(t, info)
 			assert.Empty(t, diags)
@@ -259,7 +259,7 @@ func Test_NewInfo(t *testing.T) {
 	})
 }
 
-func Test_Info_SkippedFields(t *testing.T) {
+func Test_Struct_SkippedFields(t *testing.T) {
 	t.Parallel()
 
 	td := loadTestdata(t)
@@ -267,7 +267,7 @@ func Test_Info_SkippedFields(t *testing.T) {
 	// Get info for LiteralTest struct with directive lookup
 	strct := td.getStruct(t, "LiteralTest")
 	pos := td.getStructPos(t, "LiteralTest")
-	info, _ := structs.NewInfo(td.fset, strct, "LiteralTest", td.pkg, pos, td.cache)
+	info, _ := structure.NewStruct(td.fset, strct, "LiteralTest", td.pkg, pos, td.cache)
 
 	// Verify fields are parsed correctly
 	require.Len(t, info.Fields, 4)
@@ -365,14 +365,14 @@ func Test_Info_SkippedFields(t *testing.T) {
 	})
 }
 
-func Test_Info_SkippedFields_EmptyStruct(t *testing.T) {
+func Test_Struct_SkippedFields_EmptyStruct(t *testing.T) {
 	t.Parallel()
 
 	td := loadTestdata(t)
 
 	strct := td.getStruct(t, "Empty")
 	pos := td.getStructPos(t, "Empty")
-	info, _ := structs.NewInfo(td.fset, strct, "Empty", td.pkg, pos, nil)
+	info, _ := structure.NewStruct(td.fset, strct, "Empty", td.pkg, pos, nil)
 
 	lit := &ast.CompositeLit{Elts: []ast.Expr{}} //nolint:exhaustruct
 

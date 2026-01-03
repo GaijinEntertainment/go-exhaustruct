@@ -1,4 +1,4 @@
-package structs_test
+package structure_test
 
 import (
 	"go/ast"

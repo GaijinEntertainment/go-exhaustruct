@@ -1,64 +1,138 @@
+// Package testdata provides test fixtures for structs package tests.
 package testdata
 
-type emptyStruct struct{}
+// === BASIC STRUCTS ===
 
-type commentOptionalStruct struct {
+// Empty has no fields.
+type Empty struct{}
+
+// SingleField has one exported field.
+type SingleField struct {
+	Name string
+}
+
+// MultiField has multiple exported fields.
+type MultiField struct {
+	A string
+	B int
+	C bool
+}
+
+// MixedExported has both exported and unexported fields.
+type MixedExported struct {
+	Exported   string
+	unexported int
+	Another    bool
+}
+
+// AllUnexported has only unexported fields.
+type AllUnexported struct {
+	a string
+	b int
+}
+
+// === DIRECTIVE-BASED OPTIONALITY ===
+
+// WithOptionalDoc has a field marked optional via doc comment.
+type WithOptionalDoc struct {
 	Required string
 	//exhaustruct:optional
-	OptionalDoc string
-	OptionalInline string //exhaustruct:optional
+	Optional int
 }
 
-// commentEdgeCases tests comment consumption rules.
-type commentEdgeCases struct {
-	// Rule 4: end-of-line comment on previous line does NOT apply to next field
-	FieldWithInlineComment string //exhaustruct:optional
-	FieldAfterInline       string // should NOT be optional
-
-	// Rule 3: block/doc comment on previous line IS consumed
-	//exhaustruct:optional
-	FieldWithDocComment string // should be optional
-
-	// Field with no comments
-	PlainField string // should NOT be optional
+// WithOptionalInline has a field marked optional via inline comment.
+type WithOptionalInline struct {
+	Required string
+	Optional int //exhaustruct:optional
 }
 
-// duplicateDirectivesStruct tests that first directive wins when duplicates exist.
-type duplicateDirectivesStruct struct {
-	// Duplicate directives in doc comment - first (optional) wins
-	//exhaustruct:optional
+// WithEnforcedField has a field marked as enforced.
+type WithEnforcedField struct {
+	Normal string
 	//exhaustruct:enforce
-	DuplicateDocField string
-
-	NormalField string
+	Enforced int
 }
 
-type testStruct struct {
-	// some random comment
+// WithMixedDirectives has fields with different directives.
+type WithMixedDirectives struct {
+	Normal string
+	//exhaustruct:optional
+	Optional int
+	//exhaustruct:enforce
+	Enforced bool
+}
 
+// === STRUCT-LEVEL DIRECTIVES ===
+
+//exhaustruct:ignore
+type IgnoredStruct struct {
+	A string
+	B int
+}
+
+//exhaustruct:enforce
+type EnforcedStruct struct {
+	A string
+	B int
+}
+
+//exhaustruct:optional
+type OptionalStruct struct {
+	A string
+	B int
+}
+
+// === EMBEDDED FIELDS ===
+
+// Embedded is a type to embed.
+type Embedded struct {
+	E string
+}
+
+// WithEmbedded has an embedded field.
+type WithEmbedded struct {
+	Embedded
+	Own string
+}
+
+// unexported is an unexported embedded type.
+type unexported struct {
+	u string
+}
+
+// WithUnexportedEmbedded has an unexported embedded field.
+type WithUnexportedEmbedded struct {
+	unexported
+	Own string
+}
+
+// === LITERALS FOR SKIPPED TESTS ===
+
+// LiteralTest is used for testing Skipped method.
+type LiteralTest struct {
 	ExportedRequired   int
 	unexportedRequired int
-
-	ExportedOptional   int `exhaustruct:"optional"`
-	unexportedOptional int `exhaustruct:"optional"`
+	//exhaustruct:optional
+	ExportedOptional   int
+	unexportedOptional int //exhaustruct:optional
 }
 
+//nolint:unused // used for AST inspection in tests
 var (
-	_unnamed = testStruct{1, 2, 3, 4}
-	_named   = testStruct{
+	_positionalComplete = LiteralTest{1, 2, 3, 4}
+	_namedComplete      = LiteralTest{
 		ExportedRequired:   1,
 		unexportedRequired: 2,
 		ExportedOptional:   3,
 		unexportedOptional: 4,
 	}
-	_unnamedIncomplete = testStruct{1}
-	_namedIncomplete1  = testStruct{
+	_namedMissingUnexported = LiteralTest{
 		ExportedRequired: 1,
 		ExportedOptional: 3,
 	}
-	_namedIncomplete2 = testStruct{
+	_namedMissingExported = LiteralTest{
 		ExportedOptional:   3,
 		unexportedOptional: 4,
 	}
-	_empty = testStruct{}
+	_empty = LiteralTest{}
 )

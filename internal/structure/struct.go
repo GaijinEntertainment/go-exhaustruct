@@ -1,4 +1,4 @@
-package structs
+package structure
 
 import (
 	"go/ast"
@@ -20,24 +20,24 @@ const AnonymousName = "<anonymous>"
 // For named literals, applies requirement rules based on directives and accessibility.
 // The externalPkg flag indicates if the struct is from an external package
 // (unexported fields are inaccessible and thus not required).
-func (i *Info) SkippedFields(lit *ast.CompositeLit, externalPkg bool) Fields {
+func (s *Struct) SkippedFields(lit *ast.CompositeLit, externalPkg bool) Fields {
 	if len(lit.Elts) != 0 && !isNamedLiteral(lit) {
-		return i.skippedPositional(len(lit.Elts), externalPkg)
+		return s.skippedPositional(len(lit.Elts), externalPkg)
 	}
 
-	return i.skippedNamed(lit, externalPkg)
+	return s.skippedNamed(lit, externalPkg)
 }
 
 // skippedPositional returns remaining fields after the given count for positional literals.
-func (i *Info) skippedPositional(count int, externalPkg bool) Fields {
-	remaining := i.Fields[count:]
+func (s *Struct) skippedPositional(count int, externalPkg bool) Fields {
+	remaining := s.Fields[count:]
 
 	if !externalPkg {
-		if count >= len(i.Fields) {
+		if count >= len(s.Fields) {
 			return nil
 		}
 
-		return slices.Clone(i.Fields[count:])
+		return slices.Clone(s.Fields[count:])
 	}
 
 	res := make(Fields, 0, len(remaining))
@@ -56,12 +56,12 @@ func (i *Info) skippedPositional(count int, externalPkg bool) Fields {
 }
 
 // skippedNamed returns missing required fields for named literals.
-func (i *Info) skippedNamed(lit *ast.CompositeLit, externalPkg bool) Fields {
+func (s *Struct) skippedNamed(lit *ast.CompositeLit, externalPkg bool) Fields {
 	present := presentFields(lit)
-	res := make(Fields, 0, len(i.Fields)-len(present))
+	res := make(Fields, 0, len(s.Fields)-len(present))
 
-	for _, f := range i.Fields {
-		if !present[f.Name] && i.isFieldRequired(f, externalPkg) {
+	for _, f := range s.Fields {
+		if !present[f.Name] && s.isFieldRequired(f, externalPkg) {
 			res = append(res, f)
 		}
 	}
@@ -74,12 +74,12 @@ func (i *Info) skippedNamed(lit *ast.CompositeLit, externalPkg bool) Fields {
 }
 
 // isFieldRequired returns true if the field must be present in a literal.
-func (i *Info) isFieldRequired(f Field, externalPkg bool) bool {
+func (s *Struct) isFieldRequired(f Field, externalPkg bool) bool {
 	if f.Enforced {
 		return true
 	}
 
-	if f.Optional || i.Optional {
+	if f.Optional || s.Optional {
 		return false
 	}
 
@@ -118,8 +118,8 @@ func isNamedLiteral(lit *ast.CompositeLit) bool {
 	return ok
 }
 
-// Info represents a struct type with its analysis metadata.
-type Info struct {
+// Struct represents a struct type with its analysis metadata.
+type Struct struct {
 	// Name is the struct type name.
 	Name string
 	// PackagePath is the full import path of the package where the struct is defined.
@@ -138,22 +138,22 @@ type Info struct {
 	Optional bool `exhaustruct:"optional"`
 }
 
-// NewInfo creates a new Info from a struct type with directive lookup.
+// NewStruct creates a new Struct from a struct type with directive lookup.
 // The fset is used to convert positions to line/column information.
 // The name is the type name (use [AnonymousName] for anonymous structs).
 // The pkg provides package path information.
 // The pos is the type definition position.
 // The lookup is used to check for directives at the struct and field positions.
-// Returns the Info and any diagnostics from directive parsing.
-func NewInfo(
+// Returns the Struct and any diagnostics from directive parsing.
+func NewStruct(
 	fset *token.FileSet,
 	strct *types.Struct,
 	name string,
 	pkg *types.Package,
 	pos token.Pos,
 	lookup DirectiveLookup,
-) (*Info, []analysis.Diagnostic) {
-	res := Info{
+) (*Struct, []analysis.Diagnostic) {
+	res := Struct{
 		Name:        name,
 		PackagePath: pkg.Path(),
 		Position:    fset.Position(pos),

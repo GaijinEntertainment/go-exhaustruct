@@ -1,4 +1,4 @@
-package structs
+package structure
 
 import (
 	"go/token"

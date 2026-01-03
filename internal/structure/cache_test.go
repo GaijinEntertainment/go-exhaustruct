@@ -1,4 +1,4 @@
-package structs_test
+package structure_test
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"dev.gaijin.team/go/exhaustruct/v4/internal/structs"
+	"dev.gaijin.team/go/exhaustruct/v4/internal/structure"
 )
 
 func Test_Cache(t *testing.T) {
@@ -17,7 +17,7 @@ func Test_Cache(t *testing.T) {
 	t.Run("miss", func(t *testing.T) {
 		t.Parallel()
 
-		cache := &structs.Cache{}
+		cache := &structure.Cache{}
 
 		strct := td.getStruct(t, "SingleField")
 		pos := td.getStructPos(t, "SingleField")
@@ -36,7 +36,7 @@ func Test_Cache(t *testing.T) {
 	t.Run("hit", func(t *testing.T) {
 		t.Parallel()
 
-		cache := &structs.Cache{}
+		cache := &structure.Cache{}
 
 		strct := td.getStruct(t, "SingleField")
 		pos := td.getStructPos(t, "SingleField")
@@ -55,7 +55,7 @@ func Test_Cache(t *testing.T) {
 	t.Run("different structs", func(t *testing.T) {
 		t.Parallel()
 
-		cache := &structs.Cache{}
+		cache := &structure.Cache{}
 
 		strct1 := td.getStruct(t, "SingleField")
 		pos1 := td.getStructPos(t, "SingleField")
@@ -78,7 +78,7 @@ func Test_Cache(t *testing.T) {
 	t.Run("with directives", func(t *testing.T) {
 		t.Parallel()
 
-		cache := &structs.Cache{}
+		cache := &structure.Cache{}
 
 		strct := td.getStruct(t, "IgnoredStruct")
 		pos := td.getStructPos(t, "IgnoredStruct")

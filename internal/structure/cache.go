@@ -1,4 +1,4 @@
-package structs
+package structure
 
 import (
 	"go/token"
@@ -9,10 +9,10 @@ import (
 	"golang.org/x/tools/go/analysis"
 )
 
-// Cache provides thread-safe caching of parsed struct Info.
+// Cache provides thread-safe caching of parsed Struct metadata.
 type Cache struct {
-	infos map[*types.Struct]*Info
-	mu    sync.RWMutex
+	structs map[*types.Struct]*Struct
+	mu      sync.RWMutex
 
 	hits   atomic.Uint64
 	misses atomic.Uint64
@@ -20,9 +20,9 @@ type Cache struct {
 
 const cachePreallocSize = 64
 
-// Get returns Info for a given struct type, creating and caching it if needed.
+// Get returns Struct for a given struct type, creating and caching it if needed.
 // The lookup is used to check for directives when the entry is not cached.
-// Returns the Info and any diagnostics from directive parsing.
+// Returns the Struct and any diagnostics from directive parsing.
 func (c *Cache) Get(
 	fset *token.FileSet,
 	strct *types.Struct,
@@ -30,40 +30,40 @@ func (c *Cache) Get(
 	pkg *types.Package,
 	pos token.Pos,
 	lookup DirectiveLookup,
-) (*Info, []analysis.Diagnostic) {
+) (*Struct, []analysis.Diagnostic) {
 	c.mu.RLock()
 
-	info, ok := c.infos[strct]
+	s, ok := c.structs[strct]
 
 	c.mu.RUnlock()
 
 	if ok {
 		c.hits.Add(1)
 
-		return info, nil
+		return s, nil
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	// Double-check after acquiring write lock.
-	if info, ok = c.infos[strct]; ok {
+	if s, ok = c.structs[strct]; ok {
 		c.hits.Add(1)
 
-		return info, nil
+		return s, nil
 	}
 
-	if c.infos == nil {
-		c.infos = make(map[*types.Struct]*Info, cachePreallocSize)
+	if c.structs == nil {
+		c.structs = make(map[*types.Struct]*Struct, cachePreallocSize)
 	}
 
 	c.misses.Add(1)
 
-	info, diags := NewInfo(fset, strct, name, pkg, pos, lookup)
+	s, diags := NewStruct(fset, strct, name, pkg, pos, lookup)
 
-	c.infos[strct] = info
+	c.structs[strct] = s
 
-	return info, diags
+	return s, diags
 }
 
 // Stats returns cache hit and miss counts.
