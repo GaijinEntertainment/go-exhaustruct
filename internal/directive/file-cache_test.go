@@ -161,10 +161,10 @@ func Test_FileCache_Lookup_ParseError(t *testing.T) {
 	require.Len(t, diags, 1)
 	assert.Contains(t, diags[0].Message, "failed to parse file 'nonexistent.go'")
 
-	// Should increment miss (attempted to parse)
+	// Parse error doesn't store in cache, so no miss recorded
 	hits, misses, _ := cache.Stats()
 	assert.Equal(t, uint64(0), hits)
-	assert.Equal(t, uint64(1), misses)
+	assert.Equal(t, uint64(0), misses)
 }
 
 func Test_FileCache_Lookup_NoDirectiveAtLine(t *testing.T) {
@@ -211,10 +211,10 @@ func Test_FileCache_Lookup_AfterAdd(t *testing.T) {
 	assert.Equal(t, directive.Directives{directive.Enforce}, d)
 	assert.Nil(t, diags) // cache hit, no diagnostics
 
-	// Should have 1 hit (from Lookup), 0 misses (Add doesn't count)
+	// Should have 1 hit (from Lookup), 1 miss (Add calls Set)
 	hits, misses, _ := cache.Stats()
 	assert.Equal(t, uint64(1), hits)
-	assert.Equal(t, uint64(0), misses)
+	assert.Equal(t, uint64(1), misses)
 }
 
 func Test_FileCache_Lookup_ReturnsDiagnosticsOnMiss(t *testing.T) {

@@ -8,12 +8,13 @@ import (
 	"go/token"
 	"go/types"
 	"os"
-	"sync"
+	"runtime"
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/ast/inspector"
 
+	"dev.gaijin.team/go/exhaustruct/v4/internal/cache"
 	"dev.gaijin.team/go/exhaustruct/v4/internal/directive"
 	"dev.gaijin.team/go/exhaustruct/v4/internal/structure"
 )
@@ -21,12 +22,12 @@ import (
 type analyzer struct {
 	config Config
 
-	structCache    *structure.Cache     `exhaustruct:"optional"`
-	fileDirectives *directive.FileCache `exhaustruct:"optional"`
-
-	typeProcessingNeed   map[string]bool
-	typeProcessingNeedMu sync.RWMutex `exhaustruct:"optional"`
+	structCache        *structure.Cache           `exhaustruct:"optional"`
+	fileDirectives     *directive.FileCache       `exhaustruct:"optional"`
+	typeProcessingNeed *cache.Cache[string, bool] `exhaustruct:"optional"`
 }
+
+const typeProcessingCacheSize = 64
 
 func NewAnalyzer(config Config) (*analysis.Analyzer, error) {
 	err := config.Prepare()
@@ -38,7 +39,7 @@ func NewAnalyzer(config Config) (*analysis.Analyzer, error) {
 		config:             config,
 		structCache:        structure.NewCache(),
 		fileDirectives:     directive.NewFileCache(&defaultParser{}),
-		typeProcessingNeed: make(map[string]bool),
+		typeProcessingNeed: cache.New[string, bool](typeProcessingCacheSize),
 	}
 
 	return &analysis.Analyzer{ //nolint:exhaustruct
@@ -373,30 +374,17 @@ func (a *analyzer) shouldProcessType(info *TypeInfo) bool {
 
 	name := info.String()
 
-	a.typeProcessingNeedMu.RLock()
-
-	res, ok := a.typeProcessingNeed[name]
-
-	a.typeProcessingNeedMu.RUnlock()
-
-	if !ok {
-		a.typeProcessingNeedMu.Lock()
-
-		res = true
-
+	return a.typeProcessingNeed.GetOrSet(name, func() bool {
 		if a.config.enforcePatterns != nil && !a.config.enforcePatterns.MatchFullString(name) {
-			res = false
+			return false
 		}
 
-		if res && a.config.ignorePatterns != nil && a.config.ignorePatterns.MatchFullString(name) {
-			res = false
+		if a.config.ignorePatterns != nil && a.config.ignorePatterns.MatchFullString(name) {
+			return false
 		}
 
-		a.typeProcessingNeed[name] = res
-		a.typeProcessingNeedMu.Unlock()
-	}
-
-	return res
+		return true
+	})
 }
 
 // isTypeOptionalByPattern returns true if the type matches optional-rx patterns.
@@ -418,11 +406,24 @@ func (*defaultParser) ParseFile(fset *token.FileSet, filename string) (*ast.File
 }
 
 func (a *analyzer) printCacheStats(pkgPath string) {
-	siHits, siMisses := a.structCache.Stats()
-	printCacheLine(pkgPath, "struct-infos", siHits, siMisses, 0)
+	siHits, siMisses, siSize := a.structCache.Stats()
+	printCacheLine(pkgPath, "struct-infos", siHits, siMisses, siSize)
 
 	fdHits, fdMisses, fdSize := a.fileDirectives.Stats()
 	printCacheLine(pkgPath, "file-directives", fdHits, fdMisses, fdSize)
+
+	printMemStats(pkgPath)
+}
+
+func printMemStats(pkgPath string) {
+	var m runtime.MemStats
+
+	runtime.ReadMemStats(&m)
+
+	const mb = 1024 * 1024
+
+	_, _ = fmt.Fprintf(os.Stderr, "[%s] memory: alloc=%dMB sys=%dMB heap=%dMB\n",
+		pkgPath, m.Alloc/mb, m.Sys/mb, m.HeapAlloc/mb)
 }
 
 func printCacheLine(pkgPath, name string, hits, misses, size uint64) {

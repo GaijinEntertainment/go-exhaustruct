@@ -28,9 +28,10 @@ func Test_Cache(t *testing.T) {
 		assert.Empty(t, diags)
 		assert.Equal(t, "SingleField", info.Name)
 
-		hits, misses := cache.Stats()
+		hits, misses, size := cache.Stats()
 		assert.Equal(t, uint64(0), hits)
 		assert.Equal(t, uint64(1), misses)
+		assert.Equal(t, uint64(1), size)
 	})
 
 	t.Run("hit", func(t *testing.T) {
@@ -47,9 +48,10 @@ func Test_Cache(t *testing.T) {
 		assert.Same(t, info1, info2)
 		assert.Empty(t, diags)
 
-		hits, misses := cache.Stats()
+		hits, misses, size := cache.Stats()
 		assert.Equal(t, uint64(1), hits)
 		assert.Equal(t, uint64(1), misses)
+		assert.Equal(t, uint64(1), size)
 	})
 
 	t.Run("different structs", func(t *testing.T) {
@@ -70,9 +72,10 @@ func Test_Cache(t *testing.T) {
 		assert.Equal(t, "SingleField", info1.Name)
 		assert.Equal(t, "MultiField", info2.Name)
 
-		hits, misses := cache.Stats()
+		hits, misses, size := cache.Stats()
 		assert.Equal(t, uint64(0), hits)
 		assert.Equal(t, uint64(2), misses)
+		assert.Equal(t, uint64(2), size)
 	})
 
 	t.Run("with directives", func(t *testing.T) {

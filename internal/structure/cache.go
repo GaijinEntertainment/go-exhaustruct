@@ -3,11 +3,10 @@ package structure
 import (
 	"go/token"
 	"go/types"
-	"sync"
-	"sync/atomic"
 
 	"golang.org/x/tools/go/analysis"
 
+	"dev.gaijin.team/go/exhaustruct/v4/internal/cache"
 	"dev.gaijin.team/go/exhaustruct/v4/internal/directive"
 )
 
@@ -15,17 +14,13 @@ const cachePreallocSize = 64
 
 // Cache provides thread-safe caching of parsed Struct metadata.
 type Cache struct {
-	structs map[*types.Struct]*Struct
-	mu      sync.RWMutex `exhaustruct:"optional"`
-
-	hits   atomic.Uint64 `exhaustruct:"optional"`
-	misses atomic.Uint64 `exhaustruct:"optional"`
+	cache *cache.Cache[*types.Struct, *Struct]
 }
 
 // NewCache creates a new Cache with pre-allocated storage.
 func NewCache() *Cache {
 	return &Cache{
-		structs: make(map[*types.Struct]*Struct, cachePreallocSize),
+		cache: cache.New[*types.Struct, *Struct](cachePreallocSize),
 	}
 }
 
@@ -40,38 +35,18 @@ func (c *Cache) Get(
 	pos token.Pos,
 	lookup *directive.FileCache,
 ) (*Struct, []analysis.Diagnostic) {
-	c.mu.RLock()
-
-	s, ok := c.structs[strct]
-
-	c.mu.RUnlock()
-
-	if ok {
-		c.hits.Add(1)
-
+	if s, ok := c.cache.Get(strct); ok {
 		return s, nil
 	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Double-check after acquiring write lock.
-	if s, ok = c.structs[strct]; ok {
-		c.hits.Add(1)
-
-		return s, nil
-	}
-
-	c.misses.Add(1)
 
 	s, diags := NewStruct(fset, strct, name, pkg, pos, lookup)
 
-	c.structs[strct] = s
+	c.cache.Set(strct, s)
 
 	return s, diags
 }
 
-// Stats returns cache hit and miss counts.
-func (c *Cache) Stats() (hits, misses uint64) {
-	return c.hits.Load(), c.misses.Load()
+// Stats returns cache hit count, miss count, and current size.
+func (c *Cache) Stats() (hits, misses, size uint64) {
+	return c.cache.Stats()
 }
