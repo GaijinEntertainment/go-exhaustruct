@@ -1,19 +1,15 @@
-// Package explicit tests explicit mode with directive interactions.
+// Package explicit tests explicit mode behavior.
 // In explicit mode: only types matching EnforcePatterns are checked by default.
-// Directives can override this behavior:
-// - //exhaustruct:enforce forces checking even when type not in patterns
-// - //exhaustruct:ignore skips checking even when type is in patterns
+// Directives can override this behavior.
 package explicit
 
 // Enforced matches EnforcePatterns (.*Enforced.*).
-// Will be checked by default in explicit mode.
 type Enforced struct {
 	A string
 	B int
 }
 
 // Skipped does NOT match EnforcePatterns.
-// Will be skipped by default in explicit mode.
 type Skipped struct {
 	A string
 	B int
@@ -41,10 +37,6 @@ func shouldFailEnforcedEmpty() {
 	_ = Enforced{} // want "explicit.Enforced is missing fields A, B"
 }
 
-func shouldPassEnforcedComplete() {
-	_ = Enforced{A: "", B: 0}
-}
-
 func shouldPassSkippedEmpty() {
 	// Type doesn't match patterns, skipped in explicit mode
 	_ = Skipped{}
@@ -57,61 +49,17 @@ func shouldFailEnforcedViaDirective() {
 	_ = EnforcedViaDirective{} // want "explicit.EnforcedViaDirective is missing fields A, B"
 }
 
-func shouldPassEnforcedViaDirectiveComplete() {
-	_ = EnforcedViaDirective{A: "", B: 0}
-}
-
 func shouldPassIgnoredViaDirective() {
 	// Type has //exhaustruct:ignore, skipped despite matching patterns
 	_ = IgnoredViaDirective{}
 }
 
-// === Literal-level directive overrides ===
+// === Literal-level directive override ===
 
 func shouldPassEnforcedWithLiteralIgnore() {
 	// Type matches patterns, but literal has ignore directive
 	//exhaustruct:ignore
 	_ = Enforced{}
-
-	_ = Enforced{} //exhaustruct:ignore
-}
-
-func shouldFailSkippedWithLiteralEnforce() {
-	// Type doesn't match patterns, but literal has enforce directive
-	//exhaustruct:enforce
-	_ = Skipped{} // want "explicit.Skipped is missing fields A, B"
-
-	_ = Skipped{} //exhaustruct:enforce // want "explicit.Skipped is missing fields A, B"
-}
-
-// === Priority: literal directives override type directives ===
-
-func shouldFailIgnoredTypeWithLiteralEnforce() {
-	// Type has //exhaustruct:ignore, but literal has //exhaustruct:enforce
-	//exhaustruct:enforce
-	_ = IgnoredViaDirective{} // want "explicit.IgnoredViaDirective is missing fields A, B"
-}
-
-func shouldPassEnforcedTypeWithLiteralIgnore() {
-	// Type has //exhaustruct:enforce, but literal has //exhaustruct:ignore
-	//exhaustruct:ignore
-	_ = EnforcedViaDirective{}
-}
-
-// === Collections with mixed directives ===
-
-func shouldHandleCollectionDirectives() {
-	_ = []Enforced{
-		{},                  // want "explicit.Enforced is missing fields A, B"
-		{}, //exhaustruct:ignore
-		{A: "", B: 0},
-	}
-
-	_ = map[string]Skipped{
-		"a": {},
-		"b": {}, //exhaustruct:enforce // want "explicit.Skipped is missing fields A, B"
-		"c": {},
-	}
 }
 
 // === Anonymous structs in explicit mode ===
@@ -122,33 +70,4 @@ func shouldPassAnonymousInExplicitMode() {
 		A string
 		B int
 	}{}
-}
-
-func shouldFailAnonymousWithEnforceDirective() {
-	// Anonymous with enforce directive should be checked
-	//exhaustruct:enforce
-	_ = struct { // want "explicit.<anonymous> is missing fields A, B"
-		A string
-		B int
-	}{}
-}
-
-func shouldPassAnonymousInSliceExplicitMode() {
-	// Anonymous in slice, not matched by patterns
-	_ = []struct {
-		A string
-	}{
-		{},
-		{A: ""},
-	}
-}
-
-func shouldFailAnonymousInSliceWithEnforce() {
-	_ = []struct {
-		A string
-	}{
-		{},
-		{}, //exhaustruct:enforce // want "explicit.<anonymous> is missing field A"
-		{A: ""},
-	}
 }

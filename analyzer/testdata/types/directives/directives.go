@@ -25,9 +25,9 @@ type TestWithOptionalFields struct {
 
 // TestMixedOptional has multiple optional fields via comment directives.
 type TestMixedOptional struct {
-	Required string
+	Required       string
 	//exhaustruct:optional
-	OptionalFirst string
+	OptionalFirst  string
 	//exhaustruct:optional
 	OptionalSecond string
 	AlsoRequired   int
