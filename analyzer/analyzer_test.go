@@ -144,6 +144,14 @@ func TestAnalyzerTypes(t *testing.T) {
 			},
 			testPackage: "testdata/types/optional_pattern",
 		},
+		{
+			name: "explicit mode with directives",
+			config: analyzer.Config{
+				EnforcePatterns: newList(t, `.*Enforced.*`),
+				ExplicitMode:    true,
+			},
+			testPackage: "testdata/types/explicit",
+		},
 	}
 
 	for _, tt := range tests {
