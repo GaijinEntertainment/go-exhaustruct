@@ -8,14 +8,12 @@ import (
 	"dev.gaijin.team/go/golib/fields"
 )
 
-// List represents a collection of compiled regular expressions that can be used
-// for pattern matching against strings. It implements the flag.Value interface
-// to support command-line flag binding.
+// List is a collection of compiled regular expressions.
+// Implements flag.Value for command-line flag binding.
 type List []*regexp.Regexp //nolint:recvcheck
 
-// NewList creates a new List from the provided regular expression patterns.
-// Each pattern string is compiled into a regular expression. If any pattern
-// is empty or fails to compile, an error is returned.
+// NewList compiles patterns into a List.
+// Returns error if any pattern is empty or invalid.
 func NewList(patterns ...string) (List, error) {
 	if len(patterns) == 0 {
 		return nil, nil
@@ -35,12 +33,8 @@ func NewList(patterns ...string) (List, error) {
 	return list, nil
 }
 
-// MatchFullString checks if any of the regular expressions in the list matches
-// the entire input string. A match is considered successful only if the regex
-// matches the complete string from start to end, not just a substring.
-//
-// For example, if a List contains the pattern "test", it will match "test"
-// but not "testing" or "contest".
+// MatchFullString returns true if any regex matches the entire string.
+// Pattern "test" matches "test" but not "testing" or "contest".
 func (l List) MatchFullString(str string) bool {
 	if len(l) == 0 {
 		return false
@@ -55,9 +49,7 @@ func (l List) MatchFullString(str string) bool {
 	return false
 }
 
-// String returns a string representation of the List by joining all regex patterns
-// with commas. This method implements the flag.Value interface and is used when
-// the List is displayed or serialized.
+// String returns comma-separated regex patterns (flag.Value interface).
 func (l List) String() string {
 	patterns := make([]string, len(l))
 	for i, re := range l {
@@ -67,9 +59,7 @@ func (l List) String() string {
 	return strings.Join(patterns, ",")
 }
 
-// Set adds a new regex pattern to the List by compiling the provided string.
-// This method implements the flag.Value interface and is called when the flag
-// is set from command-line arguments or programmatically.
+// Set compiles and appends a pattern to the List (flag.Value interface).
 func (l *List) Set(value string) error {
 	re, err := parseRx(value)
 	if err != nil {

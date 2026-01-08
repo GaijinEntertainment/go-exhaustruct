@@ -8,7 +8,6 @@ import (
 	"dev.gaijin.team/go/exhaustruct/v4/internal/directive"
 )
 
-// uniqStableMap uses a map to track seen items.
 func uniqStableMap[S ~[]T, T comparable](slice S) S { //nolint:ireturn
 	if len(slice) <= 1 {
 		return slice
@@ -28,7 +27,6 @@ func uniqStableMap[S ~[]T, T comparable](slice S) S { //nolint:ireturn
 	return s
 }
 
-// uniqStableContains uses slices.Contains to check for duplicates.
 func uniqStableContains[S ~[]T, T comparable](slice S) S { //nolint:ireturn
 	if len(slice) <= 1 {
 		return slice

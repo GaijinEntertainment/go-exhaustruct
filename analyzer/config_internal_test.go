@@ -8,105 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestConfig_Prepare(t *testing.T) {
-	t.Parallel()
-
-	t.Run("valid patterns", func(t *testing.T) {
-		t.Parallel()
-
-		config := Config{
-			EnforceRx:    []string{".*Test.*", ".*Mock.*"},
-			IgnoreRx:     []string{".*Ignored.*"},
-			OptionalRx:   []string{".*Optional.*"},
-			AllowEmptyRx: []string{".*Empty.*"},
-		}
-
-		err := config.Prepare()
-		require.NoError(t, err)
-
-		assert.Len(t, config.enforcePatterns, 2)
-		assert.Len(t, config.ignorePatterns, 1)
-		assert.Len(t, config.optionalPatterns, 1)
-		assert.Len(t, config.allowEmptyPatterns, 1)
-
-		// Test pattern matching
-		assert.True(t, config.enforcePatterns.MatchFullString("pkg.TestStruct"))
-		assert.True(t, config.enforcePatterns.MatchFullString("pkg.MockStruct"))
-		assert.False(t, config.enforcePatterns.MatchFullString("pkg.RegularStruct"))
-
-		assert.True(t, config.ignorePatterns.MatchFullString("pkg.IgnoredStruct"))
-		assert.False(t, config.ignorePatterns.MatchFullString("pkg.RegularStruct"))
-
-		assert.True(t, config.optionalPatterns.MatchFullString("pkg.OptionalStruct"))
-		assert.False(t, config.optionalPatterns.MatchFullString("pkg.RegularStruct"))
-
-		assert.True(t, config.allowEmptyPatterns.MatchFullString("pkg.EmptyStruct"))
-		assert.False(t, config.allowEmptyPatterns.MatchFullString("pkg.RegularStruct"))
-	})
-
-	t.Run("invalid enforce pattern", func(t *testing.T) {
-		t.Parallel()
-
-		config := Config{
-			EnforceRx: []string{"[invalid"},
-		}
-
-		err := config.Prepare()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "compile enforce patterns")
-	})
-
-	t.Run("invalid ignore pattern", func(t *testing.T) {
-		t.Parallel()
-
-		config := Config{
-			IgnoreRx: []string{"[invalid"},
-		}
-
-		err := config.Prepare()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "compile ignore patterns")
-	})
-
-	t.Run("invalid optional pattern", func(t *testing.T) {
-		t.Parallel()
-
-		config := Config{
-			OptionalRx: []string{"[invalid"},
-		}
-
-		err := config.Prepare()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "compile optional patterns")
-	})
-
-	t.Run("invalid allow empty pattern", func(t *testing.T) {
-		t.Parallel()
-
-		config := Config{
-			AllowEmptyRx: []string{"[invalid"},
-		}
-
-		err := config.Prepare()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "compile allow empty patterns")
-	})
-
-	t.Run("empty patterns", func(t *testing.T) {
-		t.Parallel()
-
-		config := Config{}
-
-		err := config.Prepare()
-		require.NoError(t, err)
-
-		assert.Empty(t, config.enforcePatterns)
-		assert.Empty(t, config.ignorePatterns)
-		assert.Empty(t, config.optionalPatterns)
-		assert.Empty(t, config.allowEmptyPatterns)
-	})
-}
-
 func TestConfig_BindToFlagSet(t *testing.T) {
 	t.Parallel()
 
@@ -121,6 +22,7 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 			"enforce-rx", "ignore-rx", "optional-rx",
 			"allow-empty", "allow-empty-rx",
 			"allow-empty-returns", "allow-empty-declarations",
+			"report-full-type-path", "debug-cache-metrics",
 		}
 
 		for _, flagName := range expectedFlags {
@@ -139,7 +41,10 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		err := fs.Parse(args)
 		require.NoError(t, err)
 
-		assert.Equal(t, []string{".*Test.*", ".*Mock.*"}, config.EnforceRx)
+		assert.Len(t, config.EnforcePatterns, 2)
+		assert.True(t, config.EnforcePatterns.MatchFullString("pkg.TestStruct"))
+		assert.True(t, config.EnforcePatterns.MatchFullString("pkg.MockStruct"))
+		assert.False(t, config.EnforcePatterns.MatchFullString("pkg.RegularStruct"))
 	})
 
 	t.Run("flag parsing ignore patterns", func(t *testing.T) {
@@ -152,7 +57,10 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		err := fs.Parse(args)
 		require.NoError(t, err)
 
-		assert.Equal(t, []string{".*Ignore.*", ".*Skip.*"}, config.IgnoreRx)
+		assert.Len(t, config.IgnorePatterns, 2)
+		assert.True(t, config.IgnorePatterns.MatchFullString("pkg.IgnoreStruct"))
+		assert.True(t, config.IgnorePatterns.MatchFullString("pkg.SkipStruct"))
+		assert.False(t, config.IgnorePatterns.MatchFullString("pkg.RegularStruct"))
 	})
 
 	t.Run("flag parsing optional patterns", func(t *testing.T) {
@@ -165,7 +73,9 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		err := fs.Parse(args)
 		require.NoError(t, err)
 
-		assert.Equal(t, []string{".*Optional.*"}, config.OptionalRx)
+		assert.Len(t, config.OptionalPatterns, 1)
+		assert.True(t, config.OptionalPatterns.MatchFullString("pkg.OptionalStruct"))
+		assert.False(t, config.OptionalPatterns.MatchFullString("pkg.RegularStruct"))
 	})
 
 	t.Run("flag parsing boolean flags", func(t *testing.T) {
@@ -193,40 +103,20 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		err := fs.Parse(args)
 		require.NoError(t, err)
 
-		assert.Equal(t, []string{".*Empty.*"}, config.AllowEmptyRx)
-	})
-}
-
-func TestStringSliceFlag(t *testing.T) {
-	t.Parallel()
-
-	t.Run("set and string methods", func(t *testing.T) {
-		t.Parallel()
-
-		var slice []string
-
-		ssf := stringSliceFlag{&slice}
-
-		// Initial state
-		assert.Empty(t, ssf.String())
-
-		// Set values
-		err := ssf.Set("value1")
-		require.NoError(t, err)
-		assert.Equal(t, []string{"value1"}, slice)
-		assert.Equal(t, "value1", ssf.String())
-
-		err = ssf.Set("value2")
-		require.NoError(t, err)
-		assert.Equal(t, []string{"value1", "value2"}, slice)
-		assert.Equal(t, "value1,value2", ssf.String())
+		assert.Len(t, config.AllowEmptyPatterns, 1)
+		assert.True(t, config.AllowEmptyPatterns.MatchFullString("pkg.EmptyStruct"))
+		assert.False(t, config.AllowEmptyPatterns.MatchFullString("pkg.RegularStruct"))
 	})
 
-	t.Run("nil slice handling", func(t *testing.T) {
+	t.Run("invalid pattern fails at parse time", func(t *testing.T) {
 		t.Parallel()
 
-		ssf := stringSliceFlag{nil}
-		assert.Empty(t, ssf.String())
+		config := Config{}
+		fs := config.BindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
+
+		args := []string{"-enforce-rx", "[invalid"}
+		err := fs.Parse(args)
+		assert.Error(t, err)
 	})
 }
 
@@ -251,25 +141,21 @@ func TestConfig_Integration(t *testing.T) {
 		err := fs.Parse(args)
 		require.NoError(t, err)
 
-		// Prepare patterns
-		err = config.Prepare()
-		require.NoError(t, err)
-
 		// Verify configuration state
-		assert.Equal(t, []string{".*Test.*"}, config.EnforceRx)
-		assert.Equal(t, []string{".*Skip.*"}, config.IgnoreRx)
-		assert.Equal(t, []string{".*Optional.*"}, config.OptionalRx)
-		assert.Equal(t, []string{".*Empty.*"}, config.AllowEmptyRx)
+		assert.Len(t, config.EnforcePatterns, 1)
+		assert.Len(t, config.IgnorePatterns, 1)
+		assert.Len(t, config.OptionalPatterns, 1)
+		assert.Len(t, config.AllowEmptyPatterns, 1)
 		assert.True(t, config.AllowEmpty)
 		assert.True(t, config.AllowEmptyReturns)
 		assert.False(t, config.AllowEmptyDeclarations)
 
 		// Verify patterns work
-		assert.True(t, config.enforcePatterns.MatchFullString("pkg.TestStruct"))
-		assert.False(t, config.enforcePatterns.MatchFullString("pkg.RegularStruct"))
-		assert.True(t, config.ignorePatterns.MatchFullString("pkg.SkipStruct"))
-		assert.True(t, config.optionalPatterns.MatchFullString("pkg.OptionalStruct"))
-		assert.True(t, config.allowEmptyPatterns.MatchFullString("pkg.EmptyStruct"))
+		assert.True(t, config.EnforcePatterns.MatchFullString("pkg.TestStruct"))
+		assert.False(t, config.EnforcePatterns.MatchFullString("pkg.RegularStruct"))
+		assert.True(t, config.IgnorePatterns.MatchFullString("pkg.SkipStruct"))
+		assert.True(t, config.OptionalPatterns.MatchFullString("pkg.OptionalStruct"))
+		assert.True(t, config.AllowEmptyPatterns.MatchFullString("pkg.EmptyStruct"))
 	})
 }
 
@@ -311,10 +197,8 @@ func TestConfig_ProgrammaticDefaults(t *testing.T) {
 
 		fs := config.BindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
 
-		// Use flags to explicitly set to false (using the "false" value for boolean flags)
-		// Note: boolean flags in Go can't be set to false via command line easily,
-		// so we test the case where they are not provided vs provided
-		args := []string{"-allow-empty", "-allow-empty-returns"} // Only set two flags
+		// Use flags to explicitly set (boolean flags in Go can only be set to true via command line)
+		args := []string{"-allow-empty", "-allow-empty-returns"}
 		err := fs.Parse(args)
 		require.NoError(t, err)
 
@@ -329,28 +213,34 @@ func TestConfig_ProgrammaticDefaults(t *testing.T) {
 		t.Parallel()
 
 		config := Config{
-			EnforceRx:              []string{".*Initial.*"},
 			AllowEmpty:             true,
 			AllowEmptyReturns:      false,
 			AllowEmptyDeclarations: true,
 		}
 
+		// Pre-add an enforce pattern programmatically
+		err := config.EnforcePatterns.Set(".*Initial.*")
+		require.NoError(t, err)
+
 		fs := config.BindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
 
 		args := []string{
-			"-enforce-rx", ".*Flag.*", // Override programmatic enforce
+			"-enforce-rx", ".*Flag.*", // AddFile to existing enforce patterns
 			"-allow-empty-returns",           // Override programmatic false to true
-			"-allow-empty-rx", ".*Pattern.*", // Add allow empty pattern
+			"-allow-empty-rx", ".*Pattern.*", // AddFile allow empty pattern
 		}
-		err := fs.Parse(args)
+
+		err = fs.Parse(args)
 		require.NoError(t, err)
 
 		// Verify mixed values
-		assert.Equal(t, []string{".*Initial.*", ".*Flag.*"}, config.EnforceRx) // Should be appended
-		assert.True(t, config.AllowEmpty)                                      // Programmatically set, preserved
-		assert.True(t, config.AllowEmptyReturns)                               // Overridden by flag
-		assert.True(t, config.AllowEmptyDeclarations)                          // Programmatically set, preserved
-		assert.Equal(t, []string{".*Pattern.*"}, config.AllowEmptyRx)          // Set by flag
+		assert.Len(t, config.EnforcePatterns, 2) // Initial + Flag
+		assert.True(t, config.EnforcePatterns.MatchFullString("pkg.InitialStruct"))
+		assert.True(t, config.EnforcePatterns.MatchFullString("pkg.FlagStruct"))
+		assert.True(t, config.AllowEmpty)             // Programmatically set, preserved
+		assert.True(t, config.AllowEmptyReturns)      // Overridden by flag
+		assert.True(t, config.AllowEmptyDeclarations) // Programmatically set, preserved
+		assert.Len(t, config.AllowEmptyPatterns, 1)   // Set by flag
 	})
 }
 
@@ -365,34 +255,30 @@ func TestNewAnalyzer_ConfigPreservation(t *testing.T) {
 			AllowEmpty:             true,
 			AllowEmptyReturns:      true,
 			AllowEmptyDeclarations: false,
-			EnforceRx:              []string{".*Test.*"},
 		}
+
+		// AddFile enforce pattern programmatically
+		err := config.EnforcePatterns.Set(".*Test.*")
+		require.NoError(t, err)
 
 		// Create analyzer - this should preserve the programmatic values
 		analyzer, err := NewAnalyzer(config)
 		require.NoError(t, err)
 		assert.NotNil(t, analyzer)
 
-		// The analyzer should have been created successfully without modifying the config values
-		// Since we can't directly access the internal config in the analyzer,
-		// we verify that the analyzer creation succeeded, which implies the config was preserved.
+		// The analyzer should have been created successfully
 		assert.Equal(t, "exhaustruct", analyzer.Name)
 		assert.NotEmpty(t, analyzer.Doc)
 		assert.NotNil(t, analyzer.Run)
 	})
 
-	t.Run("config preparation errors are handled", func(t *testing.T) {
+	t.Run("invalid pattern fails at set time", func(t *testing.T) {
 		t.Parallel()
 
-		// Create config with invalid pattern
-		config := Config{
-			EnforceRx: []string{"[invalid"},
-		}
+		config := Config{}
 
-		// NewAnalyzer should return an error due to invalid pattern
-		analyzer, err := NewAnalyzer(config)
-		assert.Nil(t, analyzer)
+		// Invalid pattern should fail when Set is called
+		err := config.EnforcePatterns.Set("[invalid")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "compile enforce patterns")
 	})
 }

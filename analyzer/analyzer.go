@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"go/types"
 	"os"
@@ -14,32 +13,32 @@ import (
 	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/ast/inspector"
 
-	"dev.gaijin.team/go/exhaustruct/v4/internal/cache"
+	"dev.gaijin.team/go/exhaustruct/v4/internal/astutil"
 	"dev.gaijin.team/go/exhaustruct/v4/internal/directive"
 	"dev.gaijin.team/go/exhaustruct/v4/internal/structure"
 )
 
 type analyzer struct {
-	config Config
-
-	structCache        *structure.Cache           `exhaustruct:"optional"`
-	fileDirectives     *directive.FileCache       `exhaustruct:"optional"`
-	typeProcessingNeed *cache.Cache[string, bool] `exhaustruct:"optional"`
+	config     Config
+	directives *directive.Scanner
+	processor  *structure.Processor `exhaustruct:"optional"`
 }
 
-const typeProcessingCacheSize = 64
-
 func NewAnalyzer(config Config) (*analysis.Analyzer, error) {
-	err := config.Prepare()
-	if err != nil {
-		return nil, err
-	}
+	fp := astutil.NewFileParser()
+	dirScanner := directive.NewScanner(fp)
 
 	a := analyzer{
-		config:             config,
-		structCache:        structure.NewCache(),
-		fileDirectives:     directive.NewFileCache(&defaultParser{}),
-		typeProcessingNeed: cache.New[string, bool](typeProcessingCacheSize),
+		config:     config,
+		directives: dirScanner,
+		processor: structure.NewProcessor(
+			dirScanner,
+			structure.NewOriginScanner(fp),
+			structure.WithEnforce(config.EnforcePatterns),
+			structure.WithIgnore(config.IgnorePatterns),
+			structure.WithOptional(config.OptionalPatterns),
+			structure.WithAllowEmpty(config.AllowEmptyPatterns),
+		),
 	}
 
 	return &analysis.Analyzer{ //nolint:exhaustruct
@@ -55,11 +54,11 @@ func (a *analyzer) run(pass *analysis.Pass) (any, error) {
 	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector) //nolint:forcetypeassert
 
 	// Pre-populate directive cache with files from this pass
-	for _, diag := range a.fileDirectives.Add(pass.Fset, pass.Files...) {
+	for _, diag := range a.directives.Add(pass.Fset, pass.Files...) {
 		pass.Report(diag)
 	}
 
-	insp.WithStack([]ast.Node{(*ast.CompositeLit)(nil)}, a.newVisitor(pass))
+	insp.WithStack([]ast.Node{(*ast.CompositeLit)(nil)}, a.newVisitorFunc(pass))
 
 	if a.config.DebugCacheMetrics {
 		a.printCacheStats(pass.Pkg.Path())
@@ -68,8 +67,164 @@ func (a *analyzer) run(pass *analysis.Pass) (any, error) {
 	return nil, nil //nolint:nilnil
 }
 
-// newVisitor returns visitor that only expects [ast.CompositeLit] nodes.
-func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, stack []ast.Node) bool {
+// literal holds resolved info for a struct literal being checked.
+// Short-lived: created per composite literal, discarded after check.
+type literal struct {
+	strct    *structure.Struct
+	typeName string // actual type name (may differ from strct.name for derived types)
+	ignored  bool
+	enforced bool
+}
+
+// shouldCheck implements checking decision priority.
+// Priority: literal:ignore > literal:enforce > struct:ignore > struct:enforce > mode default.
+// The only effect of explicit mode is the default: explicit defaults to skip, implicit to check.
+func (l literal) shouldCheck(explicitMode bool) bool {
+	if l.ignored {
+		return false
+	}
+
+	if l.enforced {
+		return true
+	}
+
+	if l.strct.IsIgnored() {
+		return false
+	}
+
+	if l.strct.IsEnforced() {
+		return true
+	}
+
+	return !explicitMode
+}
+
+// visitor carries context for processing a single composite literal.
+// Small enough to pass by value (~48 bytes: 4 pointers + slice header).
+type visitor struct {
+	a     *analyzer
+	pass  *analysis.Pass
+	lit   *ast.CompositeLit
+	stack []ast.Node
+}
+
+// resolveLiteralType resolves the composite literal's type and definition position.
+// Returns (typeName, struct, pos) where:
+//   - For named types: (typeName, struct, typeName.Pos())
+//   - For type aliases: (aliasTypeName, struct, aliasTypeName.Pos()) - alias's own TypeName
+//   - For anonymous structs: (nil, struct, pos)
+//   - For non-struct types: (nil, nil, NoPos)
+//
+// Pointers are dereferenced (e.g., &Struct{} or []*Struct{{}}).
+func (v visitor) resolveLiteralType() (name *types.TypeName, strct *types.Struct, pos token.Pos) {
+	typ := v.pass.TypesInfo.TypeOf(v.lit)
+
+	// Resolve pointers (e.g., &Struct{} or []*Struct{{}})
+	if ptr, ok := typ.(*types.Pointer); ok {
+		typ = ptr.Elem()
+	}
+
+	// Extract TypeName BEFORE unaliasing.
+	// For aliases, this gives us the alias's TypeName (name, position).
+	// For named types, this gives us the type's TypeName.
+	switch t := typ.(type) {
+	case *types.Alias:
+		name = t.Obj()
+	case *types.Named:
+		name = t.Obj()
+	}
+
+	// Unalias to get the underlying struct type (if it is structu ofc =)).
+	typ = types.Unalias(typ)
+
+	switch t := typ.(type) {
+	case *types.Named:
+		var ok bool
+		if strct, ok = t.Underlying().(*types.Struct); !ok {
+			return nil, nil, token.NoPos
+		}
+
+		pos = name.Pos()
+
+		return name, strct, pos
+
+	case *types.Struct:
+		pos = v.findAnonymousStructPos()
+
+		return name, t, pos
+
+	default:
+		return nil, nil, token.NoPos
+	}
+}
+
+// findAnonymousStructPos finds the position of the struct keyword for anonymous structs.
+// For explicit anonymous structs (struct{...}{}), returns position from lit.Type.
+// For inferred types (inner slice/map elements), finds direct parent's type.
+func (v visitor) findAnonymousStructPos() token.Pos {
+	if v.lit.Type != nil {
+		// explicit type definition
+		if st, ok := v.lit.Type.(*ast.StructType); ok {
+			return st.Struct
+		}
+
+		return token.NoPos
+	}
+
+	// Inferred type: find direct parent CompositeLit (skip only KeyValueExpr)
+	// Start from len-2 since len-1 is the current literal
+	for i := len(v.stack) - 2; i >= 0; i-- { //nolint:mnd
+		switch parent := v.stack[i].(type) {
+		case *ast.KeyValueExpr:
+			continue
+
+		case *ast.CompositeLit:
+			return structPosFromType(parent.Type)
+
+		default:
+			// some weird situation with non-literal parent, for our case, the only known way
+			// to have implicit type is map/array literals as direct parent
+			return token.NoPos
+		}
+	}
+
+	return token.NoPos
+}
+
+// structPosFromType extracts struct keyword position from array/map type expressions.
+// Handles pointer types (e.g., []*struct{...}).
+func structPosFromType(typ ast.Expr) token.Pos {
+	if typ == nil {
+		return token.NoPos
+	}
+
+	switch t := typ.(type) {
+	case *ast.ArrayType:
+		return structPosFromExpr(t.Elt)
+
+	case *ast.MapType:
+		return structPosFromExpr(t.Value)
+	}
+
+	return token.NoPos
+}
+
+// structPosFromExpr extracts struct keyword position, unwrapping pointers if needed.
+func structPosFromExpr(expr ast.Expr) token.Pos {
+	// Unwrap pointer: *struct{...} -> struct{...}
+	if star, ok := expr.(*ast.StarExpr); ok {
+		expr = star.X
+	}
+
+	if st, ok := expr.(*ast.StructType); ok {
+		return st.Struct
+	}
+
+	return token.NoPos
+}
+
+// newVisitorFunc returns callback for [inspector.WithStack] that processes composite literals.
+func (a *analyzer) newVisitorFunc(pass *analysis.Pass) func(n ast.Node, push bool, stack []ast.Node) bool {
 	return func(n ast.Node, push bool, stack []ast.Node) bool {
 		if !push {
 			return true
@@ -77,74 +232,130 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 
 		lit, ok := n.(*ast.CompositeLit)
 		if !ok {
-			// this should never happen, but better be prepared
 			return true
 		}
 
-		strct, pkg, typePos, ti, ok := getStructType(pass, lit)
-		if !ok {
-			return true
-		}
-
-		if len(lit.Elts) == 0 && a.checkEmptyStructAllowed(pass, stack, ti) {
-			return true
-		}
-
-		litPos := pass.Fset.Position(lit.Pos())
-		litDirs, _ := a.fileDirectives.Lookup(pass.Fset, litPos)
-
-		pos, msg := a.processStruct(pass, lit, strct, pkg, typePos, ti, litDirs)
-
-		if pos != nil {
-			pass.Reportf(*pos, "%s", msg)
-		}
+		v := visitor{a: a, pass: pass, lit: lit, stack: stack}
+		v.process()
 
 		return true
 	}
 }
 
-func (a *analyzer) checkEmptyStructAllowed(pass *analysis.Pass, stack []ast.Node, typeInfo *TypeInfo) bool {
-	// empty structs are globally allowed
-	if a.config.AllowEmpty {
+func (v visitor) process() {
+	lit, ok := v.resolveLiteral()
+	if !ok {
+		return
+	}
+
+	if len(v.lit.Elts) == 0 && v.checkEmptyAllowed(lit.strct) {
+		return
+	}
+
+	if pos, msg := v.checkLiteral(lit); pos != nil {
+		v.pass.Reportf(*pos, "%s", msg)
+	}
+}
+
+// resolveLiteral extracts struct type information from the composite literal,
+// retrieves cached metadata, and looks up directives. Returns ok=false if the
+// literal is not a struct type.
+func (v visitor) resolveLiteral() (lit literal, ok bool) {
+	typeName, strct, pos := v.resolveLiteralType()
+	if strct == nil {
+		return literal{}, false //nolint:exhaustruct // ok=false signals not found
+	}
+
+	s, diags := v.a.processor.ResolveStruct(v.pass.Fset, typeName, strct, pos, v.pass.Pkg)
+
+	for _, diag := range diags {
+		v.pass.Report(diag)
+	}
+
+	if s == nil {
+		return literal{}, false //nolint:exhaustruct // ok=false signals not found
+	}
+
+	// Look up directives at literal position
+	litPos := v.pass.Fset.Position(v.lit.Pos())
+	dirs, dirDiags := v.a.directives.Lookup(v.pass.Fset, litPos)
+
+	for _, d := range dirDiags {
+		v.pass.Report(d)
+	}
+
+	return literal{
+		strct:    s,
+		typeName: s.Name,
+		ignored:  dirs.Contains(directive.Ignore),
+		enforced: dirs.Contains(directive.Enforce),
+	}, true
+}
+
+func (v visitor) checkEmptyAllowed(s *structure.Struct) bool {
+	if v.a.config.AllowEmpty {
 		return true
 	}
 
-	// some structs are allowed to be empty, basing on pattern
-	if a.config.allowEmptyPatterns.MatchFullString(typeInfo.String()) {
+	if s.AllowEmptyDecl {
 		return true
 	}
 
-	if ret, ok := getParentReturnStmt(stack); ok {
-		// empty structures are allowed in all return statements
-		if a.config.AllowEmptyReturns {
+	if ret, ok := v.getParentReturnStmt(); ok {
+		if v.a.config.AllowEmptyReturns {
 			return true
 		}
 
-		// empty structures are allowed in error returns
-		if isErrorReturnStatement(pass, ret, stack[len(stack)-1]) {
+		if v.isErrorReturnStatement(ret) {
 			return true
 		}
 	}
 
-	// empty structures are allowed in variable declarations
-	if isChildOfVariableDeclaration(stack) && a.config.AllowEmptyDeclarations {
+	if v.isChildOfVariableDeclaration() && v.a.config.AllowEmptyDeclarations {
 		return true
 	}
 
 	return false
 }
 
-// isPartOfVariableDeclaration checks if the node is direct part of variable
-// declaration, meaning that it is a first-level RHS child of `:=` or `var`
-// declaration.
-func isChildOfVariableDeclaration(stack []ast.Node) bool {
-	if len(stack) < 2 { //nolint:mnd // stack for sure contains at leas current node and its parent (file)
+func (v visitor) checkLiteral(lit literal) (*token.Pos, string) {
+	if !lit.shouldCheck(v.a.config.ExplicitMode) {
+		return nil, ""
+	}
+
+	s := lit.strct
+
+	f := s.SkippedFields(v.lit, v.pass.Pkg.Path())
+
+	if len(f) == 0 {
+		return nil, ""
+	}
+
+	pos := v.lit.Pos()
+
+	// Use typeName from type resolution, not cached Struct.name.
+	// Derived types share the same underlying struct but have different names.
+	displayName := s.PackageName + "." + lit.typeName
+	if v.a.config.ReportFullTypePath {
+		displayName = s.FullPath[:len(s.FullPath)-len(s.Name)] + lit.typeName
+	}
+
+	if len(f) == 1 {
+		return &pos, fmt.Sprintf("%s is missing field %s", displayName, structure.FormatFieldNames(f))
+	}
+
+	return &pos, fmt.Sprintf("%s is missing fields %s", displayName, structure.FormatFieldNames(f))
+}
+
+// isChildOfVariableDeclaration checks if the node is direct part of variable
+// declaration, meaning that it is a first-level RHS child of `:=` or `var`.
+func (v visitor) isChildOfVariableDeclaration() bool {
+	if len(v.stack) < 2 { //nolint:mnd
 		return false
 	}
 
-	// Start from composite literal and go up the stack
-	for i := len(stack) - 1; i > 0; i-- {
-		parent := stack[i-1]
+	for i := len(v.stack) - 1; i > 0; i-- {
+		parent := v.stack[i-1]
 
 		switch p := parent.(type) {
 		case *ast.AssignStmt:
@@ -156,7 +367,6 @@ func isChildOfVariableDeclaration(stack []ast.Node) bool {
 			return true
 
 		case *ast.UnaryExpr:
-			// Only allow pointer taking (&)
 			if p.Op == token.AND {
 				continue
 			}
@@ -173,21 +383,19 @@ func isChildOfVariableDeclaration(stack []ast.Node) bool {
 
 // getParentReturnStmt checks if the direct parent of the current node is a
 // return statement and returns it if so.
-func getParentReturnStmt(stack []ast.Node) (*ast.ReturnStmt, bool) {
-	if len(stack) < 2 { //nolint:mnd // stack for sure contains at leas current node and its parent (file)
+func (v visitor) getParentReturnStmt() (*ast.ReturnStmt, bool) {
+	if len(v.stack) < 2 { //nolint:mnd
 		return nil, false
 	}
 
-	// Start from composite literal and go up the stack
-	for i := len(stack) - 1; i > 0; i-- {
-		parent := stack[i-1]
+	for i := len(v.stack) - 1; i > 0; i-- {
+		parent := v.stack[i-1]
 
 		switch p := parent.(type) {
 		case *ast.ReturnStmt:
 			return p, true
 
 		case *ast.UnaryExpr:
-			// Only allow pointer taking (&)
 			if p.Op == token.AND {
 				continue
 			}
@@ -209,36 +417,31 @@ var errorIface = types.Universe.Lookup("error").Type().Underlying().(*types.Inte
 
 // isErrorReturnStatement checks if the return statement is an error return
 // statement, meaning that it contains a non-nil value that implements [error].
-func isErrorReturnStatement(pass *analysis.Pass, n *ast.ReturnStmt, currentNode ast.Node) bool {
+func (v visitor) isErrorReturnStatement(n *ast.ReturnStmt) bool {
 	if len(n.Results) == 0 {
 		return false
 	}
 
-	// iterate backwards, since idiomatic position of error is at the end
 	for i := len(n.Results) - 1; i >= 0; i-- {
 		ri := n.Results[i]
 
-		// Skip the current node, since it is already being checked
-		if ri == currentNode {
+		if ri == v.lit {
 			continue
 		}
 
 		switch ri := ri.(type) {
 		case *ast.Ident:
-			// Skip nil values
 			if ri.Name == "nil" {
 				continue
 			}
 
 		case *ast.UnaryExpr:
-			// Current node might be under the unary expression
-			if ri.X == currentNode {
+			if ri.X == v.lit {
 				continue
 			}
 		}
 
-		// Check if the type implements error interface
-		resultType := pass.TypesInfo.TypeOf(ri)
+		resultType := v.pass.TypesInfo.TypeOf(ri)
 		if resultType != nil && types.Implements(resultType, errorIface) {
 			return true
 		}
@@ -247,169 +450,11 @@ func isErrorReturnStatement(pass *analysis.Pass, n *ast.ReturnStmt, currentNode 
 	return false
 }
 
-//nolint:revive // function-result-limit: 5 results needed for type resolution context
-func getStructType(pass *analysis.Pass, lit *ast.CompositeLit) (
-	*types.Struct, *types.Package, token.Pos, *TypeInfo, bool,
-) {
-	typ := types.Unalias(pass.TypesInfo.TypeOf(lit))
-
-	// Handle pointer types (e.g., implicit `{}` in `[]*Struct{...}`)
-	// See: https://github.com/GaijinEntertainment/go-exhaustruct/issues/144
-	if ptr, ok := typ.(*types.Pointer); ok {
-		typ = types.Unalias(ptr.Elem())
-	}
-
-	switch typ := typ.(type) {
-	case *types.Named: // named type
-		if strct, ok := typ.Underlying().(*types.Struct); ok {
-			pkg := typ.Obj().Pkg()
-			ti := &TypeInfo{
-				Name:        typ.Obj().Name(),
-				PackageName: pkg.Name(),
-				PackagePath: pkg.Path(),
-			}
-
-			return strct, pkg, typ.Obj().Pos(), ti, true
-		}
-
-		return nil, nil, token.NoPos, nil, false
-
-	case *types.Struct: // anonymous struct
-		ti := &TypeInfo{
-			Name:        structure.AnonymousName,
-			PackageName: pass.Pkg.Name(),
-			PackagePath: pass.Pkg.Path(),
-		}
-
-		return typ, pass.Pkg, token.NoPos, ti, true
-
-	default:
-		return nil, nil, token.NoPos, nil, false
-	}
-}
-
-//nolint:revive // argument-limit: 7 args needed for struct processing context
-func (a *analyzer) processStruct(
-	pass *analysis.Pass,
-	lit *ast.CompositeLit,
-	strct *types.Struct,
-	pkg *types.Package,
-	typePos token.Pos,
-	ti *TypeInfo,
-	litDirs directive.Directives,
-) (*token.Pos, string) {
-	// Get struct metadata with directives from cache
-	s, diags := a.structCache.Get(
-		pass.Fset,
-		strct,
-		ti.Name,
-		pkg,
-		typePos,
-		a.fileDirectives,
-	)
-
-	for _, diag := range diags {
-		pass.Report(diag)
-	}
-
-	if !a.shouldCheck(s, ti, litDirs) {
-		return nil, ""
-	}
-
-	// Apply optional-rx pattern if struct-level optional is not already set
-	// Priority: struct:optional (already in s) > flag:optional-rx
-	if !s.Optional && a.isTypeOptionalByPattern(ti) {
-		s.Optional = true
-	}
-
-	externalPkg := !structFieldsInPackage(strct, pass.Pkg)
-	f := s.SkippedFields(lit, externalPkg)
-
-	if len(f) == 0 {
-		return nil, ""
-	}
-
-	pos := lit.Pos()
-
-	typeName := ti.ShortString()
-	if a.config.ReportFullTypePath {
-		typeName = ti.String()
-	}
-
-	if len(f) == 1 {
-		return &pos, fmt.Sprintf("%s is missing field %s", typeName, f.String())
-	}
-
-	return &pos, fmt.Sprintf("%s is missing fields %s", typeName, f.String())
-}
-
-// shouldCheck implements v5 checking decision priority.
-// Priority: literal:ignore > literal:enforce > struct:ignore > struct:enforce > flag patterns.
-func (a *analyzer) shouldCheck(s *structure.Struct, ti *TypeInfo, litDirs directive.Directives) bool {
-	if litDirs.Contains(directive.Ignore) {
-		return false
-	}
-
-	if litDirs.Contains(directive.Enforce) {
-		return true
-	}
-
-	if s.Ignored {
-		return false
-	}
-
-	if s.Enforced {
-		return true
-	}
-
-	return a.shouldProcessType(ti)
-}
-
-// shouldProcessType returns true if type should be processed basing off enforce
-// and ignore patterns, defined though constructor and\or flags.
-func (a *analyzer) shouldProcessType(info *TypeInfo) bool {
-	if len(a.config.enforcePatterns) == 0 && len(a.config.ignorePatterns) == 0 {
-		return true
-	}
-
-	name := info.String()
-
-	return a.typeProcessingNeed.GetOrSet(name, func() bool {
-		if a.config.enforcePatterns != nil && !a.config.enforcePatterns.MatchFullString(name) {
-			return false
-		}
-
-		if a.config.ignorePatterns != nil && a.config.ignorePatterns.MatchFullString(name) {
-			return false
-		}
-
-		return true
-	})
-}
-
-// isTypeOptionalByPattern returns true if the type matches optional-rx patterns.
-func (a *analyzer) isTypeOptionalByPattern(info *TypeInfo) bool {
-	if len(a.config.optionalPatterns) == 0 {
-		return false
-	}
-
-	return a.config.optionalPatterns.MatchFullString(info.String())
-}
-
-// defaultParser implements directive.FileParser using go/parser.
-type defaultParser struct{}
-
-// ParseFile parses a Go source file and returns its AST with comments.
-func (*defaultParser) ParseFile(fset *token.FileSet, filename string) (*ast.File, error) {
-	//nolint:wrapcheck // error context is added by caller
-	return parser.ParseFile(fset, filename, nil, parser.ParseComments)
-}
-
 func (a *analyzer) printCacheStats(pkgPath string) {
-	siHits, siMisses, siSize := a.structCache.Stats()
+	siHits, siMisses, siSize := a.processor.Stats()
 	printCacheLine(pkgPath, "struct-infos", siHits, siMisses, siSize)
 
-	fdHits, fdMisses, fdSize := a.fileDirectives.Stats()
+	fdHits, fdMisses, fdSize := a.directives.Stats()
 	printCacheLine(pkgPath, "file-directives", fdHits, fdMisses, fdSize)
 
 	printMemStats(pkgPath)
@@ -434,37 +479,4 @@ func printCacheLine(pkgPath, name string, hits, misses, size uint64) {
 
 	_, _ = fmt.Fprintf(os.Stderr, "[%s] cache: %s: hits=%d misses=%d size=%d (%.2f%%)\n",
 		pkgPath, name, hits, misses, size, hitRate)
-}
-
-// structFieldsInPackage returns true if the struct's fields are defined in the
-// given package. For derived types like `type Bar foo.Foo`, returns false if
-// fields are from another package.
-//
-// We treat structs with zero fields as defined in the package, since there
-// are no fields to access.
-func structFieldsInPackage(structTyp *types.Struct, pkg *types.Package) bool {
-	if structTyp.NumFields() == 0 {
-		return true
-	}
-
-	fieldPkg := structTyp.Field(0).Pkg()
-
-	return fieldPkg == nil || fieldPkg == pkg
-}
-
-// TypeInfo holds display information for a struct type.
-type TypeInfo struct {
-	Name        string
-	PackageName string
-	PackagePath string
-}
-
-// String returns the full type path (e.g., "net/http.Request").
-func (t TypeInfo) String() string {
-	return t.PackagePath + "." + t.Name
-}
-
-// ShortString returns the short type name (e.g., "http.Request").
-func (t TypeInfo) ShortString() string {
-	return t.PackageName + "." + t.Name
 }

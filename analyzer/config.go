@@ -2,57 +2,50 @@ package analyzer
 
 import (
 	"flag"
-	"strings"
-
-	"dev.gaijin.team/go/golib/e"
 
 	"dev.gaijin.team/go/exhaustruct/v4/internal/pattern"
 )
 
 type Config struct {
-	// EnforceRx is a list of regular expressions to match type names that should be
-	// checked. Anonymous structs can be matched by '<anonymous>' alias.
+	// EnforcePatterns is a list of regular expressions to match type names that
+	// should be checked. Anonymous structs can be matched by '<anonymous>' alias.
 	//
 	// Each regular expression must match the full type name, including package path.
 	// For example, to match type `net/http.Cookie` regular expression should be
 	// `.*/http\.Cookie`, but not `http\.Cookie`.
-	EnforceRx       []string     `exhaustruct:"optional"`
-	enforcePatterns pattern.List `exhaustruct:"optional"`
+	EnforcePatterns pattern.List `exhaustruct:"optional"`
 
-	// IgnoreRx is a list of regular expressions to match type names that should be
-	// skipped from checking. Anonymous structs can be matched by '<anonymous>'
-	// alias.
+	// IgnorePatterns is a list of regular expressions to match type names that
+	// should be skipped from checking. Anonymous structs can be matched by
+	// '<anonymous>' alias.
 	//
-	// Has precedence over EnforceRx.
+	// Has precedence over EnforcePatterns.
 	//
 	// Each regular expression must match the full type name, including package path.
 	// For example, to match type `net/http.Cookie` regular expression should be
 	// `.*/http\.Cookie`, but not `http\.Cookie`.
-	IgnoreRx       []string     `exhaustruct:"optional"`
-	ignorePatterns pattern.List `exhaustruct:"optional"`
+	IgnorePatterns pattern.List `exhaustruct:"optional"`
 
-	// OptionalRx is a list of regular expressions to match type names where all
-	// fields are treated as optional. Anonymous structs can be matched by '<anonymous>'
-	// alias.
+	// OptionalPatterns is a list of regular expressions to match type names where
+	// all fields are treated as optional. Anonymous structs can be matched by
+	// '<anonymous>' alias.
 	//
 	// Each regular expression must match the full type name, including package path.
 	// For example, to match type `net/http.Cookie` regular expression should be
 	// `.*/http\.Cookie`, but not `http\.Cookie`.
-	OptionalRx       []string     `exhaustruct:"optional"`
-	optionalPatterns pattern.List `exhaustruct:"optional"`
+	OptionalPatterns pattern.List `exhaustruct:"optional"`
 
 	// AllowEmpty allows empty structures, effectively excluding them from the check.
 	AllowEmpty bool `exhaustruct:"optional"`
 
-	// AllowEmptyRx is a list of regular expressions to match type names that should
-	// be allowed to be empty. Anonymous structs can be matched by '<anonymous>'
-	// alias.
+	// AllowEmptyPatterns is a list of regular expressions to match type names that
+	// should be allowed to be empty. Anonymous structs can be matched by
+	// '<anonymous>' alias.
 	//
 	// Each regular expression must match the full type name, including package path.
 	// For example, to match type `net/http.Cookie` regular expression should be
 	// `.*/http\.Cookie`, but not `http\.Cookie`.
-	AllowEmptyRx       []string     `exhaustruct:"optional"`
-	allowEmptyPatterns pattern.List `exhaustruct:"optional"`
+	AllowEmptyPatterns pattern.List `exhaustruct:"optional"`
 
 	// AllowEmptyReturns allows empty structures in return statements.
 	AllowEmptyReturns bool `exhaustruct:"optional"`
@@ -67,69 +60,27 @@ type Config struct {
 
 	// DebugCacheMetrics enables printing cache hit/miss metrics to stderr.
 	DebugCacheMetrics bool `exhaustruct:"optional"`
-}
 
-// Prepare compiles all regular expression patterns into pattern lists for
-// efficient matching.
-func (c *Config) Prepare() error {
-	var err error
-
-	c.enforcePatterns, err = pattern.NewList(c.EnforceRx...)
-	if err != nil {
-		return e.NewFrom("compile enforce patterns", err)
-	}
-
-	c.ignorePatterns, err = pattern.NewList(c.IgnoreRx...)
-	if err != nil {
-		return e.NewFrom("compile ignore patterns", err)
-	}
-
-	c.optionalPatterns, err = pattern.NewList(c.OptionalRx...)
-	if err != nil {
-		return e.NewFrom("compile optional patterns", err)
-	}
-
-	c.allowEmptyPatterns, err = pattern.NewList(c.AllowEmptyRx...)
-	if err != nil {
-		return e.NewFrom("compile allow empty patterns", err)
-	}
-
-	return nil
-}
-
-// stringSliceFlag implements flag.Value interface for []string fields.
-type stringSliceFlag struct {
-	slice *[]string
-}
-
-func (s stringSliceFlag) String() string {
-	if s.slice == nil {
-		return ""
-	}
-
-	return strings.Join(*s.slice, ",")
-}
-
-func (s stringSliceFlag) Set(value string) error {
-	*s.slice = append(*s.slice, value)
-	return nil
+	// ExplicitMode enables opt-in checking. When true, only types marked with
+	// //exhaustruct:enforce directive or matching enforce-rx patterns are checked.
+	ExplicitMode bool `exhaustruct:"optional"`
 }
 
 // BindToFlagSet binds the config fields to the provided flag set.
 func (c *Config) BindToFlagSet(fs *flag.FlagSet) *flag.FlagSet {
-	fs.Var(stringSliceFlag{&c.EnforceRx}, "enforce-rx",
+	fs.Var(&c.EnforcePatterns, "enforce-rx",
 		"Regular expression to match type names that should be checked. "+
 			"Anonymous structs can be matched by '<anonymous>' alias. "+
 			"Each regex must match the full type name including package path. "+
 			"Example: `.*/http\\.Cookie`. Can be used multiple times.")
 
-	fs.Var(stringSliceFlag{&c.IgnoreRx}, "ignore-rx",
+	fs.Var(&c.IgnorePatterns, "ignore-rx",
 		"Regular expression to skip type names from checking, has precedence over -enforce-rx. "+
 			"Anonymous structs can be matched by '<anonymous>' alias. "+
 			"Each regex must match the full type name including package path. "+
 			"Example: `.*/http\\.Cookie`. Can be used multiple times.")
 
-	fs.Var(stringSliceFlag{&c.OptionalRx}, "optional-rx",
+	fs.Var(&c.OptionalPatterns, "optional-rx",
 		"Regular expression to match type names where all fields are optional. "+
 			"Anonymous structs can be matched by '<anonymous>' alias. "+
 			"Each regex must match the full type name including package path. "+
@@ -138,7 +89,7 @@ func (c *Config) BindToFlagSet(fs *flag.FlagSet) *flag.FlagSet {
 	fs.BoolVar(&c.AllowEmpty, "allow-empty", c.AllowEmpty,
 		"Allow empty structures, effectively excluding them from the check")
 
-	fs.Var(stringSliceFlag{&c.AllowEmptyRx}, "allow-empty-rx",
+	fs.Var(&c.AllowEmptyPatterns, "allow-empty-rx",
 		"Regular expression to match type names that should be allowed to be empty. "+
 			"Anonymous structs can be matched by '<anonymous>' alias. "+
 			"Each regex must match the full type name including package path. "+
@@ -156,6 +107,10 @@ func (c *Config) BindToFlagSet(fs *flag.FlagSet) *flag.FlagSet {
 
 	fs.BoolVar(&c.DebugCacheMetrics, "debug-cache-metrics", c.DebugCacheMetrics,
 		"Print cache hit/miss metrics to stderr after each package analysis")
+
+	fs.BoolVar(&c.ExplicitMode, "explicit", c.ExplicitMode,
+		"Enable explicit mode: only check types marked with //exhaustruct:enforce "+
+			"directive or matching -enforce-rx patterns")
 
 	return fs
 }

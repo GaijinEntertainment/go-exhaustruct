@@ -4,38 +4,44 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/analysis/analysistest"
 
 	"dev.gaijin.team/go/exhaustruct/v4/analyzer"
+	"dev.gaijin.team/go/exhaustruct/v4/internal/pattern"
 )
 
 var testdataPath, _ = filepath.Abs("./testdata/") //nolint:gochecknoglobals
 
+// newList is a test helper that creates a pattern.List from strings.
+func newList(tb testing.TB, patterns ...string) pattern.List {
+	tb.Helper()
+
+	list, err := pattern.NewList(patterns...)
+	require.NoError(tb, err)
+
+	return list
+}
+
 func TestAnalyzer(t *testing.T) {
 	t.Parallel()
 
-	a, err := analyzer.NewAnalyzer(analyzer.Config{EnforceRx: []string{""}})
-	assert.Nil(t, a)
-	assert.Error(t, err)
+	// Empty pattern should fail during Set()
+	config := analyzer.Config{}
 
-	a, err = analyzer.NewAnalyzer(analyzer.Config{EnforceRx: []string{"["}})
-	assert.Nil(t, a)
-	assert.Error(t, err)
+	err := config.EnforcePatterns.Set("")
+	require.Error(t, err)
 
-	a, err = analyzer.NewAnalyzer(analyzer.Config{IgnoreRx: []string{""}})
-	assert.Nil(t, a)
-	assert.Error(t, err)
+	// Invalid regex should fail during Set()
+	config = analyzer.Config{}
 
-	a, err = analyzer.NewAnalyzer(analyzer.Config{IgnoreRx: []string{"["}})
-	assert.Nil(t, a)
-	assert.Error(t, err)
+	err = config.EnforcePatterns.Set("[")
+	require.Error(t, err)
 
 	// Test ignored package behavior
-	a, err = analyzer.NewAnalyzer(analyzer.Config{
-		EnforceRx: []string{`.*\.TestExcluded`, `.*\.<anonymous>`},
-		IgnoreRx:  []string{`.*Excluded$`, `testdata/config/excluded\.<anonymous>`},
+	a, err := analyzer.NewAnalyzer(analyzer.Config{
+		EnforcePatterns: newList(t, `.*\.TestExcluded`, `.*\.<anonymous>`),
+		IgnorePatterns:  newList(t, `.*Excluded$`, `testdata/config/excluded\.<anonymous>`),
 	})
 	require.NoError(t, err)
 
@@ -64,69 +70,79 @@ func TestAnalyzerTypes(t *testing.T) {
 		{
 			name: "basic",
 			config: analyzer.Config{
-				EnforceRx: []string{`.*\.Test`},
+				EnforcePatterns: newList(t, `.*\.Test`),
 			},
 			testPackage: "testdata/types/basic",
 		},
 		{
 			name: "aliases",
 			config: analyzer.Config{
-				EnforceRx: []string{`.*\.(Base|Alias|Simple).*`},
-				IgnoreRx:  []string{`.*Excluded.*`},
+				EnforcePatterns: newList(t, `.*\.(Base|Alias|Simple).*`),
+				IgnorePatterns:  newList(t, `.*Excluded.*`),
 			},
 			testPackage: "testdata/types/aliases",
 		},
 		{
 			name: "derived",
 			config: analyzer.Config{
-				EnforceRx: []string{`.*\.(Base|Derived|External|Simple).*`},
-				IgnoreRx:  []string{`.*Excluded.*`},
+				EnforcePatterns: newList(t, `.*\.(Base|Derived|External|Simple).*`),
+				IgnorePatterns:  newList(t, `.*Excluded.*`),
 			},
 			testPackage: "testdata/types/derived",
 		},
 		{
 			name: "embedded",
 			config: analyzer.Config{
-				EnforceRx: []string{`.*\.(Embedded|TestEmbedded|Simple).*`},
+				EnforcePatterns: newList(t, `.*\.(Embedded|TestEmbedded|Simple).*`),
 			},
 			testPackage: "testdata/types/embedded",
 		},
 		{
 			name: "generics",
 			config: analyzer.Config{
-				EnforceRx: []string{`.*\.testGenericStruct`},
+				EnforcePatterns: newList(t, `.*\.testGenericStruct`),
 			},
 			testPackage: "testdata/types/generics",
 		},
 		{
 			name: "collections",
 			config: analyzer.Config{
-				EnforceRx: []string{`.*\.Test`},
+				EnforcePatterns: newList(t, `.*\.Test`),
 			},
 			testPackage: "testdata/types/collections",
 		},
 		{
 			name: "anonymous",
 			config: analyzer.Config{
-				EnforceRx: []string{`.*\.<anonymous>`},
+				EnforcePatterns: newList(t, `.*\.<anonymous>`),
 			},
 			testPackage: "testdata/types/anonymous",
 		},
 		{
 			name: "directives",
 			config: analyzer.Config{
-				EnforceRx: []string{`.*\.(Test|Embedded|Simple|WithOptionalDirective).*`},
-				IgnoreRx:  []string{`.*Excluded.*`},
+				EnforcePatterns: newList(t, `.*\.(Test|Embedded|Simple|WithOptionalDirective).*`),
+				IgnorePatterns:  newList(t, `.*Excluded.*`),
 			},
 			testPackage: "testdata/types/directives",
 		},
 		{
 			name: "filtering",
 			config: analyzer.Config{
-				EnforceRx: []string{`.*\.Test.*`},
-				IgnoreRx:  []string{`.*Excluded.*`},
+				EnforcePatterns: newList(t, `.*\.Test.*`),
+				IgnorePatterns:  newList(t, `.*Excluded.*`),
+				ExplicitMode:    true,
 			},
 			testPackage: "testdata/types/filtering",
+		},
+		{
+			name: "optional_pattern",
+			config: analyzer.Config{
+				EnforcePatterns:  newList(t, `.*\.Test.*`),
+				OptionalPatterns: newList(t, `.*\.TestOptionalByPattern`),
+				ExplicitMode:     true,
+			},
+			testPackage: "testdata/types/optional_pattern",
 		},
 	}
 

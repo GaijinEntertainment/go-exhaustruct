@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 )
 
-// Cache is a thread-safe generic cache with hit/miss statistics.
 type Cache[K comparable, V any] struct {
 	data   map[K]V
 	mu     sync.RWMutex  `exhaustruct:"optional"`
@@ -14,14 +13,12 @@ type Cache[K comparable, V any] struct {
 	misses atomic.Uint64 `exhaustruct:"optional"`
 }
 
-// New creates a cache with pre-allocated capacity.
 func New[K comparable, V any](size int) *Cache[K, V] {
 	return &Cache[K, V]{
 		data: make(map[K]V, size),
 	}
 }
 
-// Get returns cached value if exists, records hit.
 func (c *Cache[K, V]) Get(key K) (v V, ok bool) {
 	c.mu.RLock()
 
@@ -36,7 +33,7 @@ func (c *Cache[K, V]) Get(key K) (v V, ok bool) {
 	return v, ok
 }
 
-// Set stores value, records miss.
+// Set stores value and increments miss counter (caller computed the value).
 func (c *Cache[K, V]) Set(key K, value V) {
 	c.mu.Lock()
 
@@ -46,8 +43,8 @@ func (c *Cache[K, V]) Set(key K, value V) {
 	c.mu.Unlock()
 }
 
-// GetOrSet uses double-check locking pattern.
-// Returns cached value if exists, otherwise computes, stores and returns new value.
+// GetOrSet uses double-check locking to avoid computing values that are
+// cached between the initial read check and acquiring the write lock.
 func (c *Cache[K, V]) GetOrSet(key K, compute func() V) V {
 	c.mu.RLock()
 
@@ -79,7 +76,6 @@ func (c *Cache[K, V]) GetOrSet(key K, compute func() V) V {
 	return v
 }
 
-// Stats returns hit count, miss count, and current size.
 func (c *Cache[K, V]) Stats() (hits, misses, size uint64) {
 	c.mu.RLock()
 

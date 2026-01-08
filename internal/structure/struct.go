@@ -3,47 +3,128 @@ package structure
 import (
 	"go/ast"
 	"go/token"
-	"go/types"
-	"slices"
-
-	"golang.org/x/tools/go/analysis"
-
-	"dev.gaijin.team/go/exhaustruct/v4/internal/directive"
+	"strings"
 )
 
-// AnonymousName is the name used for anonymous structs.
 const AnonymousName = "<anonymous>"
 
-// SkippedFields returns fields that are missing from the literal but required.
-// For positional literals, returns remaining fields after the last provided element,
-// filtering by accessibility when externalPkg is true.
-// For named literals, applies requirement rules based on directives and accessibility.
-// The externalPkg flag indicates if the struct is from an external package
-// (unexported fields are inaccessible and thus not required).
-func (s *Struct) SkippedFields(lit *ast.CompositeLit, externalPkg bool) Fields {
-	if len(lit.Elts) != 0 && !isNamedLiteral(lit) {
-		return s.skippedPositional(len(lit.Elts), externalPkg)
-	}
-
-	return s.skippedNamed(lit, externalPkg)
+// fieldInfo contains raw field data independent of type name.
+type fieldInfo struct {
+	// name is the name of the field.
+	name string
+	// exported indicates if the field is exported.
+	exported bool `exhaustruct:"optional"`
+	// enforced indicates if the field is enforced via directive.
+	enforced bool `exhaustruct:"optional"`
+	// optional indicates if the field is optional via directive.
+	optional bool `exhaustruct:"optional"`
 }
 
-// skippedPositional returns remaining fields after the given count for positional literals.
-func (s *Struct) skippedPositional(count int, externalPkg bool) Fields {
-	remaining := s.Fields[count:]
+// structFields contains field information for a struct, independent of type name.
+type structFields struct {
+	// packagePath is the package path where fields are declared.
+	packagePath string
+	// fields is the list of fields in declaration order.
+	fields []fieldInfo
+}
 
-	if !externalPkg {
-		if count >= len(s.Fields) {
-			return nil
-		}
+type Struct struct {
+	Name        string
+	FullPath    string
+	PackageName string
 
-		return slices.Clone(s.Fields[count:])
+	Position token.Position `exhaustruct:"optional"`
+	Fields   Fields         `exhaustruct:"optional"`
+
+	Enforced bool `exhaustruct:"optional"`
+	Ignored  bool `exhaustruct:"optional"`
+	Optional bool `exhaustruct:"optional"`
+
+	PatternEnforced bool `exhaustruct:"optional"`
+	PatternIgnored  bool `exhaustruct:"optional"`
+	PatternOptional bool `exhaustruct:"optional"`
+
+	AllowEmptyDecl bool `exhaustruct:"optional"`
+
+	// Detected via OriginScanner AST inspection before types.Unalias.
+	IsAlias   bool `exhaustruct:"optional"`
+	IsDerived bool `exhaustruct:"optional"`
+}
+
+func (s *Struct) String() string {
+	return s.FullPath
+}
+
+// PackagePath returns the package path of the struct type.
+func (s *Struct) PackagePath() string {
+	if idx := strings.LastIndex(s.FullPath, "."); idx >= 0 {
+		return s.FullPath[:idx]
 	}
 
-	res := make(Fields, 0, len(remaining))
+	return s.FullPath
+}
+
+func (s *Struct) ShortString() string {
+	if idx := strings.LastIndex(s.FullPath, "/"); idx >= 0 {
+		return s.FullPath[idx+1:]
+	}
+
+	return s.FullPath
+}
+
+// IsEnforced returns true if struct is enforced via directive or pattern.
+func (s *Struct) IsEnforced() bool {
+	return s.Enforced || s.PatternEnforced
+}
+
+// IsIgnored returns true if struct is ignored via directive or pattern.
+func (s *Struct) IsIgnored() bool {
+	return s.Ignored || s.PatternIgnored
+}
+
+// IsOptional returns true if struct is optional via directive or pattern.
+func (s *Struct) IsOptional() bool {
+	return s.Optional || s.PatternOptional
+}
+
+// SkippedFields returns missing required fields for a composite literal.
+// callerPkgPath is used to determine if unexported fields are accessible.
+// For positional literals: returns fields after the last provided element.
+// For named literals: returns fields not present in the literal.
+func (s *Struct) SkippedFields(lit *ast.CompositeLit, callerPkgPath string) []Field {
+	externalPkg := s.Fields.PackagePath != callerPkgPath
+
+	if isNamedLiteral(lit) {
+		return s.skippedNamed(lit, externalPkg)
+	}
+
+	return s.skippedPositional(len(lit.Elts), externalPkg)
+}
+
+// isNamedLiteral checks if a composite literal uses named fields. It treats
+// empty literals as not named, since positional literals checks are simpler.
+func isNamedLiteral(lit *ast.CompositeLit) bool {
+	if len(lit.Elts) == 0 {
+		return false
+	}
+
+	_, ok := lit.Elts[0].(*ast.KeyValueExpr)
+
+	return ok
+}
+
+func (s *Struct) skippedPositional(count int, externalPkg bool) []Field {
+	items := s.Fields.Items
+
+	if count >= len(items) {
+		return nil
+	}
+
+	remaining := items[count:]
+	res := make([]Field, 0, len(remaining))
 
 	for _, f := range remaining {
-		if f.Exported {
+		if s.isFieldRequired(f, externalPkg) {
 			res = append(res, f)
 		}
 	}
@@ -55,8 +136,7 @@ func (s *Struct) skippedPositional(count int, externalPkg bool) Fields {
 	return res
 }
 
-// skippedNamed returns missing required fields for named literals.
-func (s *Struct) skippedNamed(lit *ast.CompositeLit, externalPkg bool) Fields {
+func (s *Struct) skippedNamed(lit *ast.CompositeLit, externalPkg bool) []Field {
 	present := make(map[string]bool, len(lit.Elts))
 
 	for _, elt := range lit.Elts {
@@ -67,9 +147,9 @@ func (s *Struct) skippedNamed(lit *ast.CompositeLit, externalPkg bool) Fields {
 		}
 	}
 
-	res := make(Fields, 0, len(s.Fields)-len(present))
+	res := make([]Field, 0, len(s.Fields.Items)-len(present))
 
-	for _, f := range s.Fields {
+	for _, f := range s.Fields.Items {
 		if !present[f.Name] && s.isFieldRequired(f, externalPkg) {
 			res = append(res, f)
 		}
@@ -82,16 +162,18 @@ func (s *Struct) skippedNamed(lit *ast.CompositeLit, externalPkg bool) Fields {
 	return res
 }
 
-// isFieldRequired returns true if the field must be present in a literal.
 func (s *Struct) isFieldRequired(f Field, externalPkg bool) bool {
+	// regardless of the structure settings, enforced fields are always required
 	if f.Enforced {
 		return true
 	}
 
-	if f.Optional || s.Optional {
+	// optionality can be inherited from the structure settings
+	if f.Optional || s.IsOptional() {
 		return false
 	}
 
+	// unexported fields are only required for same-package usage
 	if externalPkg && !f.Exported {
 		return false
 	}
@@ -99,70 +181,47 @@ func (s *Struct) isFieldRequired(f Field, externalPkg bool) bool {
 	return true
 }
 
-// isNamedLiteral returns true if the literal uses named fields.
-// Panics if the literal is empty.
-func isNamedLiteral(lit *ast.CompositeLit) bool {
-	_, ok := lit.Elts[0].(*ast.KeyValueExpr)
-	return ok
-}
-
-// Struct represents a struct type with its analysis metadata.
-type Struct struct {
-	// Name is the struct type name.
-	Name string
-	// PackagePath is the full import path of the package where the struct is defined.
-	PackagePath string
-	// Position is the source location where the struct is defined.
-	Position token.Position
-
-	// Fields contains metadata for each struct field in declaration order.
-	Fields Fields `exhaustruct:"optional"`
-
-	// Enforced indicates the struct must be checked even if excluded by pattern.
+type Field struct {
+	Name     string
+	Exported bool `exhaustruct:"optional"`
 	Enforced bool `exhaustruct:"optional"`
-	// Ignored indicates the struct should be skipped from checking.
-	Ignored bool `exhaustruct:"optional"`
-	// Optional indicates all fields of this struct are treated as optional.
 	Optional bool `exhaustruct:"optional"`
+
+	PatternEnforced bool `exhaustruct:"optional"`
+	PatternOptional bool `exhaustruct:"optional"`
 }
 
-// NewStruct creates a new Struct from a struct type with directive lookup.
-// The fset is used to convert positions to line/column information.
-// The name is the type name (use [AnonymousName] for anonymous structs).
-// The pkg provides package path information.
-// The pos is the type definition position.
-// The lookup is used to check for directives at the struct and field positions.
-// Returns the Struct and any diagnostics from directive parsing.
-func NewStruct(
-	fset *token.FileSet,
-	strct *types.Struct,
-	name string,
-	pkg *types.Package,
-	pos token.Pos,
-	lookup *directive.FileCache,
-) (*Struct, []analysis.Diagnostic) {
-	res := Struct{
-		Name:        name,
-		PackagePath: pkg.Path(),
-		Position:    fset.Position(pos),
+func (f Field) String() string {
+	return f.Name
+}
+
+// Fields is a collection of struct fields with shared package metadata.
+// Items are in declaration order (required for positional literals).
+type Fields struct {
+	PackagePath string
+	Items       []Field
+}
+
+func (f Fields) String() string {
+	return FormatFieldNames(f.Items)
+}
+
+func FormatFieldNames(fields []Field) string {
+	switch len(fields) {
+	case 0:
+		return ""
+	case 1:
+		return fields[0].Name
 	}
 
-	var allDiags []analysis.Diagnostic
+	var b strings.Builder
+	b.Grow(len(fields))
+	b.WriteString(fields[0].Name)
 
-	if lookup != nil {
-		directives, diags := lookup.Lookup(fset, res.Position)
-
-		allDiags = append(allDiags, diags...)
-
-		res.Enforced = slices.Contains(directives, directive.Enforce)
-		res.Ignored = slices.Contains(directives, directive.Ignore)
-		res.Optional = slices.Contains(directives, directive.Optional)
+	for _, s := range fields[1:] {
+		b.WriteString(", ")
+		b.WriteString(s.Name)
 	}
 
-	fields, diags := newFields(fset, strct, lookup)
-
-	allDiags = append(allDiags, diags...)
-	res.Fields = fields
-
-	return &res, allDiags
+	return b.String()
 }
