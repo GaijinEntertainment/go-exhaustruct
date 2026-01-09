@@ -173,7 +173,7 @@ func (p *Processor) resolveStructFields(
 }
 
 func (p *Processor) populateFields(fset *token.FileSet, s *Struct, strct *types.Struct) []analysis.Diagnostic {
-	structFields, diags := p.getStructFields(fset, strct)
+	resolved, diags := p.getStructFields(fset, strct)
 
 	// Fields are external when declared in a different package than the struct type.
 	// This happens for derived types and aliases from external packages.
@@ -183,14 +183,14 @@ func (p *Processor) populateFields(fset *token.FileSet, s *Struct, strct *types.
 	// out to save up on storage. Usage of derived type from the package of structure
 	// definition is simply impossible since it will cause import cycle - thus, such
 	// filtering is safe.
-	fieldsExternal := structFields.packagePath != s.PackagePath()
+	fieldsExternal := resolved.packagePath != s.PackagePath()
 
 	s.Fields = Fields{
-		PackagePath: structFields.packagePath,
-		Items:       make([]Field, 0, len(structFields.fields)),
+		PackagePath: resolved.packagePath,
+		Items:       make([]Field, 0, len(resolved.fields)),
 	}
 
-	for _, sf := range structFields.fields {
+	for _, sf := range resolved.fields {
 		if fieldsExternal && !sf.exported {
 			continue
 		}

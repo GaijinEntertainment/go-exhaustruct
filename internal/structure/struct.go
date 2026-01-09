@@ -121,19 +121,19 @@ func (s *Struct) skippedPositional(count int, externalPkg bool) []Field {
 	}
 
 	remaining := items[count:]
-	res := make([]Field, 0, len(remaining))
+	missing := make([]Field, 0, len(remaining))
 
 	for _, f := range remaining {
 		if s.isFieldRequired(f, externalPkg) {
-			res = append(res, f)
+			missing = append(missing, f)
 		}
 	}
 
-	if len(res) == 0 {
+	if len(missing) == 0 {
 		return nil
 	}
 
-	return res
+	return missing
 }
 
 func (s *Struct) skippedNamed(lit *ast.CompositeLit, externalPkg bool) []Field {
@@ -147,19 +147,19 @@ func (s *Struct) skippedNamed(lit *ast.CompositeLit, externalPkg bool) []Field {
 		}
 	}
 
-	res := make([]Field, 0, len(s.Fields.Items)-len(present))
+	missing := make([]Field, 0, len(s.Fields.Items)-len(present))
 
 	for _, f := range s.Fields.Items {
 		if !present[f.Name] && s.isFieldRequired(f, externalPkg) {
-			res = append(res, f)
+			missing = append(missing, f)
 		}
 	}
 
-	if len(res) == 0 {
+	if len(missing) == 0 {
 		return nil
 	}
 
-	return res
+	return missing
 }
 
 func (s *Struct) isFieldRequired(f Field, externalPkg bool) bool {
