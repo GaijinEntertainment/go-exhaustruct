@@ -24,7 +24,7 @@ const (
 	Optional Directive = "optional"
 )
 
-func (d Directive) Validate() bool {
+func (d Directive) IsValid() bool {
 	switch d {
 	case Ignore, Enforce, Optional:
 		return true
@@ -69,7 +69,7 @@ func Parse(text string) (found bool, result Directives, errs []error) {
 	for _, part := range parts {
 		d := Directive(part)
 
-		if !d.Validate() {
+		if !d.IsValid() {
 			errs = append(errs, ErrUnknownDirective.WithField("directive", d))
 			continue
 		}

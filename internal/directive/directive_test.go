@@ -9,7 +9,7 @@ import (
 	"dev.gaijin.team/go/exhaustruct/v4/internal/directive"
 )
 
-func Test_Directive_Validate(t *testing.T) {
+func Test_Directive_IsValid(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -30,7 +30,7 @@ func Test_Directive_Validate(t *testing.T) {
 		t.Run(string(tt.d), func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equal(t, tt.want, tt.d.Validate())
+			assert.Equal(t, tt.want, tt.d.IsValid())
 		})
 	}
 }
