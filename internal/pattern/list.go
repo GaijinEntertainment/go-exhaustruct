@@ -22,7 +22,7 @@ func NewList(patterns ...string) (List, error) {
 	list := make(List, 0, len(patterns))
 
 	for _, pattern := range patterns {
-		re, err := parseRx(pattern)
+		re, err := compilePattern(pattern)
 		if err != nil {
 			return nil, err
 		}
@@ -35,13 +35,13 @@ func NewList(patterns ...string) (List, error) {
 
 // MatchFullString returns true if any regex matches the entire string.
 // Pattern "test" matches "test" but not "testing" or "contest".
-func (l List) MatchFullString(str string) bool {
+func (l List) MatchFullString(target string) bool {
 	if len(l) == 0 {
 		return false
 	}
 
 	for i := range len(l) {
-		if m := l[i].FindStringSubmatch(str); len(m) > 0 && m[0] == str {
+		if m := l[i].FindStringSubmatch(target); len(m) > 0 && m[0] == target {
 			return true
 		}
 	}
@@ -61,7 +61,7 @@ func (l List) String() string {
 
 // Set compiles and appends a pattern to the List (flag.Value interface).
 func (l *List) Set(value string) error {
-	re, err := parseRx(value)
+	re, err := compilePattern(value)
 	if err != nil {
 		return err
 	}
@@ -71,14 +71,14 @@ func (l *List) Set(value string) error {
 	return nil
 }
 
-func parseRx(str string) (*regexp.Regexp, error) {
-	if str == "" {
+func compilePattern(pattern string) (*regexp.Regexp, error) {
+	if pattern == "" {
 		return nil, e.New("empty regular expression is not allowed")
 	}
 
-	re, err := regexp.Compile(str)
+	re, err := regexp.Compile(pattern)
 	if err != nil {
-		return nil, e.NewFrom("failed to compile regular expression", err, fields.F("pattern", str))
+		return nil, e.NewFrom("failed to compile regular expression", err, fields.F("pattern", pattern))
 	}
 
 	return re, nil
