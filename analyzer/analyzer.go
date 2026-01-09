@@ -58,20 +58,18 @@ func (a *analyzer) run(pass *analysis.Pass) (any, error) {
 	newTagMigrationVisitor(pass, insp).run()
 
 	if a.config.DebugCacheMetrics {
-		a.printCacheStats(pass.Pkg.Path())
+		pkgPath := pass.Pkg.Path()
+
+		siHits, siMisses, siSize := a.processor.Stats()
+		printCacheLine(pkgPath, "struct-infos", siHits, siMisses, siSize)
+
+		fdHits, fdMisses, fdSize := a.directives.Stats()
+		printCacheLine(pkgPath, "file-directives", fdHits, fdMisses, fdSize)
+
+		printMemStats(pkgPath)
 	}
 
 	return nil, nil //nolint:nilnil
-}
-
-func (a *analyzer) printCacheStats(pkgPath string) {
-	siHits, siMisses, siSize := a.processor.Stats()
-	printCacheLine(pkgPath, "struct-infos", siHits, siMisses, siSize)
-
-	fdHits, fdMisses, fdSize := a.directives.Stats()
-	printCacheLine(pkgPath, "file-directives", fdHits, fdMisses, fdSize)
-
-	printMemStats(pkgPath)
 }
 
 func printMemStats(pkgPath string) {

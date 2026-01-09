@@ -106,11 +106,11 @@ func (*tagMigrationVisitor) buildFix(field *ast.Field, tagValue string) analysis
 	}
 }
 
-var exhaustructTagRe = regexp.MustCompile(`\s*exhaustruct:"[^"]*"`)
+var exhaustructTagPattern = regexp.MustCompile(`\s*exhaustruct:"[^"]*"`)
 
 func removeExhastructFromTag(tagLiteral string) string {
 	tagLiteral = tagLiteral[1 : len(tagLiteral)-1]
-	tagLiteral = strings.TrimSpace(exhaustructTagRe.ReplaceAllString(tagLiteral, ""))
+	tagLiteral = strings.TrimSpace(exhaustructTagPattern.ReplaceAllString(tagLiteral, ""))
 
 	if tagLiteral == "" {
 		return ""

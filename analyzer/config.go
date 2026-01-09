@@ -68,6 +68,10 @@ type Config struct {
 
 // BindToFlagSet binds the config fields to the provided flag set.
 func (c *Config) BindToFlagSet(fs *flag.FlagSet) *flag.FlagSet {
+	fs.BoolVar(&c.ExplicitMode, "explicit", c.ExplicitMode,
+		"Enable explicit mode: only check types marked with //exhaustruct:enforce "+
+			"directive or matching -enforce-rx patterns")
+
 	fs.Var(&c.EnforcePatterns, "enforce-rx",
 		"Regular expression to match type names that should be checked. "+
 			"Anonymous structs can be matched by '<anonymous>' alias. "+
@@ -106,11 +110,8 @@ func (c *Config) BindToFlagSet(fs *flag.FlagSet) *flag.FlagSet {
 			"Useful for identifying types when configuring enforce/ignore patterns.")
 
 	fs.BoolVar(&c.DebugCacheMetrics, "debug-cache-metrics", c.DebugCacheMetrics,
-		"Print cache hit/miss metrics to stderr after each package analysis")
-
-	fs.BoolVar(&c.ExplicitMode, "explicit", c.ExplicitMode,
-		"Enable explicit mode: only check types marked with //exhaustruct:enforce "+
-			"directive or matching -enforce-rx patterns")
+		"Print cache and memory metrics to stderr after each package analysis. "+
+			"It will significantly increase the output, since metrics are printed for each analyzed package.")
 
 	return fs
 }
