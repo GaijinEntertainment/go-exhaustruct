@@ -11,264 +11,310 @@
 
 ---
 
-`exhaustruct` is a golang analyzer that finds structures with uninitialized fields
-
-## RENAME WARNING
-
-Package being renamed to `dev.gaijin.team/go/exhaustruct/v4` and all further updates will be published under this name.
-
-### Installation
-
-```shell
-go get -u dev.gaijin.team/go/exhaustruct/v4/cmd/exhaustruct
-```
-
-### Usage
-
-```
-exhaustruct [-flag] [package]
-
-Flags:
-  -i pattern | -include-rx pattern
-        Regular expression to match type names that should be processed.
-        Anonymous structs can be matched by '<anonymous>' alias.
-        Example: .*/http\.Cookie
-
-  -e pattern | -exclude-rx pattern
-        Regular expression to exclude type names from processing, has precedence over -include.
-        Anonymous structs can be matched by '<anonymous>' alias.
-        Example: .*/http\.Cookie
-
-  -allow-empty
-        Allow empty structures globally, effectively excluding them from the check
-
-  -allow-empty-returns
-        Allow empty structures in return statements
-
-  -allow-empty-declarations
-        Allow empty structures in variable declarations
-
-  -allow-empty-rx pattern
-        Regular expression to match type names that should be allowed to be empty.
-        Anonymous structs can be matched by '<anonymous>' alias.
-        Example: .*/http\.Cookie
-```
+`exhaustruct` is a golang analyzer that finds structures with uninitialized fields.
 
 If you're using [golangci-lint](https://golangci-lint.run/), refer to
-the [linters settings](https://golangci-lint.run/usage/linters/#exhaustruct) for the most up-to-date configuration
-guidance.
+the [linters settings](https://golangci-lint.run/usage/linters/#exhaustruct)
+for the most up-to-date configuration guidance.
 
-#### Comment directives
+## Installation
 
-`exhaustruct` supports comment directives to mark individual structure declarations as ignored during linting or enforce
-it's check regardless global configuration. Comment directives have precedence over global configuration.
+```shell
+go install dev.gaijin.team/go/exhaustruct/v4/cmd/exhaustruct@latest
+```
 
-- **`//exhaustruct:ignore`** - ignore structure during linting
-- **`//exhaustruct:enforce`** - enforce structure check during linting, even in case global configuration says it should
-  be ignored.
+## How It Works
 
-> Note: all directives can be placed on the line above opening bracket or on the same line.
->
-> Also, any additional comment can be placed same line right after the directive or anywhere around it, but directive
-> should be at the very beginning of the line. It is _recommended_ to comment directives, especially when ignoring
-> structures - it will help to understand the reason later.
-
-### Examples
-
-#### Basic Usage
-
-By default, linter will check all structures and report if any accessible field initialization is missing.
+The analyzer inspects struct literals in your code and reports when required
+fields are not initialized:
 
 ```go
-package main
-
-type Config struct {
-	Host     string
-	Port     int
-	Database string
-}
-
-// Without any flags - requires all fields
-func createConfig() Config {
-	return Config{} // ERROR: missing fields Host, Port, Database
-}
-
-func createValidConfig() Config {
-	return Config{
-		Host:     "localhost",
-		Port:     5432,
-		Database: "mydb",
-	}
-}
-
-```
-
-#### Empty Allowance Options
-
-##### 1. Global Empty Allowance (`-allow-empty`)
-
-**Rationale**: Useful when working with configuration structs that have sensible defaults, or when migrating codebases
-where empty structs are acceptable everywhere.
-
-```bash
-exhaustruct -allow-empty ./...
-```
-
-```go
-package main
-
-// With -allow-empty: ALL empty structs are allowed
-func createConfig() Config {
-	return Config{} // OK: empty structs allowed globally
-}
-
-var globalConfig = Config{} // OK: empty structs allowed globally
-
-func processConfigs() []Config {
-	return []Config{{}} // OK: empty structs allowed globally
-}
-
-```
-
-##### 2. Return Statement Allowance (`-allow-empty-returns`)
-
-**Rationale**: Common pattern where functions return zero-value structs in error conditions, while still enforcing
-proper initialization in other contexts.  
-This option allows zero-value structs only as a **direct** child of return statement.
-
-```bash
-exhaustruct -allow-empty-returns ./...
-```
-
-```go
-package main
-
-// With -allow-empty-returns: empty structs allowed only in return statements
-func createConfig() Config {
-	return Config{} // OK: empty struct in return statement
-}
-
-func initializeConfig() {
-	var config = Config{} // ERROR: empty struct in variable declaration
-	_ = config
-}
-
-func processConfigs() []Config {
-	return []Config{{}} // ERROR: empty struct in slice literal (not direct child of return statement)
-}
-
-```
-
-##### 3. Variable Declaration Allowance (`-allow-empty-declarations`)
-
-**Rationale**: Allows empty initialization in variable declarations while enforcing proper initialization in other
-contexts. Useful for gradual struct population patterns.
-This option allows zero-value structs only as a **direct** child of variable declaration statement.
-
-```bash
-exhaustruct -allow-empty-declarations ./...
-```
-
-```go
-package main
-
-// With -allow-empty-declarations: empty structs allowed in variable declarations
-func initializeConfig() {
-	var config = Config{} // OK: empty struct in variable declaration
-	config := Config{}    // OK: empty struct in short variable declaration
-	ptr := &Config{}      // OK: empty struct in pointer declaration
-	_ = config
-	_ = ptr
-}
-
-func createConfig() Config {
-	return Config{} // ERROR: empty struct in return statement
-}
-
-func processConfigs() []Config {
-	return []Config{{}} // ERROR: empty struct in slice literal
-}
-```
-
-##### 4. Pattern-Based Allowance (`-allow-empty-include`)
-
-**Rationale**: Granular control allowing empty structs only for specific types, typically third-party libraries or
-specific patterns where empty initialization is common practice.
-
-```bash
-exhaustruct -allow-empty-include ".*Config.*" -allow-empty-include ".*Options.*" ./...
-```
-
-```go
-package main
-
-type DatabaseConfig struct {
-	Host string
-	Port int
-}
-
-type ServerOptions struct {
-	Timeout  int
-	MaxConns int
-}
-
-type UserData struct {
-	Name  string
-	Email string
+type User struct {
+    Name  string
+    Email string
+    Age   int
 }
 
 func example() {
-	// OK: matches .*Config.* pattern
-	config := DatabaseConfig{}
-
-	// OK: matches .*Options.* pattern
-	opts := ServerOptions{}
-
-	// ERROR: doesn't match any pattern
-	user := UserData{}
-
-	_ = config
-	_ = opts
-	_ = user
+    _ = User{Name: "alice"} // ERROR: missing fields Email, Age
+    _ = User{Name: "alice", Email: "alice@example.com", Age: 30} // OK
 }
-
 ```
 
-#### Errors handling
+## Modes of Operation
 
-In order to avoid unnecessary noise, when dealing with non-pointer types returned along with errors - `exhaustruct` will
-ignore non-error types, in case return statement contains non-nil value that satisfies `error` interface.
+### Implicit Mode (Default)
+
+By default, **all** struct literals are checked. This ensures complete
+initialization across your codebase. Use ignore patterns or directives to
+exclude specific types or literals.
+
+### Explicit Mode
+
+With `-explicit` flag, the analyzer only checks structs that are explicitly
+marked for enforcement — either via `//exhaustruct:enforce` directive or
+`-enforce-rx` patterns. This is useful for large codebases where you want
+opt-in checking for critical types only.
 
 ```go
-package main
-
-import (
-	"errors"
-)
-
-type Shape struct {
-	Length int
-	Width  int
+// Only checked in explicit mode when marked
+//exhaustruct:enforce
+type Config struct {
+    Host string
+    Port int
 }
 
-func NewShape() (Shape, error) {
-	return Shape{}, errors.New("error") // will not raise an error
+// Not checked in explicit mode (unless matched by pattern)
+type Options struct {
+    Timeout int
+}
+```
+
+## Comment Directives
+
+Comment directives provide fine-grained control over checking behavior.
+They can be placed on the line above or on the same line as the target.
+
+### On Type Definitions
+
+Available directives: `enforce`, `ignore`, `optional`
+
+```go
+// All literals of this type will be checked (useful in explicit mode)
+//exhaustruct:enforce
+type Config struct {
+    Host string
+    Port int
 }
 
-type MyError struct {
-	Err error
+// All literals of this type will be skipped
+//exhaustruct:ignore
+type InternalState struct {
+    cache map[string]any
 }
 
-func (e MyError) Error() string {
-	return e.Err.Error()
+// All fields of this type are optional
+//exhaustruct:optional
+type Options struct {
+    Timeout  int
+    MaxConns int
+}
+```
+
+### On Struct Literals
+
+Available directives: `enforce`, `ignore`
+
+```go
+func example() {
+    //exhaustruct:ignore — skip this specific literal
+    _ = Config{}
+
+    _ = Config{} //exhaustruct:ignore — inline form also works
+
+    //exhaustruct:enforce — check even if type is normally ignored
+    _ = InternalState{}
+}
+```
+
+### On Fields
+
+Available directives: `optional`, `enforce`
+
+```go
+type Server struct {
+    Host string
+    Port int
+
+    //exhaustruct:optional — this field is not required
+    Timeout int
+
+    MaxConns int //exhaustruct:optional — inline form also works
+
+    //exhaustruct:enforce — required even if type is marked optional
+    Logger Logger
+}
+```
+
+### Directive Priority
+
+When multiple directives or patterns apply, priority is (highest first):
+
+1. Literal `//exhaustruct:ignore`
+2. Literal `//exhaustruct:enforce`
+3. Type-level ignore (directive or `-ignore-rx` pattern)
+4. Type-level enforce (directive or `-enforce-rx` pattern)
+5. Mode default (implicit=check, explicit=skip)
+
+## Configuration
+
+### Type Selection Flags
+
+| Flag | Description |
+|------|-------------|
+| `-explicit` | Enable explicit mode (opt-in checking) |
+| `-enforce-rx` | Regex pattern for types/fields to check (repeatable) |
+| `-ignore-rx` | Regex pattern for types to skip (repeatable) |
+| `-optional-rx` | Regex pattern for types/fields to mark optional (repeatable) |
+
+### Empty Literal Allowances
+
+| Flag | Description |
+|------|-------------|
+| `-allow-empty` | Allow all empty struct literals globally |
+| `-allow-empty-rx` | Regex pattern for types allowed to be empty (repeatable) |
+| `-allow-empty-returns` | Allow empty literals in return statements |
+| `-allow-empty-declarations` | Allow empty literals in `var` and `:=` declarations |
+
+### Output Flags
+
+| Flag | Description |
+|------|-------------|
+| `-report-full-type-path` | Show full package path in errors (e.g., `net/http.Cookie`) |
+| `-debug-cache-metrics` | Print cache statistics to stderr |
+
+### Pattern Format
+
+All regex patterns (`-*-rx` flags) match against **full paths**.
+
+For types:
+```
+package/path.TypeName
+```
+
+For fields:
+```
+package/path.TypeName#FieldName
+```
+
+For anonymous structs, use `<anonymous>` as the type name:
+```
+package/path.<anonymous>
+```
+
+Examples:
+- `net/http\.Request` — matches type `http.Request`
+- `.*\.Config` — matches any type named `Config`
+- `.*\.Server#Timeout` — matches field `Timeout` in any `Server` type
+- `github\.com/user/repo/pkg\..*` — matches all types in a package
+- `.*\.<anonymous>` — matches all anonymous structs
+- `mypackage\.<anonymous>#Field` — matches field `Field` in anonymous structs in `mypackage`
+
+## Special Behaviors
+
+### Error Returns
+
+Empty struct literals are automatically allowed in return statements when
+accompanied by a non-nil error value:
+
+```go
+func LoadConfig() (Config, error) {
+    if err := validate(); err != nil {
+        return Config{}, err // OK: error return
+    }
+    return Config{Host: "localhost", Port: 8080}, nil
+}
+```
+
+### Unexported Fields
+
+Fields that are unexported and belong to external packages are never required,
+as they cannot be initialized from outside the package:
+
+```go
+import "external/pkg"
+
+func example() {
+    // If pkg.Server has unexported fields, they are not required
+    _ = pkg.Server{Host: "localhost"} // OK
+}
+```
+
+### Derived Types and Aliases
+
+Type aliases and derived types inherit **field-level** directives from their
+underlying struct, but **type-level** directives are not inherited:
+
+```go
+//exhaustruct:enforce
+type Config struct {
+    Host string
+    //exhaustruct:optional
+    Timeout int
 }
 
-func NewSquare() (Shape, error) {
-	return Shape{}, &MyError{Err: errors.New("error")} // will not raise an error
+type MyConfig = Config      // alias: inherits optional Timeout, but NOT enforce
+type ExtConfig Config       // derived: inherits optional Timeout, but NOT enforce
+
+func example() {
+    // Config is enforced (has type-level directive)
+    _ = Config{} // ERROR in explicit mode
+
+    // MyConfig inherits field optionality but not type enforcement
+    _ = MyConfig{Host: "localhost"} // OK: Timeout is optional (inherited)
+    _ = MyConfig{}                  // OK in explicit mode: type not enforced
+}
+```
+
+To enforce checking on derived or aliased types, add directives on their
+definitions:
+
+```go
+//exhaustruct:enforce
+type StrictConfig = Config  // now enforced independently
+
+//exhaustruct:enforce
+type StrictExtConfig Config // now enforced independently
+```
+
+Field-level directives (`//exhaustruct:optional`, `//exhaustruct:enforce` on fields)
+apply to the struct's field definitions and are shared by all types using that
+underlying struct. Type-level directives control whether literals of that
+specific type are checked and must be specified separately for each type.
+
+## Migration from v4
+
+### New Features in v5
+
+- **Explicit mode** (`-explicit`): Opt-in checking instead of check-all
+- **Optional patterns** (`-optional-rx`): Mark all fields of matching types
+  as optional
+- **Field patterns**: `-enforce-rx` and `-optional-rx` can now match individual
+  fields using `Type#Field` syntax
+- **Type-level directives**: `//exhaustruct:enforce`, `//exhaustruct:ignore`,
+  and `//exhaustruct:optional` can be placed on type definitions
+- **Field-level enforce**: `//exhaustruct:enforce` on fields forces them to be
+  required even when the type is optional
+
+### Flag Renames
+
+| v4 | v5 |
+|----|-----|
+| `-include-rx` / `-i` | `-enforce-rx` |
+| `-exclude-rx` / `-e` | `-ignore-rx` |
+
+### Struct Tags Deprecated
+
+Struct tags like `exhaustruct:"optional"` are no longer supported. Use comment
+directives instead:
+
+```go
+// v4 (deprecated)
+type Server struct {
+    Host    string
+    Timeout int `exhaustruct:"optional"`
 }
 
-func NewCircle() (Shape, error) {
-	return Shape{}, &MyError{} // will raise "main.MyError is missing field Err"
+// v5
+type Server struct {
+    Host    string
+    //exhaustruct:optional
+    Timeout int
 }
+```
 
+Run with `-fix` to automatically migrate struct tags to comment directives:
+
+```shell
+exhaustruct -fix ./...
 ```
