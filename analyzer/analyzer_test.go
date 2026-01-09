@@ -66,6 +66,7 @@ func TestAnalyzerTypes(t *testing.T) {
 		name        string
 		config      analyzer.Config
 		testPackage string
+		testFixes   bool
 	}{
 		{
 			name: "basic",
@@ -152,6 +153,12 @@ func TestAnalyzerTypes(t *testing.T) {
 			},
 			testPackage: "testdata/types/explicit",
 		},
+		{
+			name:        "deprecated tags",
+			config:      analyzer.Config{},
+			testPackage: "testdata/types/tags",
+			testFixes:   true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -161,7 +168,11 @@ func TestAnalyzerTypes(t *testing.T) {
 			a, err := analyzer.NewAnalyzer(tt.config)
 			require.NoError(t, err)
 
-			analysistest.Run(t, testdataPath, a, tt.testPackage)
+			if tt.testFixes {
+				analysistest.RunWithSuggestedFixes(t, testdataPath, a, tt.testPackage)
+			} else {
+				analysistest.Run(t, testdataPath, a, tt.testPackage)
+			}
 		})
 	}
 }

@@ -60,6 +60,8 @@ func (a *analyzer) run(pass *analysis.Pass) (any, error) {
 
 	insp.WithStack([]ast.Node{(*ast.CompositeLit)(nil)}, a.newVisitorFunc(pass))
 
+	newTagMigrationVisitor(pass, insp).run()
+
 	if a.config.DebugCacheMetrics {
 		a.printCacheStats(pass.Pkg.Path())
 	}
