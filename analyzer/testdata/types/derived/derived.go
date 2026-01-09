@@ -57,3 +57,24 @@ func shouldFailDerivedFromIgnored() {
 	// Derived type does NOT inherit ignore directive
 	_ = DerivedFromIgnored{} // want "derived.DerivedFromIgnored is missing fields X, Y"
 }
+
+// === Directive on derived type definition ===
+// Directives CAN be placed on derived type definitions.
+
+// DerivedTarget is a normal struct (not ignored).
+type DerivedTarget struct {
+	X string
+	Y int
+}
+
+// IgnoredDerived has ignore directive on the derived type itself.
+//
+//exhaustruct:ignore
+type IgnoredDerived DerivedTarget
+
+func testDirectiveOnDerived() {
+	// Base type NOT ignored - fails
+	_ = DerivedTarget{} // want "derived.DerivedTarget is missing fields X, Y"
+	// Derived type has ignore directive - passes
+	_ = IgnoredDerived{}
+}
