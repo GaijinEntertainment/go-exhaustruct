@@ -436,7 +436,7 @@ func loadTestdata(t *testing.T) *testdata {
 	dirScanner := directive.NewScanner(fp)
 	originScanner := structure.NewOriginScanner(fp)
 
-	dirScanner.Add(fset, file)
+	dirScanner.ProcessFiles(fset, file)
 
 	return &testdata{
 		fset:       fset,

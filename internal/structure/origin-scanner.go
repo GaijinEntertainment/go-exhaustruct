@@ -55,8 +55,8 @@ func (o *OriginScanner) onFileParsed(
 	return nil
 }
 
-func (o *OriginScanner) Add(fset *token.FileSet, files ...*ast.File) {
-	o.parser.Add(fset, files...)
+func (o *OriginScanner) ProcessFiles(fset *token.FileSet, files ...*ast.File) {
+	o.parser.ProcessFiles(fset, files...)
 }
 
 // Lookup returns the type origin for a named type in the given file.
@@ -74,7 +74,7 @@ func (o *OriginScanner) Lookup(
 		return origins[typeName]
 	}
 
-	o.parser.ParseByName(fset, filename)
+	o.parser.ProcessFilename(fset, filename)
 
 	if origins, ok := o.cache.Get(filename); ok {
 		return origins[typeName]

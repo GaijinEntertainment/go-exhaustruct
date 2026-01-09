@@ -14,7 +14,7 @@ import (
 	"dev.gaijin.team/go/exhaustruct/v4/internal/directive"
 )
 
-func Test_Scanner_Add(t *testing.T) {
+func Test_Scanner_ProcessFiles(t *testing.T) {
 	t.Parallel()
 
 	fset := token.NewFileSet()
@@ -30,17 +30,17 @@ func Test_Scanner_Add(t *testing.T) {
 	assert.Equal(t, uint64(0), misses)
 	assert.Equal(t, uint64(0), size)
 
-	diagnostics := scanner.Add(fset, file)
-	assert.NotEmpty(t, diagnostics, "first Add should return diagnostics")
+	diagnostics := scanner.ProcessFiles(fset, file)
+	assert.NotEmpty(t, diagnostics, "first ProcessFiles should return diagnostics")
 
 	_, _, size = scanner.Stats()
 	assert.Equal(t, uint64(1), size)
 
-	diagnostics = scanner.Add(fset, file)
-	assert.Nil(t, diagnostics, "second Add should return nil")
+	diagnostics = scanner.ProcessFiles(fset, file)
+	assert.Nil(t, diagnostics, "second ProcessFiles should return nil")
 }
 
-func Test_Scanner_Add_MultipleFiles(t *testing.T) {
+func Test_Scanner_ProcessFiles_MultipleFiles(t *testing.T) {
 	t.Parallel()
 
 	fset := token.NewFileSet()
@@ -56,8 +56,8 @@ func Test_Scanner_Add_MultipleFiles(t *testing.T) {
 	fp := astutil.NewFileParser()
 	scanner := directive.NewScanner(fp)
 
-	scanner.Add(fset, file1)
-	scanner.Add(fset, file2)
+	scanner.ProcessFiles(fset, file1)
+	scanner.ProcessFiles(fset, file2)
 
 	_, _, size := scanner.Stats()
 	assert.Equal(t, uint64(2), size)
@@ -86,7 +86,7 @@ func Test_Scanner_Lookup(t *testing.T) {
 	fp := astutil.NewFileParser()
 	scanner := directive.NewScanner(fp)
 
-	scanner.Add(fset, file)
+	scanner.ProcessFiles(fset, file)
 
 	pos := token.Position{Filename: "test.go", Line: 3} //nolint:exhaustruct // only Filename and Line needed
 
@@ -96,7 +96,7 @@ func Test_Scanner_Lookup(t *testing.T) {
 
 	hits, misses, _ := scanner.Stats()
 	assert.Equal(t, uint64(1), hits)
-	assert.Equal(t, uint64(1), misses) // from Add
+	assert.Equal(t, uint64(1), misses) // from ProcessFiles
 
 	d, diags = scanner.Lookup(fset, pos)
 	assert.Equal(t, directive.Directives{directive.Optional}, d)
@@ -154,7 +154,7 @@ func Test_Scanner_Lookup_NoDirectiveAtLine(t *testing.T) {
 
 	fp := astutil.NewFileParser()
 	scanner := directive.NewScanner(fp)
-	scanner.Add(fset, file)
+	scanner.ProcessFiles(fset, file)
 
 	pos := token.Position{Filename: "test.go", Line: 1} //nolint:exhaustruct // only Filename and Line needed
 	d, _ := scanner.Lookup(fset, pos)
@@ -173,7 +173,7 @@ func Test_Scanner_Lookup_AfterAdd(t *testing.T) {
 	fp := astutil.NewFileParser()
 	scanner := directive.NewScanner(fp)
 
-	scanner.Add(fset, file)
+	scanner.ProcessFiles(fset, file)
 
 	pos := token.Position{Filename: "shared.go", Line: 3} //nolint:exhaustruct // only Filename and Line needed
 	d, diags := scanner.Lookup(fset, pos)
@@ -185,7 +185,7 @@ func Test_Scanner_Lookup_AfterAdd(t *testing.T) {
 	assert.Equal(t, uint64(1), misses)
 }
 
-func Test_Scanner_Lookup_ParseByName(t *testing.T) {
+func Test_Scanner_Lookup_ProcessFilename(t *testing.T) {
 	t.Parallel()
 
 	fset := token.NewFileSet()
@@ -274,7 +274,7 @@ var x int //exhaustruct:enforce
 
 			fp := astutil.NewFileParser()
 			scanner := directive.NewScanner(fp)
-			scanner.Add(fset, file)
+			scanner.ProcessFiles(fset, file)
 
 			pos := token.Position{Filename: "test.go", Line: tt.line} //nolint:exhaustruct
 			got, _ := scanner.Lookup(fset, pos)
@@ -294,7 +294,7 @@ func Test_Scanner_Testdata(t *testing.T) {
 
 	fp := astutil.NewFileParser()
 	scanner := directive.NewScanner(fp)
-	diagnostics := scanner.Add(fset, file)
+	diagnostics := scanner.ProcessFiles(fset, file)
 
 	// Lines where we expect directives to apply
 	expectDirective := map[int]directive.Directives{

@@ -56,9 +56,9 @@ func (p *FileParser) OnFileParsed(cb ParseCallback) {
 	p.callbacks = append(p.callbacks, cb)
 }
 
-// Add triggers all callbacks for each provided AST file.
+// ProcessFiles triggers all callbacks for each provided AST file.
 // Already-parsed files are skipped.
-func (p *FileParser) Add(fset *token.FileSet, files ...*ast.File) []analysis.Diagnostic {
+func (p *FileParser) ProcessFiles(fset *token.FileSet, files ...*ast.File) []analysis.Diagnostic {
 	var allDiags []analysis.Diagnostic
 
 	for _, file := range files {
@@ -97,9 +97,9 @@ func (p *FileParser) Add(fset *token.FileSet, files ...*ast.File) []analysis.Dia
 	return allDiags
 }
 
-// ParseByName parses a file by name and triggers all callbacks.
-// Returns nil if already parsed.
-func (p *FileParser) ParseByName(fset *token.FileSet, filename string) []analysis.Diagnostic {
+// ProcessFilename parses a file from disk and triggers all callbacks.
+// Returns nil if already processed.
+func (p *FileParser) ProcessFilename(fset *token.FileSet, filename string) []analysis.Diagnostic {
 	p.mu.RLock()
 
 	alreadyParsed := p.parsed[filename]

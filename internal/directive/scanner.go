@@ -41,14 +41,14 @@ func (s *Scanner) onFileParsed(fset *token.FileSet, file *ast.File) []analysis.D
 	return diags
 }
 
-// Add pre-populates the cache by delegating to FileParser.Add.
+// ProcessFiles pre-populates the cache by delegating to FileParser.ProcessFiles.
 // Returns diagnostics from directive parsing.
-func (s *Scanner) Add(fset *token.FileSet, files ...*ast.File) []analysis.Diagnostic {
-	return s.parser.Add(fset, files...)
+func (s *Scanner) ProcessFiles(fset *token.FileSet, files ...*ast.File) []analysis.Diagnostic {
+	return s.parser.ProcessFiles(fset, files...)
 }
 
 // Lookup returns the directives at the given source position.
-// If the file is not in cache, triggers FileParser.ParseByName to parse it.
+// If the file is not in cache, triggers FileParser.ProcessFilename to parse it.
 func (s *Scanner) Lookup(fset *token.FileSet, pos token.Position) (Directives, []analysis.Diagnostic) {
 	if pos.Filename == "" {
 		return nil, nil
@@ -59,7 +59,7 @@ func (s *Scanner) Lookup(fset *token.FileSet, pos token.Position) (Directives, [
 	}
 
 	// Cache miss - parse file (triggers onFileParsed callback).
-	diags := s.parser.ParseByName(fset, pos.Filename)
+	diags := s.parser.ProcessFilename(fset, pos.Filename)
 
 	if fd, ok := s.cache.Get(pos.Filename); ok {
 		return fd[pos.Line], diags
@@ -94,7 +94,7 @@ func (*Scanner) parseFileDirectives(fset *token.FileSet, file *ast.File) (fileDi
 
 		line := fset.Position(n.Pos()).Line
 		if d, ok := directives[line]; ok {
-			d.forLine = line
+			d.targetLine = line
 			directives[line] = d
 		}
 
@@ -104,18 +104,18 @@ func (*Scanner) parseFileDirectives(fset *token.FileSet, file *ast.File) (fileDi
 	result := make(fileDirectives, len(directives))
 
 	for line, d := range directives {
-		_, exists := result[d.forLine]
+		_, exists := result[d.targetLine]
 		if !exists {
-			result[d.forLine] = d.directives
+			result[d.targetLine] = d.directives
 			continue
 		}
 
 		pos := d.pos
 
 		// directives from block comments win over inline comments
-		if line != d.forLine {
-			result[d.forLine] = d.directives
-			pos = directives[d.forLine].pos
+		if line != d.targetLine {
+			result[d.targetLine] = d.directives
+			pos = directives[d.targetLine].pos
 		}
 
 		diagnostics = append(diagnostics, analysis.Diagnostic{
@@ -129,7 +129,7 @@ func (*Scanner) parseFileDirectives(fset *token.FileSet, file *ast.File) (fileDi
 
 type parsedDirective struct {
 	pos        token.Pos
-	forLine    int
+	targetLine int
 	directives Directives
 }
 
@@ -176,7 +176,7 @@ func parseCommentDirectives(
 			hasDirective = true
 			directives[fset.Position(pos).Line] = parsedDirective{
 				pos:        pos,
-				forLine:    fset.Position(cg.End()).Line + 1,
+				targetLine:    fset.Position(cg.End()).Line + 1,
 				directives: parsed,
 			}
 		}

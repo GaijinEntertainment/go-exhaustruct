@@ -22,7 +22,7 @@ func Test_OriginScanner(t *testing.T) {
 
 	fp := astutil.NewFileParser()
 	origin := structure.NewOriginScanner(fp)
-	origin.Add(fset, file)
+	origin.ProcessFiles(fset, file)
 
 	tests := []struct {
 		name     string
@@ -81,8 +81,8 @@ func Test_OriginScanner_Stats(t *testing.T) {
 	assert.Equal(t, uint64(0), misses)
 	assert.Equal(t, uint64(0), size)
 
-	// Add file - triggers miss.
-	origin.Add(fset, file)
+	// ProcessFiles - triggers miss.
+	origin.ProcessFiles(fset, file)
 
 	_, misses, size = origin.Stats()
 	assert.Equal(t, uint64(1), misses)
@@ -139,7 +139,7 @@ func Test_OriginScanner_MultipleFiles(t *testing.T) {
 	fp := astutil.NewFileParser()
 	origin := structure.NewOriginScanner(fp)
 
-	origin.Add(fset, file1, file2)
+	origin.ProcessFiles(fset, file1, file2)
 
 	_, misses, size := origin.Stats()
 	assert.Equal(t, uint64(2), misses)
