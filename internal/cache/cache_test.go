@@ -15,7 +15,7 @@ import (
 func Test_Cache(t *testing.T) {
 	t.Parallel()
 
-	t.Run("ResolveStruct miss", func(t *testing.T) {
+	t.Run("Get miss", func(t *testing.T) {
 		t.Parallel()
 
 		c := cache.New[string, int](8)
@@ -31,7 +31,7 @@ func Test_Cache(t *testing.T) {
 		assert.Equal(t, uint64(0), size)
 	})
 
-	t.Run("Set and ResolveStruct", func(t *testing.T) {
+	t.Run("Set and Get", func(t *testing.T) {
 		t.Parallel()
 
 		c := cache.New[string, int](8)
