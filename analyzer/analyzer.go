@@ -14,6 +14,7 @@ import (
 	"golang.org/x/tools/go/ast/inspector"
 
 	"dev.gaijin.team/go/exhaustruct/v4/internal/comment"
+	"dev.gaijin.team/go/exhaustruct/v4/internal/fix"
 	"dev.gaijin.team/go/exhaustruct/v4/internal/structure"
 )
 
@@ -40,11 +41,15 @@ func NewAnalyzer(config Config) (*analysis.Analyzer, error) {
 	}
 
 	return &analysis.Analyzer{ //nolint:exhaustruct
-		Name:     "exhaustruct",
-		Doc:      "Checks if all structure fields are initialized",
-		Run:      a.run,
-		Requires: []*analysis.Analyzer{inspect.Analyzer},
-		Flags:    *a.config.BindToFlagSet(flag.NewFlagSet("", flag.PanicOnError)),
+		Name:             "exhaustruct",
+		Doc:              "Checks if all structure fields are initialized",
+		Run:              a.run,
+		Requires:         []*analysis.Analyzer{inspect.Analyzer},
+		Flags:            *a.config.BindToFlagSet(flag.NewFlagSet("", flag.PanicOnError)),
+		URL:              "",
+		RunDespiteErrors: false,
+		ResultType:       nil,
+		FactTypes:        nil,
 	}, nil
 }
 
@@ -84,10 +89,22 @@ func (a *analyzer) newVisitor(pass *analysis.Pass) func(n ast.Node, push bool, s
 
 		file := a.comments.Get(pass.Fset, stack[0].(*ast.File)) //nolint:forcetypeassert
 		rc := getCompositeLitRelatedComments(stack, file)
-		pos, msg := a.processStruct(pass, lit, structTyp, typeInfo, rc)
+		pos, msg, suggestedFix := a.processStruct(pass, lit, structTyp, typeInfo, rc)
 
 		if pos != nil {
-			pass.Reportf(*pos, "%s", msg)
+			diag := analysis.Diagnostic{
+				Pos:            *pos,
+				Message:        msg,
+				End:            0,
+				Category:       "",
+				URL:            "",
+				SuggestedFixes: nil,
+				Related:        nil,
+			}
+			if suggestedFix != nil {
+				diag.SuggestedFixes = []analysis.SuggestedFix{*suggestedFix}
+			}
+			pass.Report(diag)
 		}
 
 		return true
@@ -318,15 +335,15 @@ func (a *analyzer) processStruct(
 	structTyp *types.Struct,
 	info *TypeInfo,
 	comments []*ast.CommentGroup,
-) (*token.Pos, string) {
+) (*token.Pos, string, *analysis.SuggestedFix) {
 	shouldProcess := a.shouldProcessType(info)
 
 	if shouldProcess && comment.HasDirective(comments, comment.DirectiveIgnore) {
-		return nil, ""
+		return nil, "", nil
 	}
 
 	if !shouldProcess && !comment.HasDirective(comments, comment.DirectiveEnforce) {
-		return nil, ""
+		return nil, "", nil
 	}
 
 	canAccessUnexported := structFieldsInPackage(structTyp, pass.Pkg)
@@ -339,14 +356,24 @@ func (a *analyzer) processStruct(
 			typeName = info.String()
 		}
 
+		// Generate suggested fix
+		missingFields := make([]fix.MissingField, 0, len(f))
+		for _, field := range f {
+			missingFields = append(missingFields, fix.MissingField{
+				Name: field.Name,
+				Type: field.Type,
+			})
+		}
+		suggestedFix := fix.Generate(pass.Fset, lit, missingFields)
+
 		if len(f) == 1 {
-			return &pos, fmt.Sprintf("%s is missing field %s", typeName, f.String())
+			return &pos, fmt.Sprintf("%s is missing field %s", typeName, f.String()), suggestedFix
 		}
 
-		return &pos, fmt.Sprintf("%s is missing fields %s", typeName, f.String())
+		return &pos, fmt.Sprintf("%s is missing fields %s", typeName, f.String()), suggestedFix
 	}
 
-	return nil, ""
+	return nil, "", nil
 }
 
 // shouldProcessType returns true if type should be processed basing off include

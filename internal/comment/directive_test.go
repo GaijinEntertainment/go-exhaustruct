@@ -35,7 +35,7 @@ func TestParseDirective(t *testing.T) {
 			comments: []*ast.CommentGroup{
 				{
 					List: []*ast.Comment{
-						{Text: "// some comment"},
+						{Text: "// some comment", Slash: 0},
 					},
 				},
 			},
@@ -47,9 +47,9 @@ func TestParseDirective(t *testing.T) {
 			comments: []*ast.CommentGroup{
 				{
 					List: []*ast.Comment{
-						{Text: "//exhaustruct:ignore"},
-						{Text: "// some comment"},
-						{Text: "//exhaustruct:enforce"},
+						{Text: "//exhaustruct:ignore", Slash: 0},
+						{Text: "// some comment", Slash: 0},
+						{Text: "//exhaustruct:enforce", Slash: 0},
 					},
 				},
 			},
@@ -61,9 +61,9 @@ func TestParseDirective(t *testing.T) {
 			comments: []*ast.CommentGroup{
 				{
 					List: []*ast.Comment{
-						{Text: "//exhaustruct:ignore"},
-						{Text: "// some comment"},
-						{Text: "//exhaustruct:enforce beacuse of some reason"},
+						{Text: "//exhaustruct:ignore", Slash: 0},
+						{Text: "// some comment", Slash: 0},
+						{Text: "//exhaustruct:enforce beacuse of some reason", Slash: 0},
 					},
 				},
 			},
@@ -75,7 +75,7 @@ func TestParseDirective(t *testing.T) {
 			comments: []*ast.CommentGroup{
 				{
 					List: []*ast.Comment{
-						{Text: "//exhaustruct:ignore"},
+						{Text: "//exhaustruct:ignore", Slash: 0},
 					},
 				},
 			},

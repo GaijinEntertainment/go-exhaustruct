@@ -15,6 +15,7 @@ const (
 // Field represents a single struct field with its metadata.
 type Field struct {
 	Name     string
+	Type     types.Type
 	Exported bool
 	Optional bool
 }
@@ -34,6 +35,7 @@ func NewFields(strct *types.Struct) Fields {
 
 		sf = append(sf, &Field{
 			Name:     f.Name(),
+			Type:     f.Type(),
 			Exported: f.Exported(),
 			Optional: HasOptionalTag(strct.Tag(i)),
 		})

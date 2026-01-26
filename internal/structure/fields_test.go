@@ -46,8 +46,16 @@ type StructFieldsSuite struct {
 
 func (s *StructFieldsSuite) SetupSuite() {
 	pkgs, err := packages.Load(&packages.Config{ //nolint:exhaustruct
-		Mode: packages.NeedTypes | packages.NeedTypesInfo | packages.NeedTypesSizes | packages.NeedSyntax,
-		Dir:  "testdata",
+		Mode:       packages.NeedTypes | packages.NeedTypesInfo | packages.NeedTypesSizes | packages.NeedSyntax,
+		Dir:        "testdata",
+		Context:    nil,
+		Logf:       nil,
+		Env:        nil,
+		BuildFlags: nil,
+		Fset:       nil,
+		ParseFile:  nil,
+		Tests:      false,
+		Overlay:    nil,
 	}, "")
 	s.Require().NoError(err)
 	s.Require().Len(pkgs, 1)
@@ -87,12 +95,30 @@ func (s *StructFieldsSuite) TestNewStructFields() {
 	sf := s.getStructFields()
 
 	s.Len(sf, 4)
-	s.Equal(structure.Fields{
+	s.assertFieldsMatch(sf, []fieldMeta{
 		{"ExportedRequired", true, false},
 		{"unexportedRequired", false, false},
 		{"ExportedOptional", true, true},
 		{"unexportedOptional", false, true},
-	}, sf)
+	})
+}
+
+// fieldMeta is a helper type for comparing field properties without Type.
+type fieldMeta struct {
+	Name     string
+	Exported bool
+	Optional bool
+}
+
+// assertFieldsMatch compares Fields by Name, Exported, and Optional only.
+func (s *StructFieldsSuite) assertFieldsMatch(actual structure.Fields, expected []fieldMeta) {
+	s.T().Helper()
+	s.Require().Len(actual, len(expected))
+	for i, f := range actual {
+		s.Equal(expected[i].Name, f.Name, "field %d name mismatch", i)
+		s.Equal(expected[i].Exported, f.Exported, "field %d exported mismatch", i)
+		s.Equal(expected[i].Optional, f.Optional, "field %d optional mismatch", i)
+	}
 }
 
 func (s *StructFieldsSuite) TestStructFields_String() {
@@ -117,11 +143,11 @@ func (s *StructFieldsSuite) TestSkipped_Positional_Incomplete() {
 	lit := s.getLiteral("_unnamedIncomplete")
 
 	// Positional literals return remaining fields regardless of export status
-	s.Equal(structure.Fields{
+	s.assertFieldsMatch(sf.Skipped(lit, true), []fieldMeta{
 		{"unexportedRequired", false, false},
 		{"ExportedOptional", true, true},
 		{"unexportedOptional", false, true},
-	}, sf.Skipped(lit, true))
+	})
 }
 
 func (s *StructFieldsSuite) TestSkipped_Named_Complete() {
@@ -140,9 +166,9 @@ func (s *StructFieldsSuite) TestSkipped_Named_MissingUnexported() {
 	s.Nil(sf.Skipped(lit, true))
 
 	// onlyExported=false: unexported fields are required
-	s.Equal(structure.Fields{
+	s.assertFieldsMatch(sf.Skipped(lit, false), []fieldMeta{
 		{"unexportedRequired", false, false},
-	}, sf.Skipped(lit, false))
+	})
 }
 
 func (s *StructFieldsSuite) TestSkipped_Named_MissingExported() {
@@ -150,15 +176,15 @@ func (s *StructFieldsSuite) TestSkipped_Named_MissingExported() {
 	lit := s.getLiteral("_namedIncomplete2")
 
 	// onlyExported=true: only exported required fields reported
-	s.Equal(structure.Fields{
+	s.assertFieldsMatch(sf.Skipped(lit, true), []fieldMeta{
 		{"ExportedRequired", true, false},
-	}, sf.Skipped(lit, true))
+	})
 
 	// onlyExported=false: both exported and unexported required fields reported
-	s.Equal(structure.Fields{
+	s.assertFieldsMatch(sf.Skipped(lit, false), []fieldMeta{
 		{"ExportedRequired", true, false},
 		{"unexportedRequired", false, false},
-	}, sf.Skipped(lit, false))
+	})
 }
 
 func (s *StructFieldsSuite) TestSkipped_Empty() {
@@ -166,14 +192,14 @@ func (s *StructFieldsSuite) TestSkipped_Empty() {
 	lit := s.getLiteral("_empty")
 
 	// Empty literal: all required fields are missing
-	s.Equal(structure.Fields{
+	s.assertFieldsMatch(sf.Skipped(lit, true), []fieldMeta{
 		{"ExportedRequired", true, false},
-	}, sf.Skipped(lit, true))
+	})
 
-	s.Equal(structure.Fields{
+	s.assertFieldsMatch(sf.Skipped(lit, false), []fieldMeta{
 		{"ExportedRequired", true, false},
 		{"unexportedRequired", false, false},
-	}, sf.Skipped(lit, false))
+	})
 }
 
 func Test_Fields_Skipped_EmptyStruct(t *testing.T) {
@@ -181,7 +207,7 @@ func Test_Fields_Skipped_EmptyStruct(t *testing.T) {
 
 	var emptyFields structure.Fields
 
-	lit := &ast.CompositeLit{Elts: []ast.Expr{}} //nolint:exhaustruct
+	lit := &ast.CompositeLit{Elts: []ast.Expr{}, Type: nil, Lbrace: 0, Rbrace: 0, Incomplete: false} //nolint:exhaustruct
 
 	require.Nil(t, emptyFields.Skipped(lit, true))
 	require.Nil(t, emptyFields.Skipped(lit, false))
@@ -191,8 +217,16 @@ func Test_NewFields_EmptyStruct(t *testing.T) {
 	t.Parallel()
 
 	pkgs, err := packages.Load(&packages.Config{ //nolint:exhaustruct
-		Mode: packages.NeedTypes,
-		Dir:  "testdata",
+		Mode:       packages.NeedTypes,
+		Dir:        "testdata",
+		Context:    nil,
+		Logf:       nil,
+		Env:        nil,
+		BuildFlags: nil,
+		Fset:       nil,
+		ParseFile:  nil,
+		Tests:      false,
+		Overlay:    nil,
 	}, "")
 	require.NoError(t, err)
 	require.Len(t, pkgs, 1)
@@ -212,8 +246,16 @@ func Test_FieldsCache_Stats(t *testing.T) {
 	t.Parallel()
 
 	pkgs, err := packages.Load(&packages.Config{ //nolint:exhaustruct
-		Mode: packages.NeedTypes,
-		Dir:  "testdata",
+		Mode:       packages.NeedTypes,
+		Dir:        "testdata",
+		Context:    nil,
+		Logf:       nil,
+		Env:        nil,
+		BuildFlags: nil,
+		Fset:       nil,
+		ParseFile:  nil,
+		Tests:      false,
+		Overlay:    nil,
 	}, "")
 	require.NoError(t, err)
 	require.Len(t, pkgs, 1)
