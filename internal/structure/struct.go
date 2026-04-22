@@ -163,13 +163,29 @@ func (s *Struct) skippedNamed(lit *ast.CompositeLit, externalPkg bool) []Field {
 }
 
 func (s *Struct) isFieldRequired(f Field, externalPkg bool) bool {
-	// regardless of the structure settings, enforced fields are always required
+	// explicit field directives win over everything
 	if f.Enforced {
 		return true
 	}
 
+	if f.Optional {
+		return false
+	}
+
+	// field-level patterns apply only when they specifically target the field —
+	// i.e., the pattern matches the field path but not the struct path. A broad
+	// pattern that also matches the struct is handled via s.IsEnforced/IsOptional
+	// and must not silently promote unrelated fields to required/optional.
+	if f.PatternEnforced && !s.PatternEnforced {
+		return true
+	}
+
+	if f.PatternOptional && !s.PatternOptional {
+		return false
+	}
+
 	// optionality can be inherited from the structure settings
-	if f.Optional || s.IsOptional() {
+	if s.IsOptional() {
 		return false
 	}
 
