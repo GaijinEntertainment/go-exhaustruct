@@ -34,22 +34,22 @@ var lineAfterGap int // line 29: NO directive (blank line 28 breaks the associat
 //exhaustruct:enforce
 var multipleDirectives int // line 35: "optional" wins (first directive)
 
-// === BLOCK COMMENT AS DOC ===
+// === BLOCK COMMENTS NOT SUPPORTED (as doc) ===
 
 /*exhaustruct:optional*/
-var blockDocComment int // line 40: directive applies here
+var blockDocComment int // line 40: NO directive (block comments not supported)
 
 /* exhaustruct:enforce */
-var blockDocWithSpaces int // line 43: directive applies here
+var blockDocWithSpaces int // line 43: NO directive (block comments not supported)
 
-// === BLOCK COMMENT INLINE ===
+// === BLOCK COMMENTS NOT SUPPORTED (inline) ===
 
-var blockInline int /*exhaustruct:optional*/ // line 47: directive applies here
+var blockInline int /*exhaustruct:optional*/ // line 47: NO directive (block comments not supported)
 
-// === MIXED: DOC AND INLINE ON SAME TARGET ===
+// === MIXED: DOC AND INLINE ON SAME TARGET (doc wins, conflict reported) ===
 
 //exhaustruct:optional
-var mixedDocAndInline int //exhaustruct:enforce // line 52: inline "enforce" overwrites doc "optional"
+var mixedDocAndInline int //exhaustruct:enforce // line 52: "optional" wins (doc directive is first; inline emits conflict diagnostic)
 
 // === REGULAR COMMENTS (no directive) ===
 
