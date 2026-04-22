@@ -44,7 +44,7 @@ func (v *tagMigrationVisitor) visitStructType(n ast.Node) {
 			continue
 		}
 
-		value, ok := parseExhastructTag(field.Tag.Value)
+		value, ok := parseExhaustructTag(field.Tag.Value)
 		if !ok {
 			continue
 		}
@@ -55,9 +55,9 @@ func (v *tagMigrationVisitor) visitStructType(n ast.Node) {
 
 const exhaustructTagKey = "exhaustruct"
 
-// parseExhastructTag extracts value from `exhaustruct:"value"` tag.
+// parseExhaustructTag extracts value from `exhaustruct:"value"` tag.
 // Returns ("", false) if tag not present.
-func parseExhastructTag(tagLiteral string) (string, bool) {
+func parseExhaustructTag(tagLiteral string) (string, bool) {
 	if len(tagLiteral) < 2 { //nolint:mnd
 		return "", false
 	}
@@ -80,7 +80,7 @@ func (v *tagMigrationVisitor) buildDiagnostic(
 
 func (*tagMigrationVisitor) buildFix(field *ast.Field, tagValue string) analysis.SuggestedFix {
 	tag := field.Tag
-	newTag := removeExhastructFromTag(tag.Value)
+	newTag := removeExhaustructFromTag(tag.Value)
 
 	if tagValue == "optional" {
 		if newTag != "" {
@@ -108,7 +108,7 @@ func (*tagMigrationVisitor) buildFix(field *ast.Field, tagValue string) analysis
 
 var exhaustructTagPattern = regexp.MustCompile(`\s*exhaustruct:"[^"]*"`)
 
-func removeExhastructFromTag(tagLiteral string) string {
+func removeExhaustructFromTag(tagLiteral string) string {
 	tagLiteral = tagLiteral[1 : len(tagLiteral)-1]
 	tagLiteral = strings.TrimSpace(exhaustructTagPattern.ReplaceAllString(tagLiteral, ""))
 
