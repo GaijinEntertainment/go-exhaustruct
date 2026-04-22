@@ -33,6 +33,19 @@ func (c *Cache[K, V]) Get(key K) (v V, ok bool) {
 	return v, ok
 }
 
+// Peek returns the value without updating hit/miss counters. Use it when the
+// caller has already recorded the miss that triggered the fill and a follow-up
+// read for the just-written entry must not inflate the hit rate.
+func (c *Cache[K, V]) Peek(key K) (v V, ok bool) {
+	c.mu.RLock()
+
+	v, ok = c.entries[key]
+
+	c.mu.RUnlock()
+
+	return v, ok
+}
+
 // Set stores value and increments miss counter (caller computed the value).
 func (c *Cache[K, V]) Set(key K, value V) {
 	c.mu.Lock()

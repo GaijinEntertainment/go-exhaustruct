@@ -200,8 +200,10 @@ func Test_Scanner_Lookup_ProcessFilename(t *testing.T) {
 	assert.Equal(t, directive.Directives{directive.Optional}, d)
 	assert.Empty(t, diags)
 
+	// Cold Lookup records exactly one miss and no hits — the post-parse
+	// read for the just-written entry must not be counted.
 	hits, misses, size := scanner.Stats()
-	assert.Equal(t, uint64(1), hits)
+	assert.Equal(t, uint64(0), hits)
 	assert.Equal(t, uint64(1), misses)
 	assert.Equal(t, uint64(1), size)
 
@@ -210,7 +212,7 @@ func Test_Scanner_Lookup_ProcessFilename(t *testing.T) {
 	assert.Nil(t, diags)
 
 	hits, _, _ = scanner.Stats()
-	assert.Equal(t, uint64(2), hits)
+	assert.Equal(t, uint64(1), hits)
 }
 
 func Test_Scanner_DirectiveLookup(t *testing.T) {

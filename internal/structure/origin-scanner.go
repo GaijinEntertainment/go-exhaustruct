@@ -74,9 +74,12 @@ func (o *OriginScanner) Lookup(
 		return origins[typeName]
 	}
 
+	// Cache miss - parse file (onFileParsed stores the result via cache.Set
+	// and records the miss). Peek avoids inflating the hit rate by re-reading
+	// the entry we just wrote.
 	o.parser.ProcessFilename(fset, filename)
 
-	if origins, ok := o.cache.Get(filename); ok {
+	if origins, ok := o.cache.Peek(filename); ok {
 		return origins[typeName]
 	}
 

@@ -58,10 +58,13 @@ func (s *Scanner) Lookup(fset *token.FileSet, pos token.Position) (Directives, [
 		return fd[pos.Line], nil
 	}
 
-	// Cache miss - parse file (triggers onFileParsed callback).
+	// Cache miss - parse file (triggers onFileParsed callback, which stores
+	// the result via cache.Set and increments the miss counter).
 	diags := s.parser.ProcessFilename(fset, pos.Filename)
 
-	if fd, ok := s.cache.Get(pos.Filename); ok {
+	// Peek avoids counting this self-induced read as a hit — the miss was
+	// already recorded by Set above.
+	if fd, ok := s.cache.Peek(pos.Filename); ok {
 		return fd[pos.Line], diags
 	}
 
@@ -176,7 +179,7 @@ func parseCommentDirectives(
 			hasDirective = true
 			directives[fset.Position(pos).Line] = parsedDirective{
 				pos:        pos,
-				targetLine:    fset.Position(cg.End()).Line + 1,
+				targetLine: fset.Position(cg.End()).Line + 1,
 				directives: parsed,
 			}
 		}
