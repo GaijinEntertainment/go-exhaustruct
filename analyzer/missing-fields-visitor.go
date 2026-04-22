@@ -58,7 +58,6 @@ type literalVisitor struct {
 // literal holds resolved info for a struct literal being checked.
 type literal struct {
 	strct    *structure.Struct
-	typeName string
 	ignored  bool
 	enforced bool
 }
@@ -128,7 +127,6 @@ func (lv literalVisitor) resolveLiteral() (lit literal, ok bool) {
 
 	return literal{
 		strct:    s,
-		typeName: s.Name,
 		ignored:  dirs.Contains(directive.Ignore),
 		enforced: dirs.Contains(directive.Enforce),
 	}, true
@@ -267,9 +265,9 @@ func (lv literalVisitor) checkLiteral(lit literal) (*token.Pos, string) {
 
 	pos := lv.lit.Pos()
 
-	displayName := strct.PackageName + "." + lit.typeName
+	displayName := strct.PackageName + "." + strct.Name
 	if lv.analysis.analyzer.config.ReportFullTypePath {
-		displayName = strct.FullPath[:len(strct.FullPath)-len(strct.Name)] + lit.typeName
+		displayName = strct.FullPath
 	}
 
 	if len(missingFields) == 1 {
