@@ -20,7 +20,7 @@ for the most up-to-date configuration guidance.
 ## Installation
 
 ```shell
-go install dev.gaijin.team/go/exhaustruct/v4/cmd/exhaustruct@latest
+go install dev.gaijin.team/go/exhaustruct/v5/cmd/exhaustruct@latest
 ```
 
 ## How It Works

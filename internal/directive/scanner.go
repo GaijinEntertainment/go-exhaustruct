@@ -6,8 +6,8 @@ import (
 
 	"golang.org/x/tools/go/analysis"
 
-	"dev.gaijin.team/go/exhaustruct/v4/internal/astutil"
-	"dev.gaijin.team/go/exhaustruct/v4/internal/cache"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/astutil"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/cache"
 )
 
 // Scanner provides thread-safe caching and lookup of file directives.

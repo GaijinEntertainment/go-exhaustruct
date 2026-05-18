@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"dev.gaijin.team/go/exhaustruct/v4/internal/directive"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/directive"
 )
 
 func Test_Directive_IsValid(t *testing.T) {

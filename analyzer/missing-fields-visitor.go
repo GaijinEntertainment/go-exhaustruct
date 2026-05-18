@@ -9,8 +9,8 @@ import (
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/ast/inspector"
 
-	"dev.gaijin.team/go/exhaustruct/v4/internal/directive"
-	"dev.gaijin.team/go/exhaustruct/v4/internal/structure"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/directive"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/structure"
 )
 
 // missingFieldsVisitor checks struct literals for missing field initializations.

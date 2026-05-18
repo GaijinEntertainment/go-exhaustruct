@@ -1,4 +1,4 @@
-module dev.gaijin.team/go/exhaustruct/v4
+module dev.gaijin.team/go/exhaustruct/v5
 
 go 1.24.0
 

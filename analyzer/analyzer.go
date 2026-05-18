@@ -10,9 +10,9 @@ import (
 	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/ast/inspector"
 
-	"dev.gaijin.team/go/exhaustruct/v4/internal/astutil"
-	"dev.gaijin.team/go/exhaustruct/v4/internal/directive"
-	"dev.gaijin.team/go/exhaustruct/v4/internal/structure"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/astutil"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/directive"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/structure"
 )
 
 type analyzer struct {

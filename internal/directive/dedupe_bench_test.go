@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"testing"
 
-	"dev.gaijin.team/go/exhaustruct/v4/internal/directive"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/directive"
 )
 
 func uniqStableMap[S ~[]T, T comparable](slice S) S { //nolint:ireturn
@@ -85,7 +85,7 @@ func generateTestData(size int) directive.Directives {
 *
 goos: darwin
 goarch: arm64
-pkg: dev.gaijin.team/go/exhaustruct/v4/internal/directive
+pkg: dev.gaijin.team/go/exhaustruct/v5/internal/directive
 cpu: Apple M4 Max
 Benchmark_UniqStable
 Benchmark_UniqStable/Map/10

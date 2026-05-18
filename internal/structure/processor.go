@@ -6,9 +6,9 @@ import (
 
 	"golang.org/x/tools/go/analysis"
 
-	"dev.gaijin.team/go/exhaustruct/v4/internal/cache"
-	"dev.gaijin.team/go/exhaustruct/v4/internal/directive"
-	"dev.gaijin.team/go/exhaustruct/v4/internal/pattern"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/cache"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/directive"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/pattern"
 )
 
 type Processor struct {

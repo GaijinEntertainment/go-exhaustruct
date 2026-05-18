@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"dev.gaijin.team/go/exhaustruct/v4/internal/astutil"
-	"dev.gaijin.team/go/exhaustruct/v4/internal/directive"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/astutil"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/directive"
 )
 
 func Test_Scanner_ProcessFiles(t *testing.T) {

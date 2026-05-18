@@ -3,7 +3,7 @@ package analyzer
 import (
 	"flag"
 
-	"dev.gaijin.team/go/exhaustruct/v4/internal/pattern"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/pattern"
 )
 
 type Config struct {

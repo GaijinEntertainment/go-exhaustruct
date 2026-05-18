@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"dev.gaijin.team/go/exhaustruct/v4/internal/structure"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/structure"
 )
 
 func Test_Struct_String(t *testing.T) {

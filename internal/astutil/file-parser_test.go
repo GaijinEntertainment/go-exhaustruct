@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/analysis"
 
-	"dev.gaijin.team/go/exhaustruct/v4/internal/astutil"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/astutil"
 )
 
 func TestFileParser_ProcessFilename(t *testing.T) {

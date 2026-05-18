@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/analysis/analysistest"
 
-	"dev.gaijin.team/go/exhaustruct/v4/analyzer"
+	"dev.gaijin.team/go/exhaustruct/v5/analyzer"
 )
 
 func BenchmarkAnalyzer(b *testing.B) {
