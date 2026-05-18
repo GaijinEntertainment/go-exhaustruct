@@ -41,7 +41,9 @@ func (l List) MatchFullString(target string) bool {
 	}
 
 	for i := range len(l) {
-		if m := l[i].FindStringSubmatch(target); len(m) > 0 && m[0] == target {
+		// A match spanning [0, len(target)) covers every byte of target, so the
+		// matched substring is target itself — no need to allocate it for comparison.
+		if loc := l[i].FindStringIndex(target); loc != nil && loc[0] == 0 && loc[1] == len(target) {
 			return true
 		}
 	}
