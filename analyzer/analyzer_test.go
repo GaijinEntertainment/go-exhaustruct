@@ -8,40 +8,16 @@ import (
 	"golang.org/x/tools/go/analysis/analysistest"
 
 	"dev.gaijin.team/go/exhaustruct/v5/analyzer"
-	"dev.gaijin.team/go/exhaustruct/v5/internal/pattern"
 )
 
 var testdataPath, _ = filepath.Abs("./testdata/") //nolint:gochecknoglobals
 
-// newList is a test helper that creates a pattern.List from strings.
-func newList(tb testing.TB, patterns ...string) pattern.List {
-	tb.Helper()
-
-	list, err := pattern.NewList(patterns...)
-	require.NoError(tb, err)
-
-	return list
-}
-
 func TestAnalyzer(t *testing.T) {
 	t.Parallel()
 
-	// Empty pattern should fail during Set()
-	config := analyzer.Config{}
-
-	err := config.EnforcePatterns.Set("")
-	require.Error(t, err)
-
-	// Invalid regex should fail during Set()
-	config = analyzer.Config{}
-
-	err = config.EnforcePatterns.Set("[")
-	require.Error(t, err)
-
-	// Test ignored package behavior
 	a, err := analyzer.NewAnalyzer(analyzer.Config{
-		EnforcePatterns: newList(t, `.*\.TestExcluded`, `.*\.<anonymous>`),
-		IgnorePatterns:  newList(t, `.*Excluded$`, `testdata/config/excluded\.<anonymous>`),
+		EnforcePatterns: []string{`.*\.TestExcluded`, `.*\.<anonymous>`},
+		IgnorePatterns:  []string{`.*Excluded$`, `testdata/config/excluded\.<anonymous>`},
 	})
 	require.NoError(t, err)
 
@@ -59,6 +35,22 @@ func TestAnalyzerReportFullTypePath(t *testing.T) {
 	analysistest.Run(t, testdataPath, a, "testdata/config/report_full_path")
 }
 
+// TestAnalyzer_FlagsAffectAnalysis is a regression test for issue #155: flag-driven
+// pattern lists must take effect, since the processor used to capture them at
+// NewAnalyzer time, before flag parsing populated them.
+func TestAnalyzer_FlagsAffectAnalysis(t *testing.T) {
+	t.Parallel()
+
+	a, err := analyzer.NewAnalyzer(analyzer.Config{
+		ExplicitMode: true,
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, a.Flags.Set("enforce-rx", `.*\.Test`))
+
+	analysistest.Run(t, testdataPath, a, "testdata/types/basic")
+}
+
 func TestAnalyzerTypes(t *testing.T) {
 	t.Parallel()
 
@@ -71,87 +63,98 @@ func TestAnalyzerTypes(t *testing.T) {
 		{
 			name: "basic",
 			config: analyzer.Config{
-				EnforcePatterns: newList(t, `.*\.Test`),
+				EnforcePatterns: []string{`.*\.Test`},
 			},
 			testPackage: "testdata/types/basic",
+			testFixes:   false,
 		},
 		{
 			name: "aliases",
 			config: analyzer.Config{
-				EnforcePatterns: newList(t, `.*\.(Base|Alias|Simple).*`),
-				IgnorePatterns:  newList(t, `.*Excluded.*`),
+				EnforcePatterns: []string{`.*\.(Base|Alias|Simple).*`},
+				IgnorePatterns:  []string{`.*Excluded.*`},
 			},
 			testPackage: "testdata/types/aliases",
+			testFixes:   false,
 		},
 		{
 			name: "derived",
 			config: analyzer.Config{
-				EnforcePatterns: newList(t, `.*\.(Base|Derived|External|Simple).*`),
-				IgnorePatterns:  newList(t, `.*Excluded.*`),
+				EnforcePatterns: []string{`.*\.(Base|Derived|External|Simple).*`},
+				IgnorePatterns:  []string{`.*Excluded.*`},
 			},
 			testPackage: "testdata/types/derived",
+			testFixes:   false,
 		},
 		{
 			name: "embedded",
 			config: analyzer.Config{
-				EnforcePatterns: newList(t, `.*\.(Embedded|TestEmbedded|Simple).*`),
+				EnforcePatterns: []string{`.*\.(Embedded|TestEmbedded|Simple).*`},
 			},
 			testPackage: "testdata/types/embedded",
+			testFixes:   false,
 		},
 		{
 			name: "generics",
 			config: analyzer.Config{
-				EnforcePatterns: newList(t, `.*\.testGenericStruct`),
+				EnforcePatterns: []string{`.*\.testGenericStruct`},
 			},
 			testPackage: "testdata/types/generics",
+			testFixes:   false,
 		},
 		{
 			name: "collections",
 			config: analyzer.Config{
-				EnforcePatterns: newList(t, `.*\.Test`),
+				EnforcePatterns: []string{`.*\.Test`},
 			},
 			testPackage: "testdata/types/collections",
+			testFixes:   false,
 		},
 		{
 			name: "anonymous",
 			config: analyzer.Config{
-				EnforcePatterns: newList(t, `.*\.<anonymous>`),
+				EnforcePatterns: []string{`.*\.<anonymous>`},
 			},
 			testPackage: "testdata/types/anonymous",
+			testFixes:   false,
 		},
 		{
 			name: "directives",
 			config: analyzer.Config{
-				EnforcePatterns: newList(t, `.*\.(Test|Embedded|Simple|WithOptionalDirective).*`),
-				IgnorePatterns:  newList(t, `.*Excluded.*`),
+				EnforcePatterns: []string{`.*\.(Test|Embedded|Simple|WithOptionalDirective).*`},
+				IgnorePatterns:  []string{`.*Excluded.*`},
 			},
 			testPackage: "testdata/types/directives",
+			testFixes:   false,
 		},
 		{
 			name: "filtering",
 			config: analyzer.Config{
-				EnforcePatterns: newList(t, `.*\.Test.*`),
-				IgnorePatterns:  newList(t, `.*Excluded.*`),
+				EnforcePatterns: []string{`.*\.Test.*`},
+				IgnorePatterns:  []string{`.*Excluded.*`},
 				ExplicitMode:    true,
 			},
 			testPackage: "testdata/types/filtering",
+			testFixes:   false,
 		},
 		{
 			name: "optional_pattern",
 			config: analyzer.Config{
-				EnforcePatterns:  newList(t, `.*\.Test.*`),
-				OptionalPatterns: newList(t, `.*\.TestOptionalByPattern`),
+				EnforcePatterns:  []string{`.*\.Test.*`},
+				OptionalPatterns: []string{`.*\.TestOptionalByPattern`},
 				ExplicitMode:     true,
 			},
 			testPackage: "testdata/types/optional_pattern",
+			testFixes:   false,
 		},
 		{
 			name: "explicit mode with directives",
 			config: analyzer.Config{
-				EnforcePatterns: newList(t, `.*Enforced.*`),
+				EnforcePatterns: []string{`.*Enforced.*`},
 				ExplicitMode:    true,
 			},
 			testPackage: "testdata/types/explicit",
+			testFixes:   false,
 		},
 		{
 			name:        "deprecated tags",

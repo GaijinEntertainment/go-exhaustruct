@@ -234,6 +234,7 @@ linters:
       - path: "_test\\.go"
         linters:
           - funlen
+          - goconst
     paths:
       - testdata/.*
       - vendor/.* # ignore vendor

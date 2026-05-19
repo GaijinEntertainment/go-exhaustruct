@@ -11,8 +11,8 @@ import (
 
 func BenchmarkAnalyzer(b *testing.B) {
 	a, err := analyzer.NewAnalyzer(analyzer.Config{
-		EnforcePatterns: newList(b, `.*[Tt]est.*`, `.*External`, `.*Embedded`, `.*\.<anonymous>`),
-		IgnorePatterns:  newList(b, `.*Excluded$`, `e\.<anonymous>`),
+		EnforcePatterns: []string{`.*[Tt]est.*`, `.*External`, `.*Embedded`, `.*\.<anonymous>`},
+		IgnorePatterns:  []string{`.*Excluded$`, `e\.<anonymous>`},
 	})
 	require.NoError(b, err)
 

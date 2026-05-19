@@ -5,38 +5,36 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sync"
 
+	"dev.gaijin.team/go/golib/e"
+	"dev.gaijin.team/go/golib/fields"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/ast/inspector"
 
 	"dev.gaijin.team/go/exhaustruct/v5/internal/astutil"
 	"dev.gaijin.team/go/exhaustruct/v5/internal/directive"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/pattern"
 	"dev.gaijin.team/go/exhaustruct/v5/internal/structure"
 )
 
 type analyzer struct {
-	config     Config
-	directives *directive.Scanner
+	config Config
+
+	// init builds directives and processor on first call. Deferred so that
+	// flag-driven Config mutations performed by the analysis driver after
+	// NewAnalyzer returns are visible at construction time.
+	init func() error
+
+	directives *directive.Scanner   `exhaustruct:"optional"`
 	processor  *structure.Processor `exhaustruct:"optional"`
 }
 
 func NewAnalyzer(config Config) (*analysis.Analyzer, error) {
-	fp := astutil.NewFileParser()
-	dirScanner := directive.NewScanner(fp)
+	a := &analyzer{config: config} //nolint:exhaustruct
 
-	a := analyzer{
-		config:     config,
-		directives: dirScanner,
-		processor: structure.NewProcessor(
-			dirScanner,
-			structure.NewOriginScanner(fp),
-			structure.WithEnforce(config.EnforcePatterns),
-			structure.WithIgnore(config.IgnorePatterns),
-			structure.WithOptional(config.OptionalPatterns),
-			structure.WithAllowEmpty(config.AllowEmptyPatterns),
-		),
-	}
+	a.init = sync.OnceValue(a.initialize)
 
 	return &analysis.Analyzer{ //nolint:exhaustruct
 		Name:     "exhaustruct",
@@ -47,7 +45,48 @@ func NewAnalyzer(config Config) (*analysis.Analyzer, error) {
 	}, nil
 }
 
+func (a *analyzer) initialize() error {
+	fp := astutil.NewFileParser()
+
+	a.directives = directive.NewScanner(fp)
+
+	enforce, err := pattern.NewList(a.config.EnforcePatterns...)
+	if err != nil {
+		return e.NewFrom("compile enforce patterns", err, fields.F("flag", "enforce-rx"))
+	}
+
+	ignore, err := pattern.NewList(a.config.IgnorePatterns...)
+	if err != nil {
+		return e.NewFrom("compile ignore patterns", err, fields.F("flag", "ignore-rx"))
+	}
+
+	optional, err := pattern.NewList(a.config.OptionalPatterns...)
+	if err != nil {
+		return e.NewFrom("compile optional patterns", err, fields.F("flag", "optional-rx"))
+	}
+
+	allowEmpty, err := pattern.NewList(a.config.AllowEmptyPatterns...)
+	if err != nil {
+		return e.NewFrom("compile allow-empty patterns", err, fields.F("flag", "allow-empty-rx"))
+	}
+
+	a.processor = structure.NewProcessor(
+		a.directives,
+		structure.NewOriginScanner(fp),
+		structure.WithEnforce(enforce),
+		structure.WithIgnore(ignore),
+		structure.WithOptional(optional),
+		structure.WithAllowEmpty(allowEmpty),
+	)
+
+	return nil
+}
+
 func (a *analyzer) run(pass *analysis.Pass) (any, error) {
+	if err := a.init(); err != nil {
+		return nil, err
+	}
+
 	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector) //nolint:forcetypeassert
 
 	for _, diag := range a.directives.ProcessFiles(pass.Fset, pass.Files...) {

@@ -41,7 +41,7 @@ func TestAnalyzerEmpty(t *testing.T) {
 		{
 			name: "allow empty by pattern",
 			config: analyzer.Config{
-				AllowEmptyPatterns: newList(t, ".*Allowed.*", ".*Nested.*"),
+				AllowEmptyPatterns: []string{".*Allowed.*", ".*Nested.*"},
 			},
 			testPackage: "testdata/config/allow_empty/patterns",
 		},
