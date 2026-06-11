@@ -39,7 +39,7 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		args := []string{"-enforce-rx", ".*Test.*", "-enforce-rx", ".*Mock.*"}
 		require.NoError(t, fs.Parse(args))
 
-		assert.Equal(t, []string{".*Test.*", ".*Mock.*"}, config.EnforcePatterns)
+		assert.Equal(t, Patterns{".*Test.*", ".*Mock.*"}, config.EnforcePatterns)
 	})
 
 	t.Run("flag parsing ignore patterns", func(t *testing.T) {
@@ -51,7 +51,7 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		args := []string{"-ignore-rx", ".*Ignore.*", "-ignore-rx", ".*Skip.*"}
 		require.NoError(t, fs.Parse(args))
 
-		assert.Equal(t, []string{".*Ignore.*", ".*Skip.*"}, config.IgnorePatterns)
+		assert.Equal(t, Patterns{".*Ignore.*", ".*Skip.*"}, config.IgnorePatterns)
 	})
 
 	t.Run("flag parsing optional patterns", func(t *testing.T) {
@@ -63,7 +63,7 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		args := []string{"-optional-rx", ".*Optional.*"}
 		require.NoError(t, fs.Parse(args))
 
-		assert.Equal(t, []string{".*Optional.*"}, config.OptionalPatterns)
+		assert.Equal(t, Patterns{".*Optional.*"}, config.OptionalPatterns)
 	})
 
 	t.Run("flag parsing boolean flags", func(t *testing.T) {
@@ -89,7 +89,7 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		args := []string{"-allow-empty-rx", ".*Empty.*"}
 		require.NoError(t, fs.Parse(args))
 
-		assert.Equal(t, []string{".*Empty.*"}, config.AllowEmptyPatterns)
+		assert.Equal(t, Patterns{".*Empty.*"}, config.AllowEmptyPatterns)
 	})
 
 	t.Run("invalid pattern fails at parse time", func(t *testing.T) {
@@ -130,10 +130,10 @@ func TestConfig_Integration(t *testing.T) {
 		}
 		require.NoError(t, fs.Parse(args))
 
-		assert.Equal(t, []string{".*Test.*"}, config.EnforcePatterns)
-		assert.Equal(t, []string{".*Skip.*"}, config.IgnorePatterns)
-		assert.Equal(t, []string{".*Optional.*"}, config.OptionalPatterns)
-		assert.Equal(t, []string{".*Empty.*"}, config.AllowEmptyPatterns)
+		assert.Equal(t, Patterns{".*Test.*"}, config.EnforcePatterns)
+		assert.Equal(t, Patterns{".*Skip.*"}, config.IgnorePatterns)
+		assert.Equal(t, Patterns{".*Optional.*"}, config.OptionalPatterns)
+		assert.Equal(t, Patterns{".*Empty.*"}, config.AllowEmptyPatterns)
 		assert.True(t, config.AllowEmpty)
 		assert.True(t, config.AllowEmptyReturns)
 		assert.False(t, config.AllowEmptyDeclarations)
@@ -196,8 +196,8 @@ func TestConfig_ProgrammaticDefaults(t *testing.T) {
 		}
 		require.NoError(t, fs.Parse(args))
 
-		assert.Equal(t, []string{".*Initial.*", ".*Flag.*"}, config.EnforcePatterns)
-		assert.Equal(t, []string{".*Pattern.*"}, config.AllowEmptyPatterns)
+		assert.Equal(t, Patterns{".*Initial.*", ".*Flag.*"}, config.EnforcePatterns)
+		assert.Equal(t, Patterns{".*Pattern.*"}, config.AllowEmptyPatterns)
 		assert.True(t, config.AllowEmpty)
 		assert.True(t, config.AllowEmptyReturns)
 		assert.True(t, config.AllowEmptyDeclarations)
