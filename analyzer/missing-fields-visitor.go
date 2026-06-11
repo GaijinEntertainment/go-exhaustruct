@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"slices"
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/ast/inspector"
@@ -152,6 +153,7 @@ func (lv literalVisitor) resolveLiteralType() (name *types.TypeName, strct *type
 	switch t := typ.(type) {
 	case *types.Named:
 		var ok bool
+
 		if strct, ok = t.Underlying().(*types.Struct); !ok {
 			return nil, nil, token.NoPos
 		}
@@ -344,9 +346,7 @@ func (lv literalVisitor) isErrorReturnStatement(n *ast.ReturnStmt) bool {
 		return false
 	}
 
-	for i := len(n.Results) - 1; i >= 0; i-- {
-		ri := n.Results[i]
-
+	for _, ri := range slices.Backward(n.Results) {
 		if ri == lv.lit {
 			continue
 		}

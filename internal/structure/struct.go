@@ -231,6 +231,7 @@ func FormatFieldNames(fields []Field) string {
 	}
 
 	var b strings.Builder
+
 	b.Grow(len(fields))
 	b.WriteString(fields[0].Name)
 
