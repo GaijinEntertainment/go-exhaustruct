@@ -61,6 +61,7 @@ func parseExhaustructTag(tagLiteral string) (string, bool) {
 	if len(tagLiteral) < 2 { //nolint:mnd
 		return "", false
 	}
+
 	// Strip backticks
 	inner := tagLiteral[1 : len(tagLiteral)-1]
 
