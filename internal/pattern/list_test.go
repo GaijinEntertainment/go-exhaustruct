@@ -1,7 +1,6 @@
 package pattern_test
 
 import (
-	"flag"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -151,108 +150,4 @@ func TestList_MatchFullString_NilList(t *testing.T) {
 	var list pattern.List
 
 	assert.False(t, list.MatchFullString("anything"), "nil list should not match anything")
-}
-
-func TestList_String_NilList(t *testing.T) {
-	t.Parallel()
-
-	var list pattern.List
-
-	assert.Empty(t, list.String(), "nil list should return empty string")
-}
-
-func TestList_String(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		patterns []string
-		want     string
-	}{
-		{
-			name:     "empty list",
-			patterns: []string{},
-			want:     "",
-		},
-		{
-			name:     "single pattern",
-			patterns: []string{"test"},
-			want:     "test",
-		},
-		{
-			name:     "multiple patterns",
-			patterns: []string{"test", "foo.*", "bar$"},
-			want:     "test,foo.*,bar$",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			list, err := pattern.NewList(tt.patterns...)
-			require.NoError(t, err)
-
-			got := list.String()
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-func TestList_Set(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		value   string
-		wantErr bool
-	}{
-		{
-			name:    "valid pattern",
-			value:   "test.*",
-			wantErr: false,
-		},
-		{
-			name:    "empty string pattern",
-			value:   "",
-			wantErr: true,
-		},
-		{
-			name:    "invalid pattern",
-			value:   "[invalid",
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			var list pattern.List
-
-			err := list.Set(tt.value)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Len(t, list, 1, "Set() should add exactly one pattern")
-			}
-		})
-	}
-}
-
-func TestList_FlagIntegration(t *testing.T) {
-	t.Parallel()
-
-	var list pattern.List
-
-	fs := flag.NewFlagSet("test", flag.ContinueOnError)
-	fs.Var(&list, "pattern", "pattern to match")
-
-	err := fs.Parse([]string{"-pattern", "test.*", "-pattern", "foo"})
-	require.NoError(t, err, "flag parsing should succeed")
-
-	assert.Len(t, list, 2, "should have parsed 2 patterns")
-	assert.True(t, list.MatchFullString("testing"), "first pattern should match 'testing'")
-	assert.True(t, list.MatchFullString("foo"), "second pattern should match 'foo'")
 }

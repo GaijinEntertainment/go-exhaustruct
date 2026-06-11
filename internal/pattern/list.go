@@ -2,15 +2,13 @@ package pattern
 
 import (
 	"regexp"
-	"strings"
 
 	"dev.gaijin.team/go/golib/e"
 	"dev.gaijin.team/go/golib/fields"
 )
 
 // List is a collection of compiled regular expressions.
-// Implements flag.Value for command-line flag binding.
-type List []*regexp.Regexp //nolint:recvcheck
+type List []*regexp.Regexp
 
 // NewList compiles patterns into a List.
 // Returns error if any pattern is empty or invalid.
@@ -49,28 +47,6 @@ func (l List) MatchFullString(target string) bool {
 	}
 
 	return false
-}
-
-// String returns comma-separated regex patterns (flag.Value interface).
-func (l List) String() string {
-	patterns := make([]string, len(l))
-	for i, re := range l {
-		patterns[i] = re.String()
-	}
-
-	return strings.Join(patterns, ",")
-}
-
-// Set compiles and appends a pattern to the List (flag.Value interface).
-func (l *List) Set(value string) error {
-	re, err := compilePattern(value)
-	if err != nil {
-		return err
-	}
-
-	*l = append(*l, re)
-
-	return nil
 }
 
 func compilePattern(pattern string) (*regexp.Regexp, error) {
