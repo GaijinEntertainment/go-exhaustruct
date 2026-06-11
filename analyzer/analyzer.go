@@ -16,33 +16,38 @@ import (
 	"dev.gaijin.team/go/exhaustruct/v5/internal/structure"
 )
 
-type analyzer struct {
-	config Config
-
-	// init builds directives and processor on first call. NewAnalyzer defers
-	// it to the first run so that flag-driven Config mutations performed by
-	// the analysis driver after construction are visible; NewAnalyzerWithConfig
-	// invokes it eagerly so configuration errors surface at construction time.
-	init func() error
-
-	directives *directive.Scanner   `exhaustruct:"optional"`
-	processor  *structure.Processor `exhaustruct:"optional"`
+// engine bundles the stateful components shared by every run of a single
+// analyzer instance.
+type engine struct {
+	directives *directive.Scanner
+	processor  *structure.Processor
 }
 
 // NewAnalyzer returns an analyzer configured exclusively through command-line
-// flags, intended for CLI drivers (singlechecker, go vet -vettool). The
-// configuration is consumed on the first run, after the driver has parsed
-// the flags.
+// flags, intended for CLI drivers (singlechecker, go vet -vettool). The engine
+// is built lazily on the first run, after the driver has parsed the flags.
 func NewAnalyzer() *analysis.Analyzer {
-	a := &analyzer{config: Config{}} //nolint:exhaustruct
+	config := &Config{}
 
-	a.init = sync.OnceValue(a.initialize)
+	lazyEngine := sync.OnceValues(func() (engine, error) {
+		return newEngine(config)
+	})
 
-	aa := newBaseAnalyzer(a.run)
+	a := newBaseAnalyzer(func(pass *analysis.Pass) (any, error) {
+		eng, err := lazyEngine()
+		if err != nil {
+			return nil, err
+		}
 
-	aa.Flags = *a.config.bindToFlagSet(flag.NewFlagSet("", flag.PanicOnError))
+		run(pass, config, eng)
 
-	return aa
+		return nil, nil //nolint:nilnil
+	})
+
+	a.Flags.Init("", flag.PanicOnError)
+	config.bindToFlagSet(&a.Flags)
+
+	return a
 }
 
 // NewAnalyzerWithConfig returns an analyzer configured programmatically,
@@ -50,15 +55,16 @@ func NewAnalyzer() *analysis.Analyzer {
 // copied and validated immediately; it exposes no flags, and later mutations
 // of the passed Config have no effect.
 func NewAnalyzerWithConfig(config Config) (*analysis.Analyzer, error) {
-	a := &analyzer{config: config} //nolint:exhaustruct
-
-	a.init = sync.OnceValue(a.initialize)
-
-	if err := a.init(); err != nil {
+	eng, err := newEngine(&config)
+	if err != nil {
 		return nil, err
 	}
 
-	return newBaseAnalyzer(a.run), nil
+	return newBaseAnalyzer(func(pass *analysis.Pass) (any, error) {
+		run(pass, &config, eng)
+
+		return nil, nil //nolint:nilnil
+	}), nil
 }
 
 func newBaseAnalyzer(run func(*analysis.Pass) (any, error)) *analysis.Analyzer {
@@ -70,56 +76,50 @@ func newBaseAnalyzer(run func(*analysis.Pass) (any, error)) *analysis.Analyzer {
 	}
 }
 
-func (a *analyzer) initialize() error {
+func newEngine(config *Config) (engine, error) {
+	enforce, err := pattern.NewList(config.EnforcePatterns...)
+	if err != nil {
+		return engine{}, e.NewFrom("compile enforce patterns", err, fields.F("flag", "enforce-rx"))
+	}
+
+	ignore, err := pattern.NewList(config.IgnorePatterns...)
+	if err != nil {
+		return engine{}, e.NewFrom("compile ignore patterns", err, fields.F("flag", "ignore-rx"))
+	}
+
+	optional, err := pattern.NewList(config.OptionalPatterns...)
+	if err != nil {
+		return engine{}, e.NewFrom("compile optional patterns", err, fields.F("flag", "optional-rx"))
+	}
+
+	allowEmpty, err := pattern.NewList(config.AllowEmptyPatterns...)
+	if err != nil {
+		return engine{}, e.NewFrom("compile allow-empty patterns", err, fields.F("flag", "allow-empty-rx"))
+	}
+
 	fp := astutil.NewFileParser()
+	directives := directive.NewScanner(fp)
 
-	a.directives = directive.NewScanner(fp)
-
-	enforce, err := pattern.NewList(a.config.EnforcePatterns...)
-	if err != nil {
-		return e.NewFrom("compile enforce patterns", err, fields.F("flag", "enforce-rx"))
-	}
-
-	ignore, err := pattern.NewList(a.config.IgnorePatterns...)
-	if err != nil {
-		return e.NewFrom("compile ignore patterns", err, fields.F("flag", "ignore-rx"))
-	}
-
-	optional, err := pattern.NewList(a.config.OptionalPatterns...)
-	if err != nil {
-		return e.NewFrom("compile optional patterns", err, fields.F("flag", "optional-rx"))
-	}
-
-	allowEmpty, err := pattern.NewList(a.config.AllowEmptyPatterns...)
-	if err != nil {
-		return e.NewFrom("compile allow-empty patterns", err, fields.F("flag", "allow-empty-rx"))
-	}
-
-	a.processor = structure.NewProcessor(
-		a.directives,
-		structure.NewOriginScanner(fp),
-		structure.WithEnforce(enforce),
-		structure.WithIgnore(ignore),
-		structure.WithOptional(optional),
-		structure.WithAllowEmpty(allowEmpty),
-	)
-
-	return nil
+	return engine{
+		directives: directives,
+		processor: structure.NewProcessor(
+			directives,
+			structure.NewOriginScanner(fp),
+			structure.WithEnforce(enforce),
+			structure.WithIgnore(ignore),
+			structure.WithOptional(optional),
+			structure.WithAllowEmpty(allowEmpty),
+		),
+	}, nil
 }
 
-func (a *analyzer) run(pass *analysis.Pass) (any, error) {
-	if err := a.init(); err != nil {
-		return nil, err
-	}
-
+func run(pass *analysis.Pass, config *Config, eng engine) {
 	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector) //nolint:forcetypeassert
 
-	for _, diag := range a.directives.ProcessFiles(pass.Fset, pass.Files...) {
+	for _, diag := range eng.directives.ProcessFiles(pass.Fset, pass.Files...) {
 		pass.Report(diag)
 	}
 
-	newMissingFieldsVisitor(pass, insp, &a.config, a.directives, a.processor).run()
+	newMissingFieldsVisitor(pass, insp, config, eng.directives, eng.processor).run()
 	runTagMigration(pass, insp)
-
-	return nil, nil //nolint:nilnil
 }
