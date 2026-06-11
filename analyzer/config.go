@@ -69,8 +69,8 @@ type Config struct {
 	ExplicitMode bool `exhaustruct:"optional"`
 }
 
-// BindToFlagSet binds the config fields to the provided flag set.
-func (c *Config) BindToFlagSet(fs *flag.FlagSet) *flag.FlagSet {
+// bindToFlagSet binds the config fields to the provided flag set.
+func (c *Config) bindToFlagSet(fs *flag.FlagSet) *flag.FlagSet {
 	fs.BoolVar(&c.ExplicitMode, "explicit", c.ExplicitMode,
 		"Enable explicit mode: only check types marked with //exhaustruct:enforce "+
 			"directive or matching -enforce-rx patterns")

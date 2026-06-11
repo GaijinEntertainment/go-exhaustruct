@@ -59,7 +59,7 @@ func TestAnalyzerEmpty(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			a, err := analyzer.NewAnalyzer(tt.config)
+			a, err := analyzer.NewAnalyzerWithConfig(tt.config)
 			require.NoError(t, err)
 
 			analysistest.Run(t, testdataPath, a, tt.testPackage)

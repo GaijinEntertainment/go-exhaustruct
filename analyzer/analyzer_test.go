@@ -15,7 +15,7 @@ var testdataPath, _ = filepath.Abs("./testdata/") //nolint:gochecknoglobals
 func TestAnalyzer(t *testing.T) {
 	t.Parallel()
 
-	a, err := analyzer.NewAnalyzer(analyzer.Config{
+	a, err := analyzer.NewAnalyzerWithConfig(analyzer.Config{
 		EnforcePatterns: []string{`.*\.TestExcluded`, `.*\.<anonymous>`},
 		IgnorePatterns:  []string{`.*Excluded$`, `testdata/config/excluded\.<anonymous>`},
 	})
@@ -27,7 +27,7 @@ func TestAnalyzer(t *testing.T) {
 func TestAnalyzerReportFullTypePath(t *testing.T) {
 	t.Parallel()
 
-	a, err := analyzer.NewAnalyzer(analyzer.Config{
+	a, err := analyzer.NewAnalyzerWithConfig(analyzer.Config{
 		ReportFullTypePath: true,
 	})
 	require.NoError(t, err)
@@ -41,11 +41,9 @@ func TestAnalyzerReportFullTypePath(t *testing.T) {
 func TestAnalyzer_FlagsAffectAnalysis(t *testing.T) {
 	t.Parallel()
 
-	a, err := analyzer.NewAnalyzer(analyzer.Config{
-		ExplicitMode: true,
-	})
-	require.NoError(t, err)
+	a := analyzer.NewAnalyzer()
 
+	require.NoError(t, a.Flags.Set("explicit", "true"))
 	require.NoError(t, a.Flags.Set("enforce-rx", `.*\.Test`))
 
 	analysistest.Run(t, testdataPath, a, "testdata/types/basic")
@@ -168,7 +166,7 @@ func TestAnalyzerTypes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			a, err := analyzer.NewAnalyzer(tt.config)
+			a, err := analyzer.NewAnalyzerWithConfig(tt.config)
 			require.NoError(t, err)
 
 			if tt.testFixes {

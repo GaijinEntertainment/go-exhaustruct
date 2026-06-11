@@ -11,10 +11,5 @@ import (
 func main() {
 	flag.Bool("unsafeptr", false, "")
 
-	a, err := analyzer.NewAnalyzer(analyzer.Config{})
-	if err != nil {
-		panic(err)
-	}
-
-	singlechecker.Main(a)
+	singlechecker.Main(analyzer.NewAnalyzer())
 }

@@ -10,7 +10,7 @@ import (
 )
 
 func BenchmarkAnalyzer(b *testing.B) {
-	a, err := analyzer.NewAnalyzer(analyzer.Config{
+	a, err := analyzer.NewAnalyzerWithConfig(analyzer.Config{
 		EnforcePatterns: []string{`.*[Tt]est.*`, `.*External`, `.*Embedded`, `.*\.<anonymous>`},
 		IgnorePatterns:  []string{`.*Excluded$`, `e\.<anonymous>`},
 	})

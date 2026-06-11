@@ -22,27 +22,55 @@ import (
 type analyzer struct {
 	config Config
 
-	// init builds directives and processor on first call. Deferred so that
-	// flag-driven Config mutations performed by the analysis driver after
-	// NewAnalyzer returns are visible at construction time.
+	// init builds directives and processor on first call. NewAnalyzer defers
+	// it to the first run so that flag-driven Config mutations performed by
+	// the analysis driver after construction are visible; NewAnalyzerWithConfig
+	// invokes it eagerly so configuration errors surface at construction time.
 	init func() error
 
 	directives *directive.Scanner   `exhaustruct:"optional"`
 	processor  *structure.Processor `exhaustruct:"optional"`
 }
 
-func NewAnalyzer(config Config) (*analysis.Analyzer, error) {
+// NewAnalyzer returns an analyzer configured exclusively through command-line
+// flags, intended for CLI drivers (singlechecker, go vet -vettool). The
+// configuration is consumed on the first run, after the driver has parsed
+// the flags.
+func NewAnalyzer() *analysis.Analyzer {
+	a := &analyzer{config: Config{}} //nolint:exhaustruct
+
+	a.init = sync.OnceValue(a.initialize)
+
+	aa := newBaseAnalyzer(a.run)
+
+	aa.Flags = *a.config.bindToFlagSet(flag.NewFlagSet("", flag.PanicOnError))
+
+	return aa
+}
+
+// NewAnalyzerWithConfig returns an analyzer configured programmatically,
+// intended for library consumers such as golangci-lint. The configuration is
+// copied and validated immediately; it exposes no flags, and later mutations
+// of the passed Config have no effect.
+func NewAnalyzerWithConfig(config Config) (*analysis.Analyzer, error) {
 	a := &analyzer{config: config} //nolint:exhaustruct
 
 	a.init = sync.OnceValue(a.initialize)
 
+	if err := a.init(); err != nil {
+		return nil, err
+	}
+
+	return newBaseAnalyzer(a.run), nil
+}
+
+func newBaseAnalyzer(run func(*analysis.Pass) (any, error)) *analysis.Analyzer {
 	return &analysis.Analyzer{ //nolint:exhaustruct
 		Name:     "exhaustruct",
 		Doc:      "Checks if all structure fields are initialized",
-		Run:      a.run,
+		Run:      run,
 		Requires: []*analysis.Analyzer{inspect.Analyzer},
-		Flags:    *a.config.BindToFlagSet(flag.NewFlagSet("", flag.PanicOnError)),
-	}, nil
+	}
 }
 
 func (a *analyzer) initialize() error {
