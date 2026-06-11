@@ -10,26 +10,16 @@ import (
 	"golang.org/x/tools/go/ast/inspector"
 )
 
-// tagMigrationVisitor scans struct definitions for deprecated exhaustruct tags
-// and emits migration diagnostics with suggested fixes.
-type tagMigrationVisitor struct {
-	pass *analysis.Pass
-	insp *inspector.Inspector
+// runTagMigration scans struct definitions for deprecated exhaustruct tags
+// and emits migration diagnostics with suggested fixes, using inspector to
+// traverse StructType nodes efficiently.
+func runTagMigration(pass *analysis.Pass, insp *inspector.Inspector) {
+	insp.Preorder([]ast.Node{new(ast.StructType)}, func(n ast.Node) {
+		visitStructType(pass, n)
+	})
 }
 
-func newTagMigrationVisitor(
-	pass *analysis.Pass,
-	insp *inspector.Inspector,
-) *tagMigrationVisitor {
-	return &tagMigrationVisitor{pass: pass, insp: insp}
-}
-
-// run uses inspector to traverse StructType nodes efficiently.
-func (v *tagMigrationVisitor) run() {
-	v.insp.Preorder([]ast.Node{new(ast.StructType)}, v.visitStructType)
-}
-
-func (v *tagMigrationVisitor) visitStructType(n ast.Node) {
+func visitStructType(pass *analysis.Pass, n ast.Node) {
 	st, ok := n.(*ast.StructType)
 	if !ok {
 		return
@@ -49,7 +39,7 @@ func (v *tagMigrationVisitor) visitStructType(n ast.Node) {
 			continue
 		}
 
-		v.pass.Report(v.buildDiagnostic(field, value))
+		pass.Report(buildTagDiagnostic(field, value))
 	}
 }
 
@@ -68,18 +58,15 @@ func parseExhaustructTag(tagLiteral string) (string, bool) {
 	return reflect.StructTag(inner).Lookup(exhaustructTagKey)
 }
 
-func (v *tagMigrationVisitor) buildDiagnostic(
-	field *ast.Field,
-	tagValue string,
-) analysis.Diagnostic {
+func buildTagDiagnostic(field *ast.Field, tagValue string) analysis.Diagnostic {
 	return analysis.Diagnostic{
 		Pos:            field.Tag.Pos(),
 		Message:        `struct tag "exhaustruct" is not supported anymore, use comment directives`,
-		SuggestedFixes: []analysis.SuggestedFix{v.buildFix(field, tagValue)},
+		SuggestedFixes: []analysis.SuggestedFix{buildTagFix(field, tagValue)},
 	}
 }
 
-func (*tagMigrationVisitor) buildFix(field *ast.Field, tagValue string) analysis.SuggestedFix {
+func buildTagFix(field *ast.Field, tagValue string) analysis.SuggestedFix {
 	tag := field.Tag
 	newTag := removeExhaustructFromTag(tag.Value)
 
