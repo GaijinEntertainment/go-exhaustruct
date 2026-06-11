@@ -118,8 +118,8 @@ func (a *analyzer) run(pass *analysis.Pass) (any, error) {
 		pass.Report(diag)
 	}
 
-	newMissingFieldsVisitor(a, pass, insp).run()
-	newTagMigrationVisitor(pass, insp).run()
+	newMissingFieldsVisitor(pass, insp, &a.config, a.directives, a.processor).run()
+	runTagMigration(pass, insp)
 
 	return nil, nil //nolint:nilnil
 }

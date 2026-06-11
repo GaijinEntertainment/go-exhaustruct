@@ -16,17 +16,27 @@ import (
 
 // missingFieldsVisitor checks struct literals for missing field initializations.
 type missingFieldsVisitor struct {
-	analyzer *analyzer
-	pass     *analysis.Pass
-	insp     *inspector.Inspector
+	pass       *analysis.Pass
+	insp       *inspector.Inspector
+	config     *Config
+	directives *directive.Scanner
+	processor  *structure.Processor
 }
 
 func newMissingFieldsVisitor(
-	a *analyzer,
 	pass *analysis.Pass,
 	insp *inspector.Inspector,
+	config *Config,
+	directives *directive.Scanner,
+	processor *structure.Processor,
 ) *missingFieldsVisitor {
-	return &missingFieldsVisitor{analyzer: a, pass: pass, insp: insp}
+	return &missingFieldsVisitor{
+		pass:       pass,
+		insp:       insp,
+		config:     config,
+		directives: directives,
+		processor:  processor,
+	}
 }
 
 func (v *missingFieldsVisitor) run() {
@@ -43,7 +53,7 @@ func (v *missingFieldsVisitor) visit(n ast.Node, push bool, stack []ast.Node) bo
 		return true
 	}
 
-	lv := literalVisitor{analysis: v, lit: lit, stack: stack}
+	lv := literalVisitor{missingFieldsVisitor: v, lit: lit, stack: stack}
 	lv.process()
 
 	return true
@@ -51,9 +61,10 @@ func (v *missingFieldsVisitor) visit(n ast.Node, push bool, stack []ast.Node) bo
 
 // literalVisitor carries context for processing a single composite literal.
 type literalVisitor struct {
-	analysis *missingFieldsVisitor
-	lit      *ast.CompositeLit
-	stack    []ast.Node
+	*missingFieldsVisitor
+
+	lit   *ast.CompositeLit
+	stack []ast.Node
 }
 
 // literal holds resolved info for a struct literal being checked.
@@ -95,7 +106,7 @@ func (lv literalVisitor) process() {
 	}
 
 	if pos, msg := lv.checkLiteral(lit); pos != nil {
-		lv.analysis.pass.Reportf(*pos, "%s", msg)
+		lv.pass.Reportf(*pos, "%s", msg)
 	}
 }
 
@@ -107,23 +118,23 @@ func (lv literalVisitor) resolveLiteral() (lit literal, ok bool) {
 		return literal{}, false //nolint:exhaustruct
 	}
 
-	s, diags := lv.analysis.analyzer.processor.ResolveStruct(
-		lv.analysis.pass.Fset, typeName, strct, pos, lv.analysis.pass.Pkg,
+	s, diags := lv.processor.ResolveStruct(
+		lv.pass.Fset, typeName, strct, pos, lv.pass.Pkg,
 	)
 
 	for _, diag := range diags {
-		lv.analysis.pass.Report(diag)
+		lv.pass.Report(diag)
 	}
 
 	if s == nil {
 		return literal{}, false //nolint:exhaustruct
 	}
 
-	litPos := lv.analysis.pass.Fset.Position(lv.lit.Pos())
-	dirs, dirDiags := lv.analysis.analyzer.directives.Lookup(lv.analysis.pass.Fset, litPos)
+	litPos := lv.pass.Fset.Position(lv.lit.Pos())
+	dirs, dirDiags := lv.directives.Lookup(lv.pass.Fset, litPos)
 
 	for _, d := range dirDiags {
-		lv.analysis.pass.Report(d)
+		lv.pass.Report(d)
 	}
 
 	return literal{
@@ -135,7 +146,7 @@ func (lv literalVisitor) resolveLiteral() (lit literal, ok bool) {
 
 // resolveLiteralType resolves the composite literal's type and definition position.
 func (lv literalVisitor) resolveLiteralType() (name *types.TypeName, strct *types.Struct, pos token.Pos) {
-	typ := lv.analysis.pass.TypesInfo.TypeOf(lv.lit)
+	typ := lv.pass.TypesInfo.TypeOf(lv.lit)
 
 	if ptr, ok := typ.(*types.Pointer); ok {
 		typ = ptr.Elem()
@@ -227,7 +238,7 @@ func structPosFromExpr(expr ast.Expr) token.Pos {
 }
 
 func (lv literalVisitor) checkEmptyAllowed(s *structure.Struct) bool {
-	if lv.analysis.analyzer.config.AllowEmpty {
+	if lv.config.AllowEmpty {
 		return true
 	}
 
@@ -236,7 +247,7 @@ func (lv literalVisitor) checkEmptyAllowed(s *structure.Struct) bool {
 	}
 
 	if ret, ok := lv.getParentReturnStmt(); ok {
-		if lv.analysis.analyzer.config.AllowEmptyReturns {
+		if lv.config.AllowEmptyReturns {
 			return true
 		}
 
@@ -245,7 +256,7 @@ func (lv literalVisitor) checkEmptyAllowed(s *structure.Struct) bool {
 		}
 	}
 
-	if lv.isChildOfVariableDeclaration() && lv.analysis.analyzer.config.AllowEmptyDeclarations {
+	if lv.isChildOfVariableDeclaration() && lv.config.AllowEmptyDeclarations {
 		return true
 	}
 
@@ -253,13 +264,13 @@ func (lv literalVisitor) checkEmptyAllowed(s *structure.Struct) bool {
 }
 
 func (lv literalVisitor) checkLiteral(lit literal) (*token.Pos, string) {
-	if !lit.shouldCheck(lv.analysis.analyzer.config.ExplicitMode) {
+	if !lit.shouldCheck(lv.config.ExplicitMode) {
 		return nil, ""
 	}
 
 	strct := lit.strct
 
-	missingFields := strct.SkippedFields(lv.lit, lv.analysis.pass.Pkg.Path())
+	missingFields := strct.SkippedFields(lv.lit, lv.pass.Pkg.Path())
 
 	if len(missingFields) == 0 {
 		return nil, ""
@@ -268,7 +279,7 @@ func (lv literalVisitor) checkLiteral(lit literal) (*token.Pos, string) {
 	pos := lv.lit.Pos()
 
 	displayName := strct.PackageName + "." + strct.Name
-	if lv.analysis.analyzer.config.ReportFullTypePath {
+	if lv.config.ReportFullTypePath {
 		displayName = strct.FullPath
 	}
 
@@ -363,7 +374,7 @@ func (lv literalVisitor) isErrorReturnStatement(n *ast.ReturnStmt) bool {
 			}
 		}
 
-		resultType := lv.analysis.pass.TypesInfo.TypeOf(ri)
+		resultType := lv.pass.TypesInfo.TypeOf(ri)
 		if resultType != nil && types.Implements(resultType, builtinErrorInterface) {
 			return true
 		}
