@@ -21,7 +21,7 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 			"enforce-rx", "ignore-rx", "optional-rx",
 			"allow-empty", "allow-empty-rx",
 			"allow-empty-returns", "allow-empty-declarations",
-			"report-full-type-path", "debug-cache-metrics",
+			"report-full-type-path",
 		}
 
 		for _, flagName := range expectedFlags {

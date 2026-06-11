@@ -171,7 +171,6 @@ When multiple directives or patterns apply, priority is (highest first):
 | Flag | Description |
 |------|-------------|
 | `-report-full-type-path` | Show full package path in errors (e.g., `net/http.Cookie`) |
-| `-debug-cache-metrics` | Print cache statistics to stderr |
 
 ### Pattern Format
 

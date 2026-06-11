@@ -61,9 +61,6 @@ type Config struct {
 	// as import aliases can make short names ambiguous.
 	ReportFullTypePath bool `exhaustruct:"optional"`
 
-	// DebugCacheMetrics enables printing cache hit/miss metrics to stderr.
-	DebugCacheMetrics bool `exhaustruct:"optional"`
-
 	// ExplicitMode enables opt-in checking. When true, only types marked with
 	// //exhaustruct:enforce directive or matching enforce-rx patterns are checked.
 	ExplicitMode bool `exhaustruct:"optional"`
@@ -111,10 +108,6 @@ func (c *Config) bindToFlagSet(fs *flag.FlagSet) *flag.FlagSet {
 	fs.BoolVar(&c.ReportFullTypePath, "report-full-type-path", c.ReportFullTypePath,
 		"Report full package path in error messages (e.g., 'net/http.Cookie' instead of 'http.Cookie'). "+
 			"Useful for identifying types when configuring enforce/ignore patterns.")
-
-	fs.BoolVar(&c.DebugCacheMetrics, "debug-cache-metrics", c.DebugCacheMetrics,
-		"Print cache and memory metrics to stderr after each package analysis. "+
-			"It will significantly increase the output, since metrics are printed for each analyzed package.")
 
 	return fs
 }
