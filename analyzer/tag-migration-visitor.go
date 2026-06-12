@@ -7,13 +7,16 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
+	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/ast/inspector"
 )
 
 // runTagMigration scans struct definitions for deprecated exhaustruct tags
 // and emits migration diagnostics with suggested fixes, using inspector to
 // traverse StructType nodes efficiently.
-func runTagMigration(pass *analysis.Pass, insp *inspector.Inspector) {
+func runTagMigration(pass *analysis.Pass) {
+	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector) //nolint:forcetypeassert
+
 	insp.Preorder([]ast.Node{new(ast.StructType)}, func(n ast.Node) {
 		visitStructType(pass, n)
 	})
