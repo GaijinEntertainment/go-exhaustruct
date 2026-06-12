@@ -15,7 +15,8 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		t.Parallel()
 
 		config := Config{}
-		fs := config.bindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		config.bindToFlagSet(fs)
 
 		expectedFlags := []string{
 			"enforce-rx", "ignore-rx", "optional-rx",
@@ -34,7 +35,8 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		t.Parallel()
 
 		config := Config{}
-		fs := config.bindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		config.bindToFlagSet(fs)
 
 		args := []string{"-enforce-rx", ".*Test.*", "-enforce-rx", ".*Mock.*"}
 		require.NoError(t, fs.Parse(args))
@@ -46,7 +48,8 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		t.Parallel()
 
 		config := Config{}
-		fs := config.bindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		config.bindToFlagSet(fs)
 
 		args := []string{"-ignore-rx", ".*Ignore.*", "-ignore-rx", ".*Skip.*"}
 		require.NoError(t, fs.Parse(args))
@@ -58,7 +61,8 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		t.Parallel()
 
 		config := Config{}
-		fs := config.bindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		config.bindToFlagSet(fs)
 
 		args := []string{"-optional-rx", ".*Optional.*"}
 		require.NoError(t, fs.Parse(args))
@@ -70,7 +74,8 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		t.Parallel()
 
 		config := Config{}
-		fs := config.bindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		config.bindToFlagSet(fs)
 
 		args := []string{"-allow-empty", "-allow-empty-returns", "-allow-empty-declarations"}
 		require.NoError(t, fs.Parse(args))
@@ -84,7 +89,8 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		t.Parallel()
 
 		config := Config{}
-		fs := config.bindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		config.bindToFlagSet(fs)
 
 		args := []string{"-allow-empty-rx", ".*Empty.*"}
 		require.NoError(t, fs.Parse(args))
@@ -96,7 +102,8 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		t.Parallel()
 
 		config := Config{}
-		fs := config.bindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		config.bindToFlagSet(fs)
 
 		assert.Error(t, fs.Parse([]string{"-enforce-rx", "[invalid"}))
 	})
@@ -105,7 +112,8 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		t.Parallel()
 
 		config := Config{}
-		fs := config.bindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		config.bindToFlagSet(fs)
 
 		assert.Error(t, fs.Parse([]string{"-enforce-rx", ""}))
 	})
@@ -118,7 +126,8 @@ func TestConfig_Integration(t *testing.T) {
 		t.Parallel()
 
 		config := Config{}
-		fs := config.bindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		config.bindToFlagSet(fs)
 
 		args := []string{
 			"-enforce-rx", ".*Test.*",
@@ -152,7 +161,8 @@ func TestConfig_ProgrammaticDefaults(t *testing.T) {
 			AllowEmptyDeclarations: true,
 		}
 
-		fs := config.bindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		config.bindToFlagSet(fs)
 		require.NoError(t, fs.Parse([]string{}))
 
 		assert.True(t, config.AllowEmpty)
@@ -169,7 +179,8 @@ func TestConfig_ProgrammaticDefaults(t *testing.T) {
 			AllowEmptyDeclarations: true,
 		}
 
-		fs := config.bindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		config.bindToFlagSet(fs)
 		require.NoError(t, fs.Parse([]string{"-allow-empty", "-allow-empty-returns"}))
 
 		assert.True(t, config.AllowEmpty)
@@ -187,7 +198,8 @@ func TestConfig_ProgrammaticDefaults(t *testing.T) {
 			AllowEmptyDeclarations: true,
 		}
 
-		fs := config.bindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		config.bindToFlagSet(fs)
 
 		args := []string{
 			"-enforce-rx", ".*Flag.*",
@@ -230,7 +242,8 @@ func TestNewAnalyzerWithConfig_ConfigPreservation(t *testing.T) {
 		t.Parallel()
 
 		config := Config{}
-		fs := config.bindToFlagSet(flag.NewFlagSet("test", flag.ContinueOnError))
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		config.bindToFlagSet(fs)
 
 		assert.Error(t, fs.Parse([]string{"-enforce-rx", "[invalid"}))
 	})

@@ -2,11 +2,9 @@ package analyzer
 
 import (
 	"flag"
-	"regexp"
 	"strings"
 
-	"dev.gaijin.team/go/golib/e"
-	"dev.gaijin.team/go/golib/fields"
+	"dev.gaijin.team/go/exhaustruct/v5/internal/pattern"
 )
 
 type Config struct {
@@ -67,7 +65,7 @@ type Config struct {
 }
 
 // bindToFlagSet binds the config fields to the provided flag set.
-func (c *Config) bindToFlagSet(fs *flag.FlagSet) *flag.FlagSet {
+func (c *Config) bindToFlagSet(fs *flag.FlagSet) {
 	fs.BoolVar(&c.ExplicitMode, "explicit", c.ExplicitMode,
 		"Enable explicit mode: only check types marked with //exhaustruct:enforce "+
 			"directive or matching -enforce-rx patterns")
@@ -108,8 +106,6 @@ func (c *Config) bindToFlagSet(fs *flag.FlagSet) *flag.FlagSet {
 	fs.BoolVar(&c.ReportFullTypePath, "report-full-type-path", c.ReportFullTypePath,
 		"Report full package path in error messages (e.g., 'net/http.Cookie' instead of 'http.Cookie'). "+
 			"Useful for identifying types when configuring enforce/ignore patterns.")
-
-	return fs
 }
 
 // Patterns is a list of regular expression patterns. It implements
@@ -128,12 +124,8 @@ func (p *Patterns) String() string {
 
 // Set validates and appends a pattern (flag.Value interface).
 func (p *Patterns) Set(value string) error {
-	if value == "" {
-		return e.New("empty regular expression is not allowed")
-	}
-
-	if _, err := regexp.Compile(value); err != nil {
-		return e.NewFrom("compile regular expression", err, fields.F("pattern", value))
+	if _, err := pattern.NewList(value); err != nil {
+		return err //nolint:wrapcheck
 	}
 
 	*p = append(*p, value)
