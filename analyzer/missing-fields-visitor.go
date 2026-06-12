@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"golang.org/x/tools/go/analysis"
+	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/ast/inspector"
 
 	"dev.gaijin.team/go/exhaustruct/v5/internal/directive"
@@ -16,31 +17,27 @@ import (
 
 // missingFieldsVisitor checks struct literals for missing field initializations.
 type missingFieldsVisitor struct {
-	pass       *analysis.Pass
-	insp       *inspector.Inspector
-	config     *Config
-	directives *directive.Scanner
-	processor  *structure.Processor
+	pass      *analysis.Pass
+	config    *Config
+	processor *structure.Processor
 }
 
 func newMissingFieldsVisitor(
 	pass *analysis.Pass,
-	insp *inspector.Inspector,
 	config *Config,
-	directives *directive.Scanner,
 	processor *structure.Processor,
 ) *missingFieldsVisitor {
 	return &missingFieldsVisitor{
-		pass:       pass,
-		insp:       insp,
-		config:     config,
-		directives: directives,
-		processor:  processor,
+		pass:      pass,
+		config:    config,
+		processor: processor,
 	}
 }
 
 func (v *missingFieldsVisitor) run() {
-	v.insp.WithStack([]ast.Node{(*ast.CompositeLit)(nil)}, v.visit)
+	insp := v.pass.ResultOf[inspect.Analyzer].(*inspector.Inspector) //nolint:forcetypeassert
+
+	insp.WithStack([]ast.Node{(*ast.CompositeLit)(nil)}, v.visit)
 }
 
 func (v *missingFieldsVisitor) visit(n ast.Node, push bool, stack []ast.Node) bool {
@@ -131,7 +128,7 @@ func (lv literalVisitor) resolveLiteral() (lit literal, ok bool) {
 	}
 
 	litPos := lv.pass.Fset.Position(lv.lit.Pos())
-	dirs, dirDiags := lv.directives.Lookup(lv.pass.Fset, litPos)
+	dirs, dirDiags := lv.processor.Directives().Lookup(lv.pass.Fset, litPos)
 
 	for _, d := range dirDiags {
 		lv.pass.Report(d)

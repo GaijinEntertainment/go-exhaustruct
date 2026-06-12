@@ -8,7 +8,6 @@ import (
 	"dev.gaijin.team/go/golib/fields"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
-	"golang.org/x/tools/go/ast/inspector"
 
 	"dev.gaijin.team/go/exhaustruct/v5/internal/astutil"
 	"dev.gaijin.team/go/exhaustruct/v5/internal/directive"
@@ -104,14 +103,10 @@ func newProcessor(config *Config) (*structure.Processor, error) {
 }
 
 func run(pass *analysis.Pass, config *Config, processor *structure.Processor) {
-	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector) //nolint:forcetypeassert
-
-	directives := processor.Directives()
-
-	for _, diag := range directives.ProcessFiles(pass.Fset, pass.Files...) {
+	for _, diag := range processor.Directives().ProcessFiles(pass.Fset, pass.Files...) {
 		pass.Report(diag)
 	}
 
-	newMissingFieldsVisitor(pass, insp, config, directives, processor).run()
-	runTagMigration(pass, insp)
+	newMissingFieldsVisitor(pass, config, processor).run()
+	runTagMigration(pass)
 }
