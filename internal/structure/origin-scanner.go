@@ -55,10 +55,6 @@ func (o *OriginScanner) onFileParsed(
 	return nil
 }
 
-func (o *OriginScanner) ProcessFiles(fset *token.FileSet, files ...*ast.File) {
-	o.parser.ProcessFiles(fset, files...)
-}
-
 // Lookup returns the type origin for a named type in the given file.
 // Triggers on-demand parsing if file is not cached.
 func (o *OriginScanner) Lookup(

@@ -10,36 +10,28 @@ import (
 	"dev.gaijin.team/go/exhaustruct/v5/internal/structure"
 )
 
-func Test_Struct_String(t *testing.T) {
+func Test_Struct_PackagePath(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
-		fullPath  string
-		wantStr   string
-		wantShort string
-		wantPkg   string
+		name     string
+		fullPath string
+		want     string
 	}{
 		{
-			name:      "simple package",
-			fullPath:  "main.Config",
-			wantStr:   "main.Config",
-			wantShort: "main.Config",
-			wantPkg:   "main",
+			name:     "simple package",
+			fullPath: "main.Config",
+			want:     "main",
 		},
 		{
-			name:      "nested package",
-			fullPath:  "net/http.Request",
-			wantStr:   "net/http.Request",
-			wantShort: "http.Request",
-			wantPkg:   "net/http",
+			name:     "nested package",
+			fullPath: "net/http.Request",
+			want:     "net/http",
 		},
 		{
-			name:      "deep nested",
-			fullPath:  "github.com/user/repo/pkg.Type",
-			wantStr:   "github.com/user/repo/pkg.Type",
-			wantShort: "pkg.Type",
-			wantPkg:   "github.com/user/repo/pkg",
+			name:     "deep nested",
+			fullPath: "github.com/user/repo/pkg.Type",
+			want:     "github.com/user/repo/pkg",
 		},
 	}
 
@@ -49,52 +41,37 @@ func Test_Struct_String(t *testing.T) {
 
 			s := &structure.Struct{Name: "Type", FullPath: tt.fullPath, PackageName: "pkg"}
 
-			assert.Equal(t, tt.wantStr, s.String())
-			assert.Equal(t, tt.wantShort, s.ShortString())
-			assert.Equal(t, tt.wantPkg, s.PackagePath())
+			assert.Equal(t, tt.want, s.PackagePath())
 		})
 	}
 }
 
-func Test_Field_String(t *testing.T) {
-	t.Parallel()
-
-	f := structure.Field{Name: "MyField"}
-	assert.Equal(t, "MyField", f.String())
-}
-
-func Test_Fields_String(t *testing.T) {
+func Test_FormatFieldNames(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name   string
-		fields structure.Fields
+		fields []structure.Field
 		want   string
 	}{
 		{
 			name:   "empty",
-			fields: structure.Fields{PackagePath: "test", Items: nil},
+			fields: nil,
 			want:   "",
 		},
 		{
 			name: "single",
-			fields: structure.Fields{
-				PackagePath: "test",
-				Items: []structure.Field{
-					{Name: "Foo", Exported: true},
-				},
+			fields: []structure.Field{
+				{Name: "Foo", Exported: true},
 			},
 			want: "Foo",
 		},
 		{
 			name: "multiple",
-			fields: structure.Fields{
-				PackagePath: "test",
-				Items: []structure.Field{
-					{Name: "Foo", Exported: true},
-					{Name: "Bar", Exported: true},
-					{Name: "Baz", Exported: true},
-				},
+			fields: []structure.Field{
+				{Name: "Foo", Exported: true},
+				{Name: "Bar", Exported: true},
+				{Name: "Baz", Exported: true},
 			},
 			want: "Foo, Bar, Baz",
 		},
@@ -104,7 +81,7 @@ func Test_Fields_String(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equal(t, tt.want, tt.fields.String())
+			assert.Equal(t, tt.want, structure.FormatFieldNames(tt.fields))
 		})
 	}
 }

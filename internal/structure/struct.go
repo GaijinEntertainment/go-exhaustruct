@@ -51,22 +51,10 @@ type Struct struct {
 	IsDerived bool `exhaustruct:"optional"`
 }
 
-func (s *Struct) String() string {
-	return s.FullPath
-}
-
 // PackagePath returns the package path of the struct type.
 func (s *Struct) PackagePath() string {
 	if idx := strings.LastIndex(s.FullPath, "."); idx >= 0 {
 		return s.FullPath[:idx]
-	}
-
-	return s.FullPath
-}
-
-func (s *Struct) ShortString() string {
-	if idx := strings.LastIndex(s.FullPath, "/"); idx >= 0 {
-		return s.FullPath[idx+1:]
 	}
 
 	return s.FullPath
@@ -207,19 +195,11 @@ type Field struct {
 	PatternOptional bool `exhaustruct:"optional"`
 }
 
-func (f Field) String() string {
-	return f.Name
-}
-
 // Fields is a collection of struct fields with shared package metadata.
 // Items are in declaration order (required for positional literals).
 type Fields struct {
 	PackagePath string
 	Items       []Field
-}
-
-func (f Fields) String() string {
-	return FormatFieldNames(f.Items)
 }
 
 func FormatFieldNames(fields []Field) string {
