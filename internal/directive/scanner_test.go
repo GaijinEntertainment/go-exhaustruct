@@ -143,6 +143,25 @@ func Test_Scanner_Lookup_ParseError(t *testing.T) {
 	assert.Contains(t, diags[0].Message, "read file")
 }
 
+// Regression test for issue #166: standard library definitions are reported at
+// "$GOROOT"-prefixed paths that cannot be opened. They carry no directives, so
+// the lookup must report none instead of a read failure.
+func Test_Scanner_Lookup_GoRoot(t *testing.T) {
+	t.Parallel()
+
+	fset := token.NewFileSet()
+
+	fp := astutil.NewFileParser()
+	scanner := directive.NewScanner(fp)
+
+	//nolint:exhaustruct // only Filename and Line needed
+	pos := token.Position{Filename: "$GOROOT/src/strings/builder.go", Line: 30}
+
+	d, diags := scanner.Lookup(fset, pos)
+	assert.Nil(t, d)
+	assert.Empty(t, diags)
+}
+
 func Test_Scanner_Lookup_NoDirectiveAtLine(t *testing.T) {
 	t.Parallel()
 

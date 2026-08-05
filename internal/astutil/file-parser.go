@@ -3,9 +3,12 @@ package astutil
 
 import (
 	"go/ast"
+	"go/build"
 	"go/parser"
 	"go/token"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -98,8 +101,13 @@ func (p *FileParser) ProcessFiles(fset *token.FileSet, files ...*ast.File) []ana
 }
 
 // ProcessFilename parses a file from disk and triggers all callbacks.
-// Returns nil if already processed.
+// Returns nil if already processed or if the file belongs to the Go
+// distribution.
 func (p *FileParser) ProcessFilename(fset *token.FileSet, filename string) []analysis.Diagnostic {
+	if isGoRootFile(filename) {
+		return nil
+	}
+
 	p.mu.RLock()
 
 	alreadyParsed := p.parsed[filename]
@@ -151,6 +159,39 @@ func (p *FileParser) Stats() (hits, misses, size uint64) {
 	p.mu.RUnlock()
 
 	return p.hits.Load(), p.misses.Load(), size
+}
+
+// goRootPlaceholder is the literal prefix the compiler records instead of the
+// real GOROOT for files of the Go distribution, see cmd/internal/objabi.AbsFile.
+// Positions loaded from export data carry it as-is, so such paths can never be
+// opened.
+const goRootPlaceholder = "$GOROOT"
+
+// isGoRootFile reports whether filename belongs to the Go distribution. Its
+// sources carry no exhaustruct directives, so parsing them yields nothing and
+// their definitions are treated as directive-free.
+func isGoRootFile(filename string) bool {
+	if hasPathPrefix(filename, goRootPlaceholder) {
+		return true
+	}
+
+	return build.Default.GOROOT != "" && hasPathPrefix(filename, build.Default.GOROOT)
+}
+
+// hasPathPrefix reports whether path starts with prefix at a path element
+// boundary. Separators are normalized, since the compiler records slashes on
+// every platform while GOROOT uses the native separator.
+func hasPathPrefix(path, prefix string) bool {
+	path = filepath.ToSlash(path)
+	prefix = strings.TrimSuffix(filepath.ToSlash(prefix), "/")
+
+	if !strings.HasPrefix(path, prefix) {
+		return false
+	}
+
+	rest := path[len(prefix):]
+
+	return rest == "" || rest[0] == '/'
 }
 
 func (p *FileParser) parse(fset *token.FileSet, filename string) (*ast.File, error) {

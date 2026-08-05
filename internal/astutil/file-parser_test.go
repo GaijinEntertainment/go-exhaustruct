@@ -2,6 +2,7 @@ package astutil_test
 
 import (
 	"go/ast"
+	"go/build"
 	"go/parser"
 	"go/token"
 	"path/filepath"
@@ -82,6 +83,50 @@ func TestFileParser_ProcessFilename_Nonexistent(t *testing.T) {
 
 	require.Len(t, diags, 1)
 	assert.Contains(t, diags[0].Message, "read file")
+}
+
+// Regression test for issue #166: positions of standard library types loaded
+// from export data carry the compiler's literal "$GOROOT" placeholder, which
+// is not an openable path. Such files must be skipped silently instead of
+// producing a positionless read diagnostic.
+func TestFileParser_ProcessFilename_GoRoot(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		giveFilename string
+	}{
+		{
+			name:         "goroot placeholder",
+			giveFilename: "$GOROOT/src/strings/builder.go",
+		},
+		{
+			name:         "real goroot path",
+			giveFilename: filepath.Join(build.Default.GOROOT, "src", "strings", "builder.go"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			fp := astutil.NewFileParser()
+			fset := token.NewFileSet()
+
+			var callbackInvoked bool
+
+			fp.OnFileParsed(func(_ *token.FileSet, _ *ast.File) []analysis.Diagnostic {
+				callbackInvoked = true
+
+				return nil
+			})
+
+			diags := fp.ProcessFilename(fset, tt.giveFilename)
+
+			assert.Empty(t, diags)
+			assert.False(t, callbackInvoked)
+		})
+	}
 }
 
 func TestFileParser_ProcessFilename_SyntaxError(t *testing.T) {
