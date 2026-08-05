@@ -92,6 +92,8 @@ func TestFileParser_ProcessFilename_Nonexistent(t *testing.T) {
 func TestFileParser_ProcessFilename_GoRoot(t *testing.T) {
 	t.Parallel()
 
+	require.NotEmpty(t, build.Default.GOROOT, "the real GOROOT case needs a resolvable GOROOT")
+
 	tests := []struct {
 		name         string
 		giveFilename string

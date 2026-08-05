@@ -171,19 +171,22 @@ const goRootPlaceholder = "$GOROOT"
 // sources carry no exhaustruct directives, so parsing them yields nothing and
 // their definitions are treated as directive-free.
 func isGoRootFile(filename string) bool {
-	if hasPathPrefix(filename, goRootPlaceholder) {
-		return true
-	}
-
-	return build.Default.GOROOT != "" && hasPathPrefix(filename, build.Default.GOROOT)
+	return hasPathPrefix(filename, goRootPlaceholder) ||
+		hasPathPrefix(filename, build.Default.GOROOT)
 }
 
 // hasPathPrefix reports whether path starts with prefix at a path element
 // boundary. Separators are normalized, since the compiler records slashes on
-// every platform while GOROOT uses the native separator.
+// every platform while GOROOT uses the native separator. An empty prefix, as
+// an unset or root GOROOT normalizes to, matches nothing rather than
+// everything.
 func hasPathPrefix(path, prefix string) bool {
-	path = filepath.ToSlash(path)
 	prefix = strings.TrimSuffix(filepath.ToSlash(prefix), "/")
+	if prefix == "" {
+		return false
+	}
+
+	path = filepath.ToSlash(path)
 
 	if !strings.HasPrefix(path, prefix) {
 		return false
