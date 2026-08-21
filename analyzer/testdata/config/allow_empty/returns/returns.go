@@ -37,3 +37,11 @@ func shouldFailEmptyInDeclaration() {
 func shouldFailEmptyInSlice() {
 	_ = []TestStruct{{}} // want "returns.TestStruct is missing fields A, B"
 }
+
+func shouldPassEmptyInParenthesizedReturn() TestStruct {
+	return (TestStruct{})
+}
+
+func shouldPassEmptyInParenthesizedPointerReturn() *TestStruct {
+	return (&TestStruct{})
+}

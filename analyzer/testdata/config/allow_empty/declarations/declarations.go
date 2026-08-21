@@ -56,3 +56,13 @@ func shouldFailAssignment() {
 	test = TestStruct{} // want "declarations.TestStruct is missing fields A, B"
 	_ = test
 }
+
+func shouldPassEmptyInParenthesizedDeclaration() {
+	v := (TestStruct{})
+	_ = v
+}
+
+func shouldPassEmptyInParenthesizedVarDeclaration() {
+	var v = (TestStruct{})
+	_ = v
+}
