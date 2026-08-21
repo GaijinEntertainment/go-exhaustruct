@@ -8,6 +8,10 @@ import (
 
 const AnonymousName = "<anonymous>"
 
+// outermost marks the promotion walk's first level, where a field owns itself
+// rather than inheriting an owner from the level above.
+const outermost = -1
+
 // fieldInfo contains raw field data independent of type name.
 type fieldInfo struct {
 	// name is the name of the field.
@@ -18,6 +22,8 @@ type fieldInfo struct {
 	enforced bool //exhaustruct:optional
 	// optional indicates if the field is optional via directive.
 	optional bool //exhaustruct:optional
+	// embedded holds the fields an embedded field promotes, nil otherwise.
+	embedded *structFields //exhaustruct:optional
 }
 
 // structFields contains field information for a struct, independent of type name.
@@ -80,13 +86,11 @@ func (s *Struct) IsOptional() bool {
 // For positional literals: returns fields after the last provided element.
 // For named literals: returns fields not present in the literal.
 func (s *Struct) SkippedFields(lit *ast.CompositeLit, callerPkgPath string) []Field {
-	externalPkg := s.Fields.PackagePath != callerPkgPath
-
 	if isNamedLiteral(lit) {
-		return s.skippedNamed(lit, externalPkg)
+		return s.skippedNamed(lit, callerPkgPath)
 	}
 
-	return s.skippedPositional(len(lit.Elts), externalPkg)
+	return s.skippedPositional(len(lit.Elts), s.Fields.PackagePath != callerPkgPath)
 }
 
 // isNamedLiteral checks if a composite literal uses named fields. It treats
@@ -124,7 +128,7 @@ func (s *Struct) skippedPositional(count int, externalPkg bool) []Field {
 	return missing
 }
 
-func (s *Struct) skippedNamed(lit *ast.CompositeLit, externalPkg bool) []Field {
+func (s *Struct) skippedNamed(lit *ast.CompositeLit, callerPkgPath string) []Field {
 	present := make(map[string]bool, len(lit.Elts))
 
 	for _, elt := range lit.Elts {
@@ -135,19 +139,163 @@ func (s *Struct) skippedNamed(lit *ast.CompositeLit, externalPkg bool) []Field {
 		}
 	}
 
-	missing := make([]Field, 0, len(s.Fields.Items)-len(present))
-
-	for _, f := range s.Fields.Items {
-		if !present[f.Name] && s.isFieldRequired(f, externalPkg) {
-			missing = append(missing, f)
-		}
-	}
+	missing := s.skippedIn(&s.Fields, present, callerPkgPath)
 
 	if len(missing) == 0 {
 		return nil
 	}
 
 	return missing
+}
+
+// skippedIn returns the required fields of fs that keys leaves uninitialized.
+//
+// Since Go 1.27 a composite literal may name a promoted field in place of the
+// embedded field carrying it (golang/go#77245), so keys is flat: a name may
+// belong to fs directly or to any struct embedded within it. Naming both a
+// promoted field and its enclosing embedded field does not compile, so an
+// embedded field is either named directly, partially filled through promoted
+// names — in which case its own missing fields are reported, each nameable from
+// the same literal — or absent altogether and reported as one missing field.
+func (s *Struct) skippedIn(fs *Fields, keys map[string]bool, callerPkgPath string) []Field {
+	externalPkg := fs.PackagePath != callerPkgPath
+	promoted := fs.promotedKeys(keys)
+
+	// Capacity is a hint, not a contract: keys may name fields absent from
+	// Items, since unexported fields are pruned for types whose fields come from
+	// another package. Clamp so a mismatch can never turn into a makeslice panic.
+	missing := make([]Field, 0, max(len(fs.Items)-len(keys), 0))
+
+	for i, f := range fs.Items {
+		if keys[f.Name] {
+			continue
+		}
+
+		if !s.isFieldRequired(f, externalPkg) {
+			continue
+		}
+
+		if len(promoted[i]) > 0 {
+			missing = append(missing, s.skippedIn(f.Embedded, promoted[i], callerPkgPath)...)
+
+			continue
+		}
+
+		missing = append(missing, f)
+	}
+
+	return missing
+}
+
+// promotedKeys groups the keys that reach a field of fs through an embedded one,
+// by the index of that embedded field. A key naming a field of fs directly
+// belongs to no group: Go promotion resolves a name to its shallowest
+// occurrence, so a direct field shadows an embedded one of the same name.
+//
+// Nothing is grouped for a struct that embeds nothing, which is the common case
+// and costs one pass over the fields.
+func (fs *Fields) promotedKeys(keys map[string]bool) map[int]map[string]bool {
+	owners := fs.owners
+	if owners == nil {
+		// Fields built outside the processor carry no precomputed map.
+		owners = fs.computeOwners()
+	}
+
+	// Empty means nothing is promoted, so every key names a field directly.
+	if len(owners) == 0 {
+		return nil
+	}
+
+	var promoted map[int]map[string]bool
+
+	for key := range keys {
+		owner, ok := owners[key]
+		if !ok || fs.Items[owner].Name == key {
+			continue
+		}
+
+		if promoted == nil {
+			promoted = make(map[int]map[string]bool, len(fs.Items))
+		}
+
+		if promoted[owner] == nil {
+			promoted[owner] = make(map[string]bool, len(keys))
+		}
+
+		promoted[owner][key] = true
+	}
+
+	return promoted
+}
+
+// embeddedLevel is one embedded struct reached while widening the promotion
+// walk, together with the field of the outermost struct that owns it.
+type embeddedLevel struct {
+	fields *Fields
+	owner  int
+}
+
+// computeOwners maps every name a literal of fs may write to the index of the
+// field that initializes it, and is empty when fs embeds nothing.
+//
+// The empty result is a value rather than nil so that a type embedding nothing
+// answers every literal without walking its fields again.
+func (fs *Fields) computeOwners() map[string]int {
+	next := fs.embeddedLevels(outermost)
+	if next == nil {
+		return map[string]int{}
+	}
+
+	owners := make(map[string]int, len(fs.Items))
+
+	for i, f := range fs.Items {
+		if _, seen := owners[f.Name]; !seen {
+			owners[f.Name] = i
+		}
+	}
+
+	// Widen one level at a time and keep the first index recorded for a name,
+	// which is Go's shallowest-wins rule. Two names equally deep are ambiguous
+	// and cannot appear in a literal at all, so either index answers.
+	for len(next) > 0 {
+		current := next
+
+		next = nil
+
+		for _, level := range current {
+			for _, f := range level.fields.Items {
+				if _, seen := owners[f.Name]; !seen {
+					owners[f.Name] = level.owner
+				}
+			}
+
+			next = append(next, level.fields.embeddedLevels(level.owner)...)
+		}
+	}
+
+	return owners
+}
+
+// embeddedLevels lists the structs embedded directly in fs, each attributed to
+// owner. At the outermost level a field owns itself, which is the index the
+// walk carries down.
+func (fs *Fields) embeddedLevels(owner int) []embeddedLevel {
+	var levels []embeddedLevel
+
+	for i, f := range fs.Items {
+		if f.Embedded == nil {
+			continue
+		}
+
+		attributed := owner
+		if owner == outermost {
+			attributed = i
+		}
+
+		levels = append(levels, embeddedLevel{fields: f.Embedded, owner: attributed})
+	}
+
+	return levels
 }
 
 func (s *Struct) isFieldRequired(f Field, externalPkg bool) bool {
@@ -193,6 +341,12 @@ type Field struct {
 
 	PatternEnforced bool //exhaustruct:optional
 	PatternOptional bool //exhaustruct:optional
+
+	// Embedded holds the fields promoted by an embedded struct field, which a
+	// literal may name in place of this field since Go 1.27. Nil for every
+	// other field, including embedded pointers — a literal cannot reach through
+	// those.
+	Embedded *Fields //exhaustruct:optional
 }
 
 // Fields is a collection of struct fields with shared package metadata.
@@ -200,6 +354,11 @@ type Field struct {
 type Fields struct {
 	PackagePath string
 	Items       []Field
+
+	// owners is the promotion map of Items, computed once when the type's
+	// metadata is built and shared by every literal of the type. Nil until then,
+	// and nil for good when nothing is embedded.
+	owners map[string]int //exhaustruct:optional
 }
 
 func FormatFieldNames(fields []Field) string {

@@ -727,3 +727,211 @@ func synthStruct(
 
 	return typeName, strct
 }
+
+// Test_Struct_SkippedFields_Promoted covers composite literals that name
+// promoted fields instead of the embedded field carrying them, which Go 1.27
+// permits (golang/go#77245). The literals are parsed rather than compiled, so
+// the case holds on toolchains that predate the feature.
+func Test_Struct_SkippedFields_Promoted(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		literal string
+		want    string
+	}{
+		{"every leaf promoted", `A{b: 1, a: 2, c: 3}`, ""},
+		{"embedded named directly", `A{B: b, a: 1}`, ""},
+		{"promoted embedded named directly", `A{C: c, b: 1, a: 2}`, ""},
+		{"nothing from the embedded subtree", `A{a: 1}`, "B"},
+		{"subtree started, deeper embedded left out", `A{b: 1, a: 2}`, "C"},
+		{"subtree started at the deepest leaf", `A{c: 1, a: 2}`, "b"},
+		{"outer field left out too", `A{c: 1}`, "b, a"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			strct := promotedFixture(t)
+			lit := parseLiteral(t, tt.literal)
+
+			assert.Equal(t, tt.want, structure.FormatFieldNames(strct.SkippedFields(lit, "example.com/dep")))
+		})
+	}
+}
+
+// Test_Struct_SkippedFields_PromotedShadowed covers a direct field shadowing an
+// embedded one: naming it must not count as initializing the embedded field.
+func Test_Struct_SkippedFields_PromotedShadowed(t *testing.T) {
+	t.Parallel()
+
+	fset := token.NewFileSet()
+	pos := fset.AddFile("testdata/structs.go", -1, 10000).Pos(0)
+	pkg := types.NewPackage("example.com/dep", "dep")
+
+	_, innerStruct, innerNamed := synthNamed(t, pkg, pos, "Inner",
+		types.NewField(pos, pkg, "x", types.Typ[types.Int], false))
+	require.NotNil(t, innerStruct)
+
+	outerName, outerStruct, _ := synthNamed(t, pkg, pos, "Outer",
+		types.NewField(pos, pkg, "Inner", innerNamed, true),
+		types.NewField(pos, pkg, "x", types.Typ[types.Int], false))
+
+	fp := astutil.NewFileParser()
+	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+
+	strct := proc.ResolveStruct(fset, outerName, outerStruct, pos, pkg)
+	require.NotNil(t, strct)
+
+	// Outer.x shadows Inner.x, so `x` initializes the outer field and Inner is
+	// left untouched.
+	assert.Equal(t, "Inner",
+		structure.FormatFieldNames(strct.SkippedFields(parseLiteral(t, `Outer{x: 1}`), "example.com/dep")))
+}
+
+// promotedFixture builds A{B; a}, B{C; b}, C{c} — all in one package.
+func promotedFixture(t *testing.T) *structure.Struct {
+	t.Helper()
+
+	fset := token.NewFileSet()
+	pos := fset.AddFile("testdata/structs.go", -1, 10000).Pos(0)
+	pkg := types.NewPackage("example.com/dep", "dep")
+
+	_, _, cNamed := synthNamed(t, pkg, pos, "C",
+		types.NewField(pos, pkg, "c", types.Typ[types.Int], false))
+
+	_, _, bNamed := synthNamed(t, pkg, pos, "B",
+		types.NewField(pos, pkg, "C", cNamed, true),
+		types.NewField(pos, pkg, "b", types.Typ[types.Int], false))
+
+	aName, aStruct, _ := synthNamed(t, pkg, pos, "A",
+		types.NewField(pos, pkg, "B", bNamed, true),
+		types.NewField(pos, pkg, "a", types.Typ[types.Int], false))
+
+	fp := astutil.NewFileParser()
+	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+
+	strct := proc.ResolveStruct(fset, aName, aStruct, pos, pkg)
+	require.NotNil(t, strct)
+
+	return strct
+}
+
+func synthNamed(
+	t *testing.T,
+	pkg *types.Package,
+	pos token.Pos,
+	name string,
+	fields ...*types.Var,
+) (*types.TypeName, *types.Struct, *types.Named) {
+	t.Helper()
+
+	strct := types.NewStruct(fields, nil)
+	typeName := types.NewTypeName(pos, pkg, name, nil)
+
+	return typeName, strct, types.NewNamed(typeName, strct, nil)
+}
+
+func parseLiteral(t *testing.T, src string) *ast.CompositeLit {
+	t.Helper()
+
+	expr, err := parser.ParseExpr(src)
+	require.NoError(t, err)
+
+	lit, ok := expr.(*ast.CompositeLit)
+	require.True(t, ok)
+
+	return lit
+}
+
+// Test_Struct_SkippedFields_EmbeddedPointer covers an embedded pointer. Go does
+// not promote through one into a composite literal, so the field stays ordinary
+// and is reported by its own name rather than descended into.
+func Test_Struct_SkippedFields_EmbeddedPointer(t *testing.T) {
+	t.Parallel()
+
+	fset := token.NewFileSet()
+	pos := fset.AddFile("testdata/structs.go", -1, 10000).Pos(0)
+	pkg := types.NewPackage("example.com/dep", "dep")
+
+	_, _, cNamed := synthNamed(t, pkg, pos, "C",
+		types.NewField(pos, pkg, "c", types.Typ[types.Int], false))
+
+	aName, aStruct, _ := synthNamed(t, pkg, pos, "A",
+		types.NewField(pos, pkg, "C", types.NewPointer(cNamed), true),
+		types.NewField(pos, pkg, "a", types.Typ[types.Int], false))
+
+	fp := astutil.NewFileParser()
+	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+
+	strct := proc.ResolveStruct(fset, aName, aStruct, pos, pkg)
+	require.NotNil(t, strct)
+
+	require.Nil(t, strct.Fields.Items[0].Embedded, "an embedded pointer promotes nothing")
+
+	// `c` names nothing reachable, so C itself is what the literal left out.
+	assert.Equal(t, "C",
+		structure.FormatFieldNames(strct.SkippedFields(parseLiteral(t, `A{c: 1, a: 2}`), "example.com/dep")))
+}
+
+// Test_Struct_SkippedFields_PromotedPatterns covers field patterns aimed at a
+// promoted field. Every level of the tree is addressed by the name a literal of
+// the outer type writes, so a pattern targets a promoted field by that name.
+func Test_Struct_SkippedFields_PromotedPatterns(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		opts []structure.Option
+		want string
+	}{
+		{"no patterns", nil, "c2"},
+		{
+			"promoted field made optional",
+			[]structure.Option{structure.WithOptional(mustList(t, `.*\.A#c2`))},
+			"",
+		},
+		{
+			"enforce on the promoted field wins over optional",
+			[]structure.Option{
+				structure.WithOptional(mustList(t, `.*\.A#c2`)),
+				structure.WithEnforce(mustList(t, `.*\.A#c2`)),
+			},
+			"c2",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			fset := token.NewFileSet()
+			pos := fset.AddFile("testdata/structs.go", -1, 10000).Pos(0)
+			pkg := types.NewPackage("example.com/dep", "dep")
+
+			_, _, cNamed := synthNamed(t, pkg, pos, "C",
+				types.NewField(pos, pkg, "c1", types.Typ[types.Int], false),
+				types.NewField(pos, pkg, "c2", types.Typ[types.Int], false))
+
+			_, _, bNamed := synthNamed(t, pkg, pos, "B",
+				types.NewField(pos, pkg, "C", cNamed, true),
+				types.NewField(pos, pkg, "b", types.Typ[types.Int], false))
+
+			aName, aStruct, _ := synthNamed(t, pkg, pos, "A",
+				types.NewField(pos, pkg, "B", bNamed, true),
+				types.NewField(pos, pkg, "a", types.Typ[types.Int], false))
+
+			fp := astutil.NewFileParser()
+			proc := structure.NewProcessor(
+				directive.NewScanner(fp), structure.NewOriginScanner(fp), tt.opts...,
+			)
+
+			strct := proc.ResolveStruct(fset, aName, aStruct, pos, pkg)
+			require.NotNil(t, strct)
+
+			lit := parseLiteral(t, `A{b: 1, a: 2, c1: 3}`)
+			assert.Equal(t, tt.want, structure.FormatFieldNames(strct.SkippedFields(lit, "example.com/dep")))
+		})
+	}
+}

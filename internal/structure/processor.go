@@ -175,6 +175,14 @@ func (p *Processor) resolveStructFields(fset *token.FileSet, strct *types.Struct
 			exported: f.Exported(),
 		}
 
+		if f.Embedded() {
+			if embedded, ok := embeddedStruct(f.Type()); ok {
+				sub := p.getStructFields(fset, embedded)
+
+				field.embedded = &sub
+			}
+		}
+
 		if p.directives != nil {
 			dirs := p.directives.Lookup(fset, fset.PositionFor(f.Pos(), false))
 
@@ -189,21 +197,28 @@ func (p *Processor) resolveStructFields(fset *token.FileSet, strct *types.Struct
 }
 
 func (p *Processor) populateFields(fset *token.FileSet, s *Struct, strct *types.Struct) {
-	resolved := p.getStructFields(fset, strct)
+	s.Fields = p.buildFields(s, p.getStructFields(fset, strct))
+}
 
-	// Fields are external when declared in a different package than the struct type.
-	// This happens for derived types and aliases from external packages.
-	//
-	// Rationale behind that filtering is that noone except package that has declared
-	// the struct can access unexported fields, therefore we can simply filter them
-	// out to save up on storage. Usage of derived type from the package of structure
-	// definition is simply impossible since it will cause import cycle - thus, such
-	// filtering is safe.
+// buildFields turns resolved field data into the Struct's own view of it,
+// applying pattern matching and access filtering. Embedded structs are built
+// recursively, since a literal may name their fields directly.
+//
+// Fields are external when declared in a different package than the struct type.
+// This happens for derived types and aliases from external packages.
+//
+// Rationale behind that filtering is that noone except package that has declared
+// the struct can access unexported fields, therefore we can simply filter them
+// out to save up on storage. Usage of derived type from the package of structure
+// definition is simply impossible since it will cause import cycle - thus, such
+// filtering is safe.
+func (p *Processor) buildFields(s *Struct, resolved structFields) Fields {
 	fieldsExternal := resolved.packagePath != s.PackagePath()
 
-	s.Fields = Fields{
+	fields := Fields{
 		PackagePath: resolved.packagePath,
 		Items:       make([]Field, 0, len(resolved.fields)),
+		owners:      nil,
 	}
 
 	for _, sf := range resolved.fields {
@@ -211,17 +226,43 @@ func (p *Processor) populateFields(fset *token.FileSet, s *Struct, strct *types.
 			continue
 		}
 
+		// Promoted fields are addressed by the name a literal of s writes, so
+		// every level shares the outer type's path.
 		fieldPath := s.FullPath + "#" + sf.name
 
-		s.Fields.Items = append(s.Fields.Items, Field{
+		field := Field{
 			Name:            sf.name,
 			Exported:        sf.exported,
 			Enforced:        sf.enforced,
 			Optional:        sf.optional,
 			PatternEnforced: p.enforce.MatchFullString(fieldPath),
 			PatternOptional: p.optional.MatchFullString(fieldPath),
-		})
+			Embedded:        nil,
+		}
+
+		if sf.embedded != nil {
+			embedded := p.buildFields(s, *sf.embedded)
+
+			field.Embedded = &embedded
+		}
+
+		fields.Items = append(fields.Items, field)
 	}
+
+	// Promotion depends only on the type, so it is resolved once here rather
+	// than for every literal of it.
+	fields.owners = fields.computeOwners()
+
+	return fields
+}
+
+// embeddedStruct returns the struct type an embedded field promotes fields
+// from. Embedded pointers yield nothing: a composite literal cannot reach
+// through them, so their fields are not promotable in this context.
+func embeddedStruct(typ types.Type) (*types.Struct, bool) {
+	strct, ok := types.Unalias(typ).Underlying().(*types.Struct)
+
+	return strct, ok
 }
 
 func (p *Processor) resolveStructOrigin(fset *token.FileSet, s *Struct) {
