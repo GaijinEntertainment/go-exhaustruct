@@ -140,17 +140,15 @@ func (lv literalVisitor) resolveLiteral() (lit literal, ok bool) {
 func (lv literalVisitor) resolveLiteralType() (name *types.TypeName, strct *types.Struct, pos token.Pos) {
 	typ := lv.pass.TypesInfo.TypeOf(lv.lit)
 
-	if ptr, ok := typ.(*types.Pointer); ok {
+	// A literal may elide `&T` when the element type is a pointer, including a
+	// pointer reached through an alias or a defined pointer type. Strip it
+	// before naming the type, so the name describes the struct rather than the
+	// pointer to it.
+	if ptr, ok := types.Unalias(typ).Underlying().(*types.Pointer); ok {
 		typ = ptr.Elem()
 	}
 
-	switch t := typ.(type) {
-	case *types.Alias:
-		name = t.Obj()
-	case *types.Named:
-		name = t.Obj()
-	}
-
+	name = typeNameOf(typ)
 	typ = types.Unalias(typ)
 
 	switch t := typ.(type) {
@@ -161,18 +159,120 @@ func (lv literalVisitor) resolveLiteralType() (name *types.TypeName, strct *type
 			return nil, nil, token.NoPos
 		}
 
-		pos = name.Pos()
+		return name, strct, name.Pos()
 
-		return name, strct, pos
+	case *types.TypeParam:
+		// A literal of a type parameter is written against its constraint's
+		// core type, which the type checker has already validated the keys
+		// against.
+		if strct = coreStruct(t); strct == nil {
+			return nil, nil, token.NoPos
+		}
+
+		// A type parameter is declared in a signature, and the core it resolves
+		// to is a shape its constraint names rather than a type anyone declared.
+		// There is no declaration to read type-level directives from, and the
+		// parameter's own line would read the directives of the function.
+		return name, strct, token.NoPos
 
 	case *types.Struct:
-		pos = lv.findAnonymousStructPos()
+		// An alias to an anonymous struct has a declaration of its own; only a
+		// genuinely unnamed struct needs its position recovered from the AST.
+		if name != nil {
+			return name, t, name.Pos()
+		}
 
-		return name, t, pos
+		return name, t, lv.findAnonymousStructPos()
 
 	default:
 		return nil, nil, token.NoPos
 	}
+}
+
+// typeNameOf returns the declaration a type is written under, or nil when the
+// type is unnamed.
+func typeNameOf(typ types.Type) *types.TypeName {
+	switch t := typ.(type) {
+	case *types.Alias:
+		return t.Obj()
+
+	case *types.Named:
+		return t.Obj()
+
+	case *types.TypeParam:
+		return t.Obj()
+
+	default:
+		return nil
+	}
+}
+
+// coreStruct returns the struct type every term of a type parameter's
+// constraint shares, or nil when the constraint has no such core type and a
+// composite literal of the parameter is therefore not possible.
+func coreStruct(tp *types.TypeParam) *types.Struct {
+	return constraintCore(tp.Constraint(), make(map[*types.Interface]bool))
+}
+
+// constraintCore resolves the struct shared by every term of a constraint,
+// descending into the interfaces it embeds: a constraint may name its terms
+// itself or inherit them from another interface, and both describe one type
+// set. Interfaces already walked are skipped, so a cyclic constraint ends.
+func constraintCore(typ types.Type, seen map[*types.Interface]bool) *types.Struct {
+	iface, ok := typ.Underlying().(*types.Interface)
+	if !ok || seen[iface] {
+		return nil
+	}
+
+	seen[iface] = true
+
+	var core *types.Struct
+
+	for embedded := range iface.EmbeddedTypes() {
+		for _, term := range unionTerms(embedded) {
+			strct := termCore(term, seen)
+			if strct == nil {
+				return nil
+			}
+
+			if core != nil && !types.Identical(core, strct) {
+				return nil
+			}
+
+			core = strct
+		}
+	}
+
+	return core
+}
+
+// termCore resolves one term of a constraint to the struct it stands for: the
+// term's own type, or the core of another interface it names.
+func termCore(term types.Type, seen map[*types.Interface]bool) *types.Struct {
+	if _, ok := term.Underlying().(*types.Interface); ok {
+		return constraintCore(term, seen)
+	}
+
+	strct, _ := term.Underlying().(*types.Struct)
+
+	return strct
+}
+
+// unionTerms splits a constraint element into its terms. A single-term element
+// is not wrapped in a union, so it stands for itself.
+func unionTerms(typ types.Type) []types.Type {
+	union, ok := typ.(*types.Union)
+	if !ok {
+		return []types.Type{typ}
+	}
+
+	terms := make([]types.Type, 0, union.Len())
+
+	for term := range union.Terms() {
+		terms = append(terms, term.Type())
+	}
+
+	return terms
 }
 
 // findAnonymousStructPos finds the position of the struct keyword for anonymous structs.
@@ -185,13 +285,19 @@ func (lv literalVisitor) findAnonymousStructPos() token.Pos {
 		return token.NoPos
 	}
 
+	// Key and value of a map literal both elide their type, and their types come
+	// from opposite sides of the map type — track which side the literal is on.
+	mapKey := false
+
 	for i := len(lv.stack) - 2; i >= 0; i-- { //nolint:mnd
 		switch parent := lv.stack[i].(type) {
 		case *ast.KeyValueExpr:
+			mapKey = parent.Key == lv.stack[i+1]
+
 			continue
 
 		case *ast.CompositeLit:
-			return structPosFromType(parent.Type)
+			return structPosFromType(parent.Type, mapKey)
 
 		default:
 			return token.NoPos
@@ -201,7 +307,7 @@ func (lv literalVisitor) findAnonymousStructPos() token.Pos {
 	return token.NoPos
 }
 
-func structPosFromType(typ ast.Expr) token.Pos {
+func structPosFromType(typ ast.Expr, mapKey bool) token.Pos {
 	if typ == nil {
 		return token.NoPos
 	}
@@ -211,6 +317,10 @@ func structPosFromType(typ ast.Expr) token.Pos {
 		return structPosFromExpr(t.Elt)
 
 	case *ast.MapType:
+		if mapKey {
+			return structPosFromExpr(t.Key)
+		}
+
 		return structPosFromExpr(t.Value)
 	}
 
@@ -364,6 +474,8 @@ func (lv literalVisitor) isErrorReturnStatement(n *ast.ReturnStmt) bool {
 			if ri.X == lv.lit {
 				continue
 			}
+
+		default:
 		}
 
 		resultType := lv.pass.TypesInfo.TypeOf(ri)

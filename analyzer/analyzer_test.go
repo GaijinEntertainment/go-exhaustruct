@@ -167,6 +167,12 @@ func TestAnalyzerTypes(t *testing.T) {
 			testFixes:   false,
 		},
 		{
+			name:        "pointers",
+			config:      analyzer.Config{},
+			testPackage: "testdata/types/pointers",
+			testFixes:   false,
+		},
+		{
 			name: "directives",
 			config: analyzer.Config{
 				EnforcePatterns: []string{`.*\.(Test|Embedded|Simple|WithOptionalDirective).*`},

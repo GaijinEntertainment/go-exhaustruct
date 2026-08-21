@@ -81,3 +81,35 @@ func testDirectiveOnAlias() {
 	// Alias has ignore directive - passes
 	_ = IgnoredAlias{}
 }
+
+// AnonAlias aliases an anonymous struct, so the alias name is the only name the
+// type has at the use site.
+//
+//exhaustruct:optional
+type AnonAlias = struct {
+	X int
+	Y int
+}
+
+// AnonAliasIgnored aliases an anonymous struct and is ignored wholesale.
+//
+//exhaustruct:ignore
+type AnonAliasIgnored = struct {
+	X int
+	Y int
+}
+
+// AnonAliasChecked aliases an anonymous struct and carries no directive.
+type AnonAliasChecked = struct {
+	X int
+	Y int
+}
+
+func shouldPassAnonymousAliasDirectives() {
+	_ = AnonAlias{X: 1}
+	_ = AnonAliasIgnored{X: 1}
+}
+
+func shouldFailAnonymousAliasWithoutDirective() {
+	_ = AnonAliasChecked{X: 1} // want "aliases.AnonAliasChecked is missing field Y"
+}
