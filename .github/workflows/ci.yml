@@ -12,57 +12,87 @@ on:
 jobs:
   lint:
     name: "Lint"
-    strategy:
-      matrix:
-        go-version: [ stable ]
-        os: [ "ubuntu-latest" ]
-    runs-on: ${{ matrix.os }}
+    runs-on: "ubuntu-latest"
     permissions:
       pull-requests: read
       contents: read
     steps:
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          go-version: ${{ matrix.go }}
+          go-version: stable
           check-latest: true
-      - uses: actions/checkout@v6
       - name: "Lint"
         uses: golangci/golangci-lint-action@v9
         with:
+          # pinned so a golangci-lint release cannot turn CI red on its own
+          version: v2.13.1
           only-new-issues: true
-          args: --timeout 5m --issues-exit-code 0
+          args: --timeout 5m
 
+  dogfood:
+    name: "Dogfood"
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          check-latest: true
+      # golangci-lint carries a released exhaustruct, so linting alone never
+      # exercises the working tree. Build the analyzer from this checkout and
+      # run it over the checkout itself.
+      #
+      # The exclusions are read from .golangci.yaml rather than repeated here,
+      # so lint and dogfood always cover the same types. The standalone binary
+      # takes flags and cannot read that file itself. Reading nothing aborts
+      # the step; running with no exclusions would report the whole tree.
+      - name: "Run exhaustruct on itself"
+        run: |
+          patterns=$(ruby -ryaml -e '
+            patterns = YAML.load_file(".golangci.yaml").dig("linters", "settings", "exhaustruct_v5", "ignore-patterns")
+            abort "exhaustruct_v5.ignore-patterns missing from .golangci.yaml" if patterns.nil? || patterns.empty?
+            puts patterns
+          ')
+          args=()
+          while IFS= read -r pattern; do
+            args+=(-ignore-rx "$pattern")
+          done <<<"$patterns"
+          go run ./cmd/exhaustruct "${args[@]}" ./...
 
   test:
     name: "Test"
     strategy:
+      fail-fast: false
       matrix:
         go-version: [ oldstable, stable ]
         os: [ "ubuntu-latest", "windows-latest", "macos-latest" ]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go-version }}
           check-latest: true
+      # The analyzer shares one processor across concurrently analysed
+      # packages, so the suite runs under the race detector.
       - name: "Run tests"
-        run: go test -json ./... > test.json
+        run: go test -race -json ./... > test.json
 
       - name: "Annotate tests"
         if: always()
-        uses: guyarb/golang-test-annotations@v0.8.0
+        uses: guyarb/golang-test-annotations@v0.9.0
         with:
           test-results: test.json
 
   dependabot-merge:
     name: "Dependabot auto-merge"
     runs-on: ubuntu-latest
-    needs: [ "lint", "test" ]
+    needs: [ "lint", "dogfood", "test" ]
     permissions:
       pull-requests: write
       contents: write
     steps:
-      - uses: fastify/github-action-merge-dependabot@v3.11.2
+      - uses: fastify/github-action-merge-dependabot@v3.15.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
