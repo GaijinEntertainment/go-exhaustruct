@@ -19,6 +19,8 @@ linters:
     # which `default: all` enables, and never with the superseded v4 linter
     - exhaustruct
     - goheader
+    # superseded by gomodguard_v2, which `default: all` enables
+    - gomodguard
     - govet
     - importas
     - intrange
@@ -67,6 +69,8 @@ linters:
         - os\.(OpenFile|WriteFile|Chmod),p?flag\..*
         - strconv\.(Format|Parse|Append).*
     exhaustruct_v5:
+      # the dogfood job in .github/workflows/ci.yml reads these patterns and
+      # passes them to the standalone binary, which cannot read them here
       ignore-patterns:
         # stdlib syntax and type structures: every construction of these is
         # partial by design, the unset fields being positions and caches the
