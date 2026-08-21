@@ -25,6 +25,12 @@ func shouldReportUnknownWithValid() {
 	_ = Test{}
 }
 
+func shouldReportDirectiveAfterSpace() {
+	// The space ends the list, so enforce would be read as prose in silence
+	//exhaustruct:ignore, enforce // want "directive after a space is not read"
+	_ = Test{}
+}
+
 func shouldReportMultipleInCommentGroup() {
 	// Multiple directives in same comment group - second is ignored
 	// First directive (ignore) still applies
