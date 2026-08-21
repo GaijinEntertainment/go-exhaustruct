@@ -1,7 +1,9 @@
 package analyzer_test
 
 import (
+	"go/build"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,6 +13,28 @@ import (
 )
 
 var testdataPath, _ = filepath.Abs("./testdata/") //nolint:gochecknoglobals
+
+// go127TestdataPath holds fixtures that need a language version newer than the
+// main testdata module declares. It is a module of its own so it can raise that
+// version without dragging every other fixture along.
+var go127TestdataPath, _ = filepath.Abs("./testdata/go127/") //nolint:gochecknoglobals
+
+// TestAnalyzerPromotedFields covers literals naming promoted fields, allowed
+// since Go 1.27 (golang/go#77245). Older toolchains cannot compile the fixture,
+// so they skip it -- the resolution logic itself is covered version-independently
+// in internal/structure.
+func TestAnalyzerPromotedFields(t *testing.T) {
+	t.Parallel()
+
+	if !slices.Contains(build.Default.ReleaseTags, "go1.27") {
+		t.Skip("promoted fields in composite literals require Go 1.27")
+	}
+
+	a, err := analyzer.NewAnalyzerWithConfig(analyzer.Config{})
+	require.NoError(t, err)
+
+	analysistest.Run(t, go127TestdataPath, a, "go127/promoted")
+}
 
 // TestAnalyzerDependencyDirectives covers directives that are malformed in a
 // dependency. A diagnostic about them would land on a file the analyzed package

@@ -229,6 +229,32 @@ func example() {
 }
 ```
 
+### Embedded Fields
+
+From Go 1.27 a composite literal may name a promoted field in place of the
+embedded field carrying it
+([golang/go#77245](https://github.com/golang/go/issues/77245)), so an embedded
+field a promoted name reaches is reported field by field. One no promoted name
+reaches is reported whole:
+
+```go
+type Base struct {
+    ID   string
+    Name string
+}
+
+type Server struct {
+    Base
+    Port int
+}
+
+func example() {
+    _ = Server{ID: "1", Name: "a", Port: 8080} // OK: promoted names fill Base
+    _ = Server{ID: "1", Port: 8080}            // missing field Name
+    _ = Server{Port: 8080}                     // missing field Base
+}
+```
+
 ### Derived Types and Aliases
 
 Type aliases and derived types inherit **field-level** directives from their
