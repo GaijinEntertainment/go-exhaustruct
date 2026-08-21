@@ -146,6 +146,33 @@ When multiple directives or patterns apply, priority is (highest first):
 4. Type-level enforce (directive or `-enforce-rx` pattern)
 5. Mode default (implicit=check, explicit=skip)
 
+Rules 1 and 2 meet when both reach one literal from different lines: an
+`ignore` above a statement and an `enforce` above a literal nested inside it,
+or a single directive list such as `//exhaustruct:ignore,enforce`. Two
+directives targeting the same line are a conflict instead, reported rather than
+resolved by this order.
+
+A type-level `-enforce-rx` selects types only under `-explicit`: in implicit
+mode rule 5 already checks the type. Rule 3 applies in both modes, which is why
+`-ignore-rx` wins wherever the two overlap.
+
+Field patterns (`Type#Field`) are a separate decision: they choose which fields
+are required inside a type that is already being checked, in either mode. A
+field-level enforce match is honoured only while no `-enforce-rx` pattern
+matches the enclosing type as well, since a type-level match takes over every
+field in it. Through the fields it takes over, a type-level pattern therefore
+does change what is reported in implicit mode:
+
+```shell
+# Host is required
+exhaustruct -optional-rx 'pkg\.Config' -enforce-rx 'pkg\.Config#Host' ./...
+
+# Host is not: the type-level enforce pattern overrides the field-level one,
+# and -optional-rx on the type then decides
+exhaustruct -optional-rx 'pkg\.Config' -enforce-rx 'pkg\.Config#Host' \
+  -enforce-rx 'pkg\.Config' ./...
+```
+
 ## Configuration
 
 ### Type Selection Flags
@@ -153,7 +180,7 @@ When multiple directives or patterns apply, priority is (highest first):
 | Flag | Description |
 |------|-------------|
 | `-explicit` | Enable explicit mode (opt-in checking) |
-| `-enforce-rx` | Regex pattern for types/fields to check (repeatable) |
+| `-enforce-rx` | Regex for types to check under `-explicit`, and for `Type#Field` paths to require (repeatable; see the priority rules above) |
 | `-ignore-rx` | Regex pattern for types to skip (repeatable) |
 | `-optional-rx` | Regex pattern for types/fields to mark optional (repeatable) |
 
@@ -318,6 +345,38 @@ specific type are checked and must be specified separately for each type.
 | `-include-rx` / `-i` | `-enforce-rx` |
 | `-exclude-rx` / `-e` | `-ignore-rx` |
 
+> [!IMPORTANT]
+> `-include-rx` and `-enforce-rx` are not the same control, so the rename is not
+> the whole migration.
+>
+> v4 folded two decisions into `-include-rx`: how wide the checking is, and
+> which types it covers. v5 separates them — `-explicit` sets the scope,
+> `-enforce-rx` selects types within it — so a v4 pattern list maps onto both
+> flags:
+>
+> ```shell
+> # v4
+> exhaustruct -include-rx '.*\.Config' ./...
+>
+> # v5
+> exhaustruct -explicit -enforce-rx '.*\.Config' ./...
+> ```
+>
+> Carrying the patterns over without `-explicit` leaves the analyzer in implicit
+> mode, where every type is checked and the patterns select nothing.
+>
+> In golangci-lint the same pair goes under `exhaustruct_v5`, which is a
+> different linter from the superseded `exhaustruct`:
+>
+> ```yaml
+> linters:
+>   settings:
+>     exhaustruct_v5:
+>       explicit-mode: true
+>       enforce-patterns:
+>         - '.*\.Config'
+> ```
+
 ### Struct Tags Deprecated
 
 Struct tags like `exhaustruct:"optional"` are no longer supported. Use comment
@@ -343,3 +402,21 @@ Run with `-fix` to automatically migrate struct tags to comment directives:
 ```shell
 exhaustruct -fix ./...
 ```
+
+`-fix` writes the directive where the tag stood when the tag ends the field's
+line, and on the line above the field otherwise. Both forms name the same
+target, so the field above migrates to:
+
+```go
+type Server struct {
+    Host    string
+    Timeout int //exhaustruct:optional
+}
+```
+
+A field that already carries an exhaustruct directive keeps it: the deprecated
+tag is removed and nothing is written over it.
+
+Every deprecated tag is reported and migrated, including one on a type
+`-ignore-rx` or `//exhaustruct:ignore` excludes from checking. The move off v4
+syntax happens once, and a tag left behind outlives the setting that hid it.

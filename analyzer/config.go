@@ -11,6 +11,14 @@ type Config struct {
 	// EnforcePatterns is a list of regular expressions to match type names that
 	// should be checked. Anonymous structs can be matched by '<anonymous>' alias.
 	//
+	// A type pattern selects the types checked under ExplicitMode; without it
+	// every type is checked already, so only field patterns change anything.
+	//
+	// A pattern may name a field as 'Type#Field', which requires that field
+	// inside a type already being checked, in either mode. Such a match is
+	// honoured only while no EnforcePatterns entry matches the enclosing type
+	// as well, since a type-level match takes over every field in it.
+	//
 	// Each regular expression must match the full type name, including package path.
 	// For example, to match type `net/http.Cookie` regular expression should be
 	// `.*/http\.Cookie`, but not `http\.Cookie`.
@@ -72,6 +80,9 @@ func (c *Config) bindToFlagSet(fs *flag.FlagSet) {
 
 	fs.Var(&c.EnforcePatterns, "enforce-rx",
 		"Regular expression to match type names that should be checked. "+
+			"Selects the types checked under -explicit. A pattern may name a field "+
+			"as Type#Field, which requires that field in either mode, but only "+
+			"while no pattern matches the enclosing type as well. "+
 			"Anonymous structs can be matched by '<anonymous>' alias. "+
 			"Each regex must match the full type name including package path. "+
 			"Example: `.*/http\\.Cookie`. Can be used multiple times.")
