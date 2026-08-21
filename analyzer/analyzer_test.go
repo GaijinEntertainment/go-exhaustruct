@@ -105,15 +105,20 @@ func TestAnalyzer_FlagsAffectAnalysis(t *testing.T) {
 	analysistest.Run(t, testdataPath, a, "testdata/types/basic")
 }
 
-func TestAnalyzerTypes(t *testing.T) {
-	t.Parallel()
+// typeCase is one fixture package with the configuration it is written
+// against. The tests run every case and the benchmark runs those marked for
+// it, so the two read one description of a fixture and cannot drift apart.
+type typeCase struct {
+	name        string
+	config      analyzer.Config
+	testPackage string
+	testFixes   bool
+	// benchmark marks a case BenchmarkAnalyzer runs as well.
+	benchmark bool //exhaustruct:optional
+}
 
-	tests := []struct {
-		name        string
-		config      analyzer.Config
-		testPackage string
-		testFixes   bool
-	}{
+func typeCases() []typeCase {
+	return []typeCase{
 		{
 			name: "basic",
 			config: analyzer.Config{
@@ -121,6 +126,7 @@ func TestAnalyzerTypes(t *testing.T) {
 			},
 			testPackage: "testdata/types/basic",
 			testFixes:   false,
+			benchmark:   true,
 		},
 		{
 			name: "aliases",
@@ -139,6 +145,7 @@ func TestAnalyzerTypes(t *testing.T) {
 			},
 			testPackage: "testdata/types/derived",
 			testFixes:   false,
+			benchmark:   true,
 		},
 		{
 			name: "embedded",
@@ -147,6 +154,7 @@ func TestAnalyzerTypes(t *testing.T) {
 			},
 			testPackage: "testdata/types/embedded",
 			testFixes:   false,
+			benchmark:   true,
 		},
 		{
 			name: "generics",
@@ -163,6 +171,7 @@ func TestAnalyzerTypes(t *testing.T) {
 			},
 			testPackage: "testdata/types/collections",
 			testFixes:   false,
+			benchmark:   true,
 		},
 		{
 			name:        "blank",
@@ -237,8 +246,12 @@ func TestAnalyzerTypes(t *testing.T) {
 			testFixes:   false,
 		},
 	}
+}
 
-	for _, tt := range tests {
+func TestAnalyzerTypes(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range typeCases() {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
