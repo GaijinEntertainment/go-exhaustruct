@@ -8,9 +8,9 @@ import (
 
 type Cache[K comparable, V any] struct {
 	entries map[K]V
-	mu      sync.RWMutex  `exhaustruct:"optional"`
-	hits    atomic.Uint64 `exhaustruct:"optional"`
-	misses  atomic.Uint64 `exhaustruct:"optional"`
+	mu      sync.RWMutex  //exhaustruct:optional
+	hits    atomic.Uint64 //exhaustruct:optional
+	misses  atomic.Uint64 //exhaustruct:optional
 }
 
 func New[K comparable, V any](initialCapacity int) *Cache[K, V] {

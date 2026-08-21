@@ -302,9 +302,9 @@ func Test_Struct_SkippedFields(t *testing.T) {
 	t.Run("positional incomplete", func(t *testing.T) {
 		t.Parallel()
 
-		lit := &ast.CompositeLit{ //nolint:exhaustruct
+		lit := &ast.CompositeLit{
 			Elts: []ast.Expr{
-				&ast.BasicLit{Kind: token.INT, Value: "1"}, //nolint:exhaustruct
+				&ast.BasicLit{Kind: token.INT, Value: "1"},
 			},
 		}
 
@@ -374,7 +374,7 @@ func Test_Struct_SkippedFields(t *testing.T) {
 		typeName, strct, pos := td.resolveType(t, "Empty")
 		info, _ := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
-		lit := &ast.CompositeLit{Elts: []ast.Expr{}} //nolint:exhaustruct
+		lit := &ast.CompositeLit{Elts: []ast.Expr{}}
 
 		assert.Nil(t, info.SkippedFields(lit, externalPkg))
 		assert.Nil(t, info.SkippedFields(lit, samePkg))
@@ -401,8 +401,8 @@ func loadTestdata(t *testing.T) *testdata {
 		t.Fatalf("failed to parse testdata: %v", err)
 	}
 
-	conf := types.Config{} //nolint:exhaustruct
-	info := &types.Info{   //nolint:exhaustruct
+	conf := types.Config{}
+	info := &types.Info{
 		Types: make(map[ast.Expr]types.TypeAndValue),
 		Defs:  make(map[*ast.Ident]types.Object),
 	}

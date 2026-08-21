@@ -15,6 +15,9 @@ linters:
     - depguard
     - errname
     - godox
+    # this repo is the source of exhaustruct: it lints itself with exhaustruct_v5,
+    # which `default: all` enables, and never with the superseded v4 linter
+    - exhaustruct
     - goheader
     - govet
     - importas
@@ -63,9 +66,14 @@ linters:
       ignored-functions:
         - os\.(OpenFile|WriteFile|Chmod),p?flag\..*
         - strconv\.(Format|Parse|Append).*
-    exhaustruct:
-      exclude:
-        - golang\.org/x/tools/go/analysis\.Diagnostic
+    exhaustruct_v5:
+      ignore-patterns:
+        # stdlib syntax and type structures: every construction of these is
+        # partial by design, the unset fields being positions and caches the
+        # toolchain fills in itself
+        - go/(ast|token|types)\..*
+        # x/tools analysis and loader structures, same reason
+        - golang\.org/x/tools/.*
     revive:
       confidence: 0.8
       enable-all-rules: true
