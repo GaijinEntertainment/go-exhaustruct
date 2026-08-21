@@ -473,14 +473,10 @@ func Test_Scanner_Lookup_Concurrent(t *testing.T) {
 	var wg sync.WaitGroup
 
 	for range 100 {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			d := scanner.Lookup(fset, pos)
 			assert.Equal(t, directive.Directives{directive.Optional}, d)
-		}()
+		})
 	}
 
 	wg.Wait()
