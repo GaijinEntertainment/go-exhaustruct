@@ -100,15 +100,11 @@ func Test_Cache(t *testing.T) {
 		var wg sync.WaitGroup
 
 		for i := range 100 {
-			wg.Add(1)
-
-			go func(i int) {
-				defer wg.Done()
-
+			wg.Go(func() {
 				c.GetOrSet(i%10, func() int {
 					return i
 				})
-			}(i)
+			})
 		}
 
 		wg.Wait()
@@ -127,18 +123,14 @@ func Test_Cache(t *testing.T) {
 		var wg sync.WaitGroup
 
 		for range 100 {
-			wg.Add(1)
-
-			go func() {
-				defer wg.Done()
-
+			wg.Go(func() {
 				c.GetOrSet("same-key", func() int {
 					computeCount.Add(1)
 					time.Sleep(10 * time.Millisecond)
 
 					return 42
 				})
-			}()
+			})
 		}
 
 		wg.Wait()

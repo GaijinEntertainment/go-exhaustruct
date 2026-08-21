@@ -426,13 +426,9 @@ func TestFileParser_ProcessFilename_ConcurrentSameFile(t *testing.T) {
 	var wg sync.WaitGroup
 
 	for range 100 {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			fp.ProcessFilename(fset, filename)
-		}()
+		})
 	}
 
 	wg.Wait()
