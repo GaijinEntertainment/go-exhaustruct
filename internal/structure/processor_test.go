@@ -5,6 +5,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,7 +17,7 @@ import (
 	"dev.gaijin.team/go/exhaustruct/v5/internal/structure"
 )
 
-func Test_Processor_Get(t *testing.T) { //nolint:maintidx
+func Test_Processor_Get(t *testing.T) {
 	t.Parallel()
 
 	td := loadTestdata(t)
@@ -42,10 +43,9 @@ func Test_Processor_Get(t *testing.T) { //nolint:maintidx
 
 				typeName, strct, pos := td.resolveType(t, tt.structName)
 
-				info, diags := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+				info := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 				require.NotNil(t, info)
-				assert.Empty(t, diags)
 				assert.Equal(t, tt.structName, info.Name)
 				assert.Equal(t, "testdata."+tt.structName, info.FullPath)
 				assert.Len(t, info.Fields.Items, tt.wantFields)
@@ -58,10 +58,9 @@ func Test_Processor_Get(t *testing.T) { //nolint:maintidx
 
 		typeName, strct, pos := td.resolveType(t, "MixedExported")
 
-		info, diags := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+		info := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 		require.NotNil(t, info)
-		assert.Empty(t, diags)
 		require.Len(t, info.Fields.Items, 3)
 
 		assert.Equal(t, "Exported", info.Fields.Items[0].Name)
@@ -96,10 +95,9 @@ func Test_Processor_Get(t *testing.T) { //nolint:maintidx
 
 				typeName, strct, pos := td.resolveType(t, tt.structName)
 
-				info, diags := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+				info := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 				require.NotNil(t, info)
-				assert.Empty(t, diags)
 				assert.Equal(t, tt.enforced, info.Enforced, "enforced mismatch")
 				assert.Equal(t, tt.ignored, info.Ignored, "Ignored mismatch")
 				assert.Equal(t, tt.optional, info.Optional, "optional mismatch")
@@ -115,10 +113,9 @@ func Test_Processor_Get(t *testing.T) { //nolint:maintidx
 
 			typeName, strct, pos := td.resolveType(t, "WithOptionalDoc")
 
-			info, diags := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+			info := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 			require.NotNil(t, info)
-			assert.Empty(t, diags)
 			require.Len(t, info.Fields.Items, 2)
 
 			assert.Equal(t, "Required", info.Fields.Items[0].Name)
@@ -133,10 +130,9 @@ func Test_Processor_Get(t *testing.T) { //nolint:maintidx
 
 			typeName, strct, pos := td.resolveType(t, "WithOptionalInline")
 
-			info, diags := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+			info := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 			require.NotNil(t, info)
-			assert.Empty(t, diags)
 			require.Len(t, info.Fields.Items, 2)
 
 			assert.Equal(t, "Required", info.Fields.Items[0].Name)
@@ -151,10 +147,9 @@ func Test_Processor_Get(t *testing.T) { //nolint:maintidx
 
 			typeName, strct, pos := td.resolveType(t, "WithEnforcedField")
 
-			info, diags := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+			info := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 			require.NotNil(t, info)
-			assert.Empty(t, diags)
 			require.Len(t, info.Fields.Items, 2)
 
 			assert.Equal(t, "Normal", info.Fields.Items[0].Name)
@@ -169,10 +164,9 @@ func Test_Processor_Get(t *testing.T) { //nolint:maintidx
 
 			typeName, strct, pos := td.resolveType(t, "WithMixedDirectives")
 
-			info, diags := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+			info := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 			require.NotNil(t, info)
-			assert.Empty(t, diags)
 			require.Len(t, info.Fields.Items, 3)
 
 			assert.Equal(t, "Normal", info.Fields.Items[0].Name)
@@ -204,10 +198,9 @@ func Test_Processor_Get(t *testing.T) { //nolint:maintidx
 		strct := types.Unalias(typ).Underlying().(*types.Struct) //nolint:forcetypeassert
 
 		// nil named + NoPos simulates anonymous struct
-		info, diags := proc.ResolveStruct(td.fset, nil, strct, token.NoPos, td.pkg)
+		info := proc.ResolveStruct(td.fset, nil, strct, token.NoPos, td.pkg)
 
 		require.NotNil(t, info)
-		assert.Empty(t, diags)
 		assert.Equal(t, structure.AnonymousName, info.Name)
 	})
 
@@ -223,13 +216,15 @@ func Test_Processor_Get(t *testing.T) { //nolint:maintidx
 
 		typeName, strct, pos := td.resolveType(t, "IgnoredStruct")
 
-		info, diags := proc.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+		info := proc.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 		require.NotNil(t, info)
-		// Without pre-populating the file parser, the directive from the source file
-		// won't be found (parser only has testdata files it has been given).
-		// The Ignored flag depends on the directive being parsed.
-		assert.Empty(t, diags)
+
+		// A processor given no files still answers with the directives of the
+		// type's own file: the lookup that resolves it parses that file on
+		// demand, so pre-populating the parser changes what it costs and never
+		// what it finds.
+		assert.True(t, info.Ignored, "the type's own directive has to be resolved")
 	})
 
 	t.Run("embedded fields", func(t *testing.T) {
@@ -240,10 +235,9 @@ func Test_Processor_Get(t *testing.T) { //nolint:maintidx
 
 			typeName, strct, pos := td.resolveType(t, "WithEmbedded")
 
-			info, diags := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+			info := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 			require.NotNil(t, info)
-			assert.Empty(t, diags)
 			require.Len(t, info.Fields.Items, 2)
 
 			assert.Equal(t, "Embedded", info.Fields.Items[0].Name)
@@ -258,10 +252,9 @@ func Test_Processor_Get(t *testing.T) { //nolint:maintidx
 
 			typeName, strct, pos := td.resolveType(t, "WithUnexportedEmbedded")
 
-			info, diags := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+			info := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 			require.NotNil(t, info)
-			assert.Empty(t, diags)
 			require.Len(t, info.Fields.Items, 2)
 
 			assert.Equal(t, "unexported", info.Fields.Items[0].Name)
@@ -279,7 +272,7 @@ func Test_Struct_SkippedFields(t *testing.T) {
 	td := loadTestdata(t)
 
 	typeName, strct, pos := td.resolveType(t, "LiteralTest")
-	info, _ := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+	info := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 	require.Len(t, info.Fields.Items, 4)
 	assert.False(t, info.Fields.Items[0].Optional) // ExportedRequired
@@ -372,7 +365,7 @@ func Test_Struct_SkippedFields(t *testing.T) {
 		t.Parallel()
 
 		typeName, strct, pos := td.resolveType(t, "Empty")
-		info, _ := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+		info := td.processor.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 		lit := &ast.CompositeLit{Elts: []ast.Expr{}}
 
@@ -530,10 +523,9 @@ func Test_Processor_WithPatterns(t *testing.T) {
 
 		typeName, strct, pos := td.resolveType(t, "MultiField")
 
-		info, diags := proc.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+		info := proc.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 		require.NotNil(t, info)
-		assert.Empty(t, diags)
 		assert.True(t, info.PatternEnforced)
 		assert.False(t, info.PatternIgnored)
 		assert.False(t, info.PatternOptional)
@@ -551,10 +543,9 @@ func Test_Processor_WithPatterns(t *testing.T) {
 
 		typeName, strct, pos := td.resolveType(t, "MultiField")
 
-		info, diags := proc.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+		info := proc.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 		require.NotNil(t, info)
-		assert.Empty(t, diags)
 		assert.False(t, info.PatternEnforced)
 		assert.True(t, info.PatternIgnored)
 		assert.False(t, info.PatternOptional)
@@ -572,10 +563,9 @@ func Test_Processor_WithPatterns(t *testing.T) {
 
 		typeName, strct, pos := td.resolveType(t, "MultiField")
 
-		info, diags := proc.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+		info := proc.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 		require.NotNil(t, info)
-		assert.Empty(t, diags)
 		assert.False(t, info.PatternEnforced)
 		assert.False(t, info.PatternIgnored)
 		assert.True(t, info.PatternOptional)
@@ -593,10 +583,9 @@ func Test_Processor_WithPatterns(t *testing.T) {
 
 		typeName, strct, pos := td.resolveType(t, "MultiField")
 
-		info, diags := proc.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+		info := proc.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 		require.NotNil(t, info)
-		assert.Empty(t, diags)
 		assert.True(t, info.AllowEmptyDecl)
 	})
 
@@ -615,13 +604,63 @@ func Test_Processor_WithPatterns(t *testing.T) {
 
 		typeName, strct, pos := td.resolveType(t, "MultiField")
 
-		info, diags := proc.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
+		info := proc.ResolveStruct(td.fset, typeName, strct, pos, td.pkg)
 
 		require.NotNil(t, info)
-		assert.Empty(t, diags)
 		assert.False(t, info.PatternEnforced)
 		assert.False(t, info.PatternIgnored)
 		assert.False(t, info.PatternOptional)
 		assert.False(t, info.AllowEmptyDecl)
 	})
+}
+
+// Test_Processor_ResolveStruct_LineDirective covers declarations a //line
+// directive remaps. Their directives and their origin are written in the
+// physical file, so resolving either by the adjusted position finds nothing.
+func Test_Processor_ResolveStruct_LineDirective(t *testing.T) {
+	t.Parallel()
+
+	fset := token.NewFileSet()
+
+	file, err := parser.ParseFile(fset, "testdata/lined.go", nil, parser.ParseComments)
+	require.NoError(t, err)
+
+	conf := types.Config{}
+	info := &types.Info{
+		Types: make(map[ast.Expr]types.TypeAndValue),
+		Defs:  make(map[*ast.Ident]types.Object),
+	}
+
+	pkg, err := conf.Check("testdata", fset, []*ast.File{file}, info)
+	require.NoError(t, err)
+
+	fp := astutil.NewFileParser()
+	scanner := directive.NewScanner(fp)
+	proc := structure.NewProcessor(scanner, structure.NewOriginScanner(fp))
+
+	scanner.ProcessFiles(fset, file)
+
+	resolve := func(name string) *structure.Struct {
+		t.Helper()
+
+		typeName, ok := pkg.Scope().Lookup(name).(*types.TypeName)
+		require.True(t, ok)
+
+		// The declaration reports the virtual file, which is what makes this a
+		// test of the physical lookup.
+		require.Equal(t, filepath.Join("testdata", "generated.tmpl"), fset.Position(typeName.Pos()).Filename)
+
+		strct, ok := typeName.Type().Underlying().(*types.Struct)
+		require.True(t, ok)
+
+		return proc.ResolveStruct(fset, typeName, strct, typeName.Pos(), pkg)
+	}
+
+	optional := resolve("LinedOptional")
+	require.NotNil(t, optional)
+	assert.True(t, optional.Optional, "the directive above the declaration must apply")
+
+	derived := resolve("LinedDerived")
+	require.NotNil(t, derived)
+	assert.True(t, derived.IsDerived, "the origin scan must reach the declaration")
 }

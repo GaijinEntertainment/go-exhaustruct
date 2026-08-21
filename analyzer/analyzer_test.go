@@ -12,6 +12,26 @@ import (
 
 var testdataPath, _ = filepath.Abs("./testdata/") //nolint:gochecknoglobals
 
+// TestAnalyzerDependencyDirectives covers directives that are malformed in a
+// dependency. A diagnostic about them would land on a file the analyzed package
+// does not own and usually cannot edit, so the consuming package reports only
+// its own findings.
+func TestAnalyzerDependencyDirectives(t *testing.T) {
+	t.Parallel()
+
+	a, err := analyzer.NewAnalyzerWithConfig(analyzer.Config{})
+	require.NoError(t, err)
+
+	// The consumer runs first and alone, so its lookup is what parses the
+	// dependency's file. Nothing about the malformed directive is reported
+	// here, and the order is the test's rather than the scheduler's.
+	analysistest.Run(t, testdataPath, a, "testdata/config/dep_directives/user")
+
+	// The owner is analysed after that parse, against a FileSet of its own, and
+	// reports its own directive at its own position.
+	analysistest.Run(t, testdataPath, a, "testdata/config/dep_directives/dep")
+}
+
 func TestAnalyzer(t *testing.T) {
 	t.Parallel()
 

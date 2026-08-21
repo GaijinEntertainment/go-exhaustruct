@@ -118,24 +118,16 @@ func (lv literalVisitor) resolveLiteral() (lit literal, ok bool) {
 		return lit, false
 	}
 
-	s, diags := lv.processor.ResolveStruct(
-		lv.pass.Fset, typeName, strct, pos, lv.pass.Pkg,
-	)
-
-	for _, diag := range diags {
-		lv.pass.Report(diag)
-	}
-
+	s := lv.processor.ResolveStruct(lv.pass.Fset, typeName, strct, pos, lv.pass.Pkg)
 	if s == nil {
 		return lit, false
 	}
 
-	litPos := lv.pass.Fset.Position(lv.lit.Pos())
-	dirs, dirDiags := lv.processor.Directives().Lookup(lv.pass.Fset, litPos)
-
-	for _, d := range dirDiags {
-		lv.pass.Report(d)
-	}
+	// Unadjusted: the directive was written in the physical file, whatever a
+	// //line directive renames it to.
+	dirs := lv.processor.Directives().Lookup(
+		lv.pass.Fset, lv.pass.Fset.PositionFor(lv.lit.Pos(), false),
+	)
 
 	return literal{
 		strct:    s,

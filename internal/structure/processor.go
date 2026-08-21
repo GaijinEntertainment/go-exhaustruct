@@ -4,8 +4,6 @@ import (
 	"go/token"
 	"go/types"
 
-	"golang.org/x/tools/go/analysis"
-
 	"dev.gaijin.team/go/exhaustruct/v5/internal/cache"
 	"dev.gaijin.team/go/exhaustruct/v5/internal/directive"
 	"dev.gaijin.team/go/exhaustruct/v5/internal/pattern"
@@ -79,33 +77,34 @@ func (p *Processor) ResolveStruct(
 	strct *types.Struct,
 	pos token.Pos,
 	callerPkg *types.Package,
-) (*Struct, []analysis.Diagnostic) {
+) *Struct {
 	if strct == nil {
-		return nil, nil
+		return nil
 	}
 
-	position := fset.Position(pos)
+	// Positions are taken unadjusted: they locate the declaration on disk, and
+	// //line directives point at files that hold no Go source.
+	position := fset.PositionFor(pos, false)
 
 	// Check cache before allocating
 	if position.IsValid() {
 		if cached, ok := p.structCache.Get(position); ok {
-			return cached, nil
+			return cached
 		}
 	}
 
 	s := p.buildStruct(typeName, position, callerPkg)
 
-	diags := p.populateFields(fset, s, strct)
+	p.populateFields(fset, s, strct)
 	p.resolveStructOrigin(fset, s)
-
-	diags = append(diags, p.resolveStructDirectives(fset, s)...)
+	p.resolveStructDirectives(fset, s)
 	p.matchStructPatterns(s)
 
 	if s.Position.IsValid() {
 		p.structCache.Set(s.Position, s)
 	}
 
-	return s, diags
+	return s
 }
 
 // buildStruct creates Struct metadata from type info.
@@ -130,28 +129,23 @@ func (*Processor) buildStruct(typeName *types.TypeName, pos token.Position, call
 	}
 }
 
-func (p *Processor) getStructFields(fset *token.FileSet, strct *types.Struct) (structFields, []analysis.Diagnostic) {
+func (p *Processor) getStructFields(fset *token.FileSet, strct *types.Struct) structFields {
 	if fields, ok := p.fieldsCache.Get(strct); ok {
-		return fields, nil
+		return fields
 	}
 
-	fields, diags := p.resolveStructFields(fset, strct)
+	fields := p.resolveStructFields(fset, strct)
 
 	p.fieldsCache.Set(strct, fields)
 
-	return fields, diags
+	return fields
 }
 
-func (p *Processor) resolveStructFields(
-	fset *token.FileSet,
-	strct *types.Struct,
-) (structFields, []analysis.Diagnostic) {
+func (p *Processor) resolveStructFields(fset *token.FileSet, strct *types.Struct) structFields {
 	result := structFields{
 		packagePath: "",
 		fields:      make([]fieldInfo, 0, strct.NumFields()),
 	}
-
-	var diags []analysis.Diagnostic
 
 	for f := range strct.Fields() {
 		if result.packagePath == "" && f.Pkg() != nil {
@@ -164,10 +158,7 @@ func (p *Processor) resolveStructFields(
 		}
 
 		if p.directives != nil {
-			fieldPos := fset.Position(f.Pos())
-			dirs, d := p.directives.Lookup(fset, fieldPos)
-
-			diags = append(diags, d...)
+			dirs := p.directives.Lookup(fset, fset.PositionFor(f.Pos(), false))
 
 			field.enforced = dirs.Contains(directive.Enforce)
 			field.optional = dirs.Contains(directive.Optional)
@@ -176,11 +167,11 @@ func (p *Processor) resolveStructFields(
 		result.fields = append(result.fields, field)
 	}
 
-	return result, diags
+	return result
 }
 
-func (p *Processor) populateFields(fset *token.FileSet, s *Struct, strct *types.Struct) []analysis.Diagnostic {
-	resolved, diags := p.getStructFields(fset, strct)
+func (p *Processor) populateFields(fset *token.FileSet, s *Struct, strct *types.Struct) {
+	resolved := p.getStructFields(fset, strct)
 
 	// Fields are external when declared in a different package than the struct type.
 	// This happens for derived types and aliases from external packages.
@@ -213,8 +204,6 @@ func (p *Processor) populateFields(fset *token.FileSet, s *Struct, strct *types.
 			PatternOptional: p.optional.MatchFullString(fieldPath),
 		})
 	}
-
-	return diags
 }
 
 func (p *Processor) resolveStructOrigin(fset *token.FileSet, s *Struct) {
@@ -228,18 +217,16 @@ func (p *Processor) resolveStructOrigin(fset *token.FileSet, s *Struct) {
 	s.IsDerived = origin == OriginDerived
 }
 
-func (p *Processor) resolveStructDirectives(fset *token.FileSet, s *Struct) []analysis.Diagnostic {
+func (p *Processor) resolveStructDirectives(fset *token.FileSet, s *Struct) {
 	if p.directives == nil || !s.Position.IsValid() {
-		return nil
+		return
 	}
 
-	dirs, diags := p.directives.Lookup(fset, s.Position)
+	dirs := p.directives.Lookup(fset, s.Position)
 
 	s.Enforced = dirs.Contains(directive.Enforce)
 	s.Ignored = dirs.Contains(directive.Ignore)
 	s.Optional = dirs.Contains(directive.Optional)
-
-	return diags
 }
 
 func (p *Processor) matchStructPatterns(s *Struct) {
