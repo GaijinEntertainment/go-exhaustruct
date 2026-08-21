@@ -143,8 +143,8 @@ func Test_Parse(t *testing.T) {
 		{
 			name:       "block comment",
 			text:       "/*exhaustruct:ignore*/",
-			directives: nil,
-			found:      false,
+			directives: directive.Directives{directive.Ignore},
+			found:      true,
 			wantErrs:   nil,
 		},
 		{
@@ -195,21 +195,21 @@ func Test_Parse(t *testing.T) {
 			text:       "//exhaustruct:,ignore",
 			directives: directive.Directives{directive.Ignore},
 			found:      true,
-			wantErrs:   []error{directive.ErrUnknownDirective}, // empty string is invalid
+			wantErrs:   nil, // an empty part names nothing, so there is nothing to report
 		},
 		{
 			name:       "trailing comma",
 			text:       "//exhaustruct:ignore,",
 			directives: directive.Directives{directive.Ignore},
 			found:      true,
-			wantErrs:   []error{directive.ErrUnknownDirective}, // empty string is invalid
+			wantErrs:   nil, // an empty part names nothing, so there is nothing to report
 		},
 		{
 			name:       "double comma",
 			text:       "//exhaustruct:ignore,,enforce",
 			directives: directive.Directives{directive.Ignore, directive.Enforce},
 			found:      true,
-			wantErrs:   []error{directive.ErrUnknownDirective}, // empty string in middle
+			wantErrs:   nil, // an empty part names nothing, so there is nothing to report
 		},
 		{
 			name:       "tab as separator after directive",
@@ -249,6 +249,80 @@ func Test_Parse(t *testing.T) {
 			assert.Equal(t, tt.found, found, "found mismatch")
 			assert.Equal(t, tt.directives, d, "directives mismatch")
 			require.Len(t, errs, len(tt.wantErrs), "error count mismatch")
+
+			for i, wantErr := range tt.wantErrs {
+				assert.ErrorIs(t, errs[i], wantErr)
+			}
+		})
+	}
+}
+
+// TestParse_CommentForms covers the comment shapes a directive can be written
+// in and the trailing prose Go authors habitually add.
+func TestParse_CommentForms(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		give      string
+		wantFound bool
+		want      directive.Directives
+		wantErrs  []error
+	}{
+		{"line comment", `//exhaustruct:optional`, true, directive.Directives{directive.Optional}, nil},
+		{"block comment", `/*exhaustruct:optional*/`, true, directive.Directives{directive.Optional}, nil},
+		{"block comment with padding is prose", `/* exhaustruct:optional */`, false, nil, nil},
+		{
+			"block comment with padding after",
+			`/*exhaustruct:optional */`,
+			true, directive.Directives{directive.Optional}, nil,
+		},
+		{
+			"block comment, multiple directives",
+			`/*exhaustruct:enforce,optional*/`,
+			true, directive.Directives{directive.Enforce, directive.Optional}, nil,
+		},
+		{"trailing comma", `//exhaustruct:optional,`, true, directive.Directives{directive.Optional}, nil},
+		{
+			"trailing prose after comma",
+			`//exhaustruct:ignore, because reasons`,
+			true, directive.Directives{directive.Ignore}, nil,
+		},
+		{
+			"directive name after comma and space",
+			`//exhaustruct:optional, enforce`,
+			true, directive.Directives{directive.Optional}, []error{directive.ErrDirectiveAfterSpace},
+		},
+		{
+			"directive name after comma and space, then prose",
+			`//exhaustruct:optional, enforce, because reasons`,
+			true, directive.Directives{directive.Optional}, []error{directive.ErrDirectiveAfterSpace},
+		},
+		{
+			"prose after comma is not a directive",
+			`//exhaustruct:optional, enforced later`,
+			true, directive.Directives{directive.Optional}, nil,
+		},
+		{
+			"trailing prose after space",
+			`//exhaustruct:ignore because reasons`,
+			true, directive.Directives{directive.Ignore}, nil,
+		},
+		{"empty after separator", `//exhaustruct:,`, true, nil, []error{directive.ErrEmptyDirective}},
+		{"space before directive", `//exhaustruct: optional`, true, nil, []error{directive.ErrEmptyDirective}},
+		{"not a directive", `// just a comment`, false, nil, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			found, got, errs := directive.Parse(tt.give)
+
+			assert.Equal(t, tt.wantFound, found)
+			assert.Equal(t, tt.want, got)
+
+			require.Len(t, errs, len(tt.wantErrs))
 
 			for i, wantErr := range tt.wantErrs {
 				assert.ErrorIs(t, errs[i], wantErr)

@@ -346,15 +346,17 @@ func Test_Scanner_Testdata(t *testing.T) {
 		100: {directive.Optional}, // DocField (doc on line 99)
 		102: {directive.Optional}, // InlineField
 		104: {directive.Optional}, // InlineFieldA
+
+		// Block comments
+		40: {directive.Optional}, // blockDocComment
+		47: {directive.Optional}, // blockInline
 	}
 
 	// Lines where we expect NO directive
 	expectNoDirective := []int{
 		23,  // lineAfterInline (inline above doesn't carry over)
 		29,  // lineAfterGap (blank line breaks association)
-		40,  // blockDocComment (block comments not supported)
-		43,  // blockDocWithSpaces (block comments not supported)
-		47,  // blockInline (block comments not supported)
+		43,  // blockDocWithSpaces (space after /* makes the comment prose)
 		57,  // regularComment
 		59,  // regularInline
 		64,  // directiveInMiddle (must start with //exhaustruct:)
