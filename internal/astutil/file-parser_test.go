@@ -73,16 +73,24 @@ func TestFileParser_ProcessFilename_HasComments(t *testing.T) {
 	assert.True(t, hasDirective)
 }
 
-func TestFileParser_ProcessFilename_Nonexistent(t *testing.T) {
+// A definition file that cannot be opened carries no directives anyone can act
+// on, and it belongs to no package in the current run, so the failure has no
+// position to be reported at. -trimpath records module-relative paths and
+// //line directives name templates and grammars; both reach here through export
+// data and open nothing.
+func TestFileParser_ProcessFilename_Unreadable(t *testing.T) {
 	t.Parallel()
 
 	fp := astutil.NewFileParser()
 	fset := token.NewFileSet()
 
-	diags := fp.ProcessFilename(fset, "nonexistent.go")
-
-	require.Len(t, diags, 1)
-	assert.Contains(t, diags[0].Message, "read file")
+	for _, filename := range []string{
+		"nonexistent.go",
+		"example.com/module@v1.2.3/trimmed.go",
+		"generated.tmpl",
+	} {
+		assert.Empty(t, fp.ProcessFilename(fset, filename), "filename %q", filename)
+	}
 }
 
 // Regression test for issue #166: positions of standard library types loaded
@@ -138,10 +146,43 @@ func TestFileParser_ProcessFilename_SyntaxError(t *testing.T) {
 	fset := token.NewFileSet()
 	filename := filepath.Join("testdata", "invalid.go")
 
-	diags := fp.ProcessFilename(fset, filename)
+	// A file that does not parse yields no directives, and the compiler will
+	// report the syntax error itself.
+	assert.Empty(t, fp.ProcessFilename(fset, filename))
+}
 
-	require.Len(t, diags, 1)
-	assert.Contains(t, diags[0].Message, "parse file")
+// TestFileParser_ProcessFilename_FailureRemembered covers a filename that
+// cannot be read or parsed. Export data names such a file once for every type
+// it carries, so the failure is recorded and later lookups answer from the
+// record instead of reaching the disk again.
+func TestFileParser_ProcessFilename_FailureRemembered(t *testing.T) {
+	t.Parallel()
+
+	for _, filename := range []string{
+		"nonexistent.go",
+		filepath.Join("testdata", "invalid.go"),
+	} {
+		t.Run(filename, func(t *testing.T) {
+			t.Parallel()
+
+			fp := astutil.NewFileParser()
+			fset := token.NewFileSet()
+
+			assert.Empty(t, fp.ProcessFilename(fset, filename))
+
+			hits, misses, size := fp.Stats()
+			assert.Equal(t, uint64(0), hits)
+			assert.Equal(t, uint64(1), misses)
+			assert.Equal(t, uint64(1), size, "the failure has to be recorded")
+
+			assert.Empty(t, fp.ProcessFilename(fset, filename))
+
+			hits, misses, size = fp.Stats()
+			assert.Equal(t, uint64(1), hits, "the second lookup has to answer from the record")
+			assert.Equal(t, uint64(1), misses, "the second lookup must not reach the disk")
+			assert.Equal(t, uint64(1), size)
+		})
+	}
 }
 
 func TestFileParser_ProcessFilename_MultipleCallbacks(t *testing.T) {
@@ -429,8 +470,5 @@ func TestFileParser_ProcessFilename_EmptyFilename(t *testing.T) {
 	fp := astutil.NewFileParser()
 	fset := token.NewFileSet()
 
-	diags := fp.ProcessFilename(fset, "")
-
-	require.Len(t, diags, 1)
-	assert.Contains(t, diags[0].Message, "read file")
+	assert.Empty(t, fp.ProcessFilename(fset, ""))
 }

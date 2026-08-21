@@ -14,6 +14,21 @@ import (
 type Scanner struct {
 	parser *astutil.FileParser
 	cache  *cache.Cache[string, fileDirectives]
+	// diags holds the parse diagnostics of each file, keyed by physical
+	// filename. A file's diagnostics belong to the package that owns it, not to
+	// whichever package happened to trigger the parse first.
+	diags *cache.Cache[string, []fileDiagnostic]
+}
+
+// fileDiagnostic is one finding of a file, held without a token.Pos. A Pos is
+// an index into the FileSet that produced it and means another file, or
+// nothing, in any other. The file is parsed by whichever pass reaches it first
+// and reported by the one that owns it, and those two need not share a FileSet,
+// so the position is kept as an offset into the file and resolved again
+// against the FileSet the owner reports with.
+type fileDiagnostic struct {
+	offset  int
+	message string
 }
 
 const cachePreallocSize = 64
@@ -24,6 +39,7 @@ func NewScanner(parser *astutil.FileParser) *Scanner {
 	s := &Scanner{
 		parser: parser,
 		cache:  cache.New[string, fileDirectives](cachePreallocSize),
+		diags:  cache.New[string, []fileDiagnostic](cachePreallocSize),
 	}
 
 	parser.OnFileParsed(s.onFileParsed)
@@ -32,44 +48,97 @@ func NewScanner(parser *astutil.FileParser) *Scanner {
 }
 
 func (s *Scanner) onFileParsed(fset *token.FileSet, file *ast.File) []analysis.Diagnostic {
-	filename := fset.Position(file.Pos()).Filename
+	filename := astutil.PhysicalFilename(fset, file.Pos())
 
 	fd, diags := s.parseFileDirectives(fset, file)
 
 	s.cache.Set(filename, fd)
+	s.diags.Set(filename, offsetDiagnostics(fset, diags))
 
 	return diags
 }
 
-// ProcessFiles pre-populates the cache by delegating to FileParser.ProcessFiles.
-// Returns diagnostics from directive parsing.
-func (s *Scanner) ProcessFiles(fset *token.FileSet, files ...*ast.File) []analysis.Diagnostic {
-	return s.parser.ProcessFiles(fset, files...)
+// offsetDiagnostics keeps what a diagnostic says and where it says it, with the
+// position taken as an offset into its file.
+func offsetDiagnostics(fset *token.FileSet, diags []analysis.Diagnostic) []fileDiagnostic {
+	held := make([]fileDiagnostic, 0, len(diags))
+
+	for _, d := range diags {
+		f := fset.File(d.Pos)
+		if f == nil {
+			continue
+		}
+
+		held = append(held, fileDiagnostic{offset: f.Offset(d.Pos), message: d.Message})
+	}
+
+	return held
 }
 
-// Lookup returns the directives at the given source position.
-// If the file is not in cache, triggers FileParser.ProcessFilename to parse it.
-func (s *Scanner) Lookup(fset *token.FileSet, pos token.Position) (Directives, []analysis.Diagnostic) {
+// ProcessFiles pre-populates the cache by delegating to FileParser.ProcessFiles,
+// and returns the directive diagnostics of exactly the given files.
+//
+// The diagnostics come from the per-file cache rather than from this parse, so a
+// file reports its own findings even when an earlier lookup from another package
+// already parsed it.
+func (s *Scanner) ProcessFiles(fset *token.FileSet, files ...*ast.File) []analysis.Diagnostic {
+	s.parser.ProcessFiles(fset, files...)
+
+	var diags []analysis.Diagnostic
+
+	for _, file := range files {
+		held, ok := s.diags.Peek(astutil.PhysicalFilename(fset, file.Pos()))
+		if !ok {
+			continue
+		}
+
+		f := fset.File(file.Pos())
+		if f == nil {
+			continue
+		}
+
+		for _, d := range held {
+			if d.offset < 0 || d.offset > f.Size() {
+				continue
+			}
+
+			diags = append(diags, analysis.Diagnostic{
+				Pos:     f.Pos(d.offset),
+				Message: d.message,
+			})
+		}
+	}
+
+	return diags
+}
+
+// Lookup returns the directives at the given source position, which must be
+// unadjusted — see astutil.PhysicalFilename. If the file is not in cache,
+// triggers FileParser.ProcessFilename to parse it.
+//
+// Diagnostics found by such an on-demand parse are not returned: the file
+// belongs to another package, which reports them through ProcessFiles.
+func (s *Scanner) Lookup(fset *token.FileSet, pos token.Position) Directives {
 	if pos.Filename == "" {
-		return nil, nil
+		return nil
 	}
 
 	if fd, ok := s.cache.Get(pos.Filename); ok {
-		return fd[pos.Line], nil
+		return fd[pos.Line]
 	}
 
 	// Cache miss - parse file (triggers onFileParsed callback, which stores
 	// the result via cache.Set and increments the miss counter).
-	diags := s.parser.ProcessFilename(fset, pos.Filename)
+	s.parser.ProcessFilename(fset, pos.Filename)
 
 	// Peek avoids counting this self-induced read as a hit — the miss was
 	// already recorded by Set above.
 	if fd, ok := s.cache.Peek(pos.Filename); ok {
-		return fd[pos.Line], diags
+		return fd[pos.Line]
 	}
 
 	// Still not in cache means parsing failed.
-	return nil, diags
+	return nil
 }
 
 func (s *Scanner) Stats() (hits, misses, size uint64) {
@@ -95,7 +164,7 @@ func (*Scanner) parseFileDirectives(fset *token.FileSet, file *ast.File) (fileDi
 			return false
 		}
 
-		line := fset.Position(n.Pos()).Line
+		line := fset.PositionFor(n.Pos(), false).Line
 		if d, ok := directives[line]; ok {
 			d.targetLine = line
 			directives[line] = d
@@ -177,9 +246,9 @@ func parseCommentDirectives(
 			}
 
 			hasDirective = true
-			directives[fset.Position(pos).Line] = parsedDirective{
+			directives[fset.PositionFor(pos, false).Line] = parsedDirective{
 				pos:        pos,
-				targetLine: fset.Position(cg.End()).Line + 1,
+				targetLine: fset.PositionFor(cg.End(), false).Line + 1,
 				directives: parsed,
 			}
 		}

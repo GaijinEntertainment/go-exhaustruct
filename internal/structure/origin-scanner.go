@@ -46,7 +46,7 @@ func (o *OriginScanner) onFileParsed(
 	fset *token.FileSet,
 	file *ast.File,
 ) []analysis.Diagnostic {
-	filename := fset.Position(file.Pos()).Filename
+	filename := astutil.PhysicalFilename(fset, file.Pos())
 
 	origins := extractTypeOrigins(file)
 
