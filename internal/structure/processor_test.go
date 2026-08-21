@@ -664,3 +664,66 @@ func Test_Processor_ResolveStruct_LineDirective(t *testing.T) {
 	require.NotNil(t, derived)
 	assert.True(t, derived.IsDerived, "the origin scan must reach the declaration")
 }
+
+// Test_Processor_ResolveStruct_PositionCollision covers types whose declaration
+// positions collide. Export data is not required to carry a faithful position:
+// gcimporter discards the column entirely and clamps any line past 64Ki to 1,
+// so distinct declarations in a dependency collapse onto a single
+// token.Position. Caching struct metadata under that position hands the wrong
+// type back to the second lookup.
+func Test_Processor_ResolveStruct_PositionCollision(t *testing.T) {
+	t.Parallel()
+
+	fset := token.NewFileSet()
+	// Named after a real file so directive and origin lookups can read it; the
+	// declarations below are synthetic and absent from it.
+	file := fset.AddFile("testdata/structs.go", -1, 10000)
+	pos := file.Pos(0)
+
+	pkg := types.NewPackage("example.com/dep", "dep")
+
+	aaaName, aaaStruct := synthStruct(pkg, pos, "Aaa", "X")
+	bbbName, bbbStruct := synthStruct(pkg, pos, "Bbb", "P", "Q", "R")
+
+	require.Equal(t, fset.Position(aaaName.Pos()), fset.Position(bbbName.Pos()),
+		"test setup: both declarations must share a position")
+
+	fp := astutil.NewFileParser()
+	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+
+	aaa := proc.ResolveStruct(fset, aaaName, aaaStruct, pos, pkg)
+	bbb := proc.ResolveStruct(fset, bbbName, bbbStruct, pos, pkg)
+
+	require.NotNil(t, aaa)
+	require.NotNil(t, bbb)
+
+	assert.Equal(t, "Aaa", aaa.Name)
+	assert.Equal(t, "example.com/dep.Aaa", aaa.FullPath)
+	assert.Len(t, aaa.Fields.Items, 1)
+
+	assert.Equal(t, "Bbb", bbb.Name)
+	assert.Equal(t, "example.com/dep.Bbb", bbb.FullPath)
+	assert.Len(t, bbb.Fields.Items, 3)
+}
+
+// synthStruct builds a named struct type whose TypeName and fields all sit at
+// pos, mimicking what gcimporter produces when it reads export data.
+func synthStruct(
+	pkg *types.Package,
+	pos token.Pos,
+	name string,
+	fieldNames ...string,
+) (*types.TypeName, *types.Struct) {
+	fields := make([]*types.Var, 0, len(fieldNames))
+
+	for _, fieldName := range fieldNames {
+		fields = append(fields, types.NewField(pos, pkg, fieldName, types.Typ[types.Int], false))
+	}
+
+	strct := types.NewStruct(fields, nil)
+
+	typeName := types.NewTypeName(pos, pkg, name, nil)
+	types.NewNamed(typeName, strct, nil)
+
+	return typeName, strct
+}

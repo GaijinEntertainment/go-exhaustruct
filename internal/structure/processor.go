@@ -9,11 +9,30 @@ import (
 	"dev.gaijin.team/go/exhaustruct/v5/internal/pattern"
 )
 
+// structKey identifies a struct type in the struct cache.
+//
+// A source position cannot serve as that identity. Export data is not required
+// to carry a faithful one: gcimporter discards the column outright and clamps
+// any line past 64Ki to 1, so distinct declarations inside one dependency file
+// collapse onto a single token.Position. go/types objects, in contrast, are
+// unique per declaration per loaded package.
+type structKey struct {
+	// name is the type's TypeName, nil for anonymous structs.
+	name *types.TypeName
+	// strct is the underlying struct type. It alone identifies an anonymous
+	// struct, and guards against a shared TypeName for a named one.
+	strct *types.Struct
+	// callerPkg is set for anonymous structs only, whose metadata is derived
+	// from the package that uses them. Named types are caller-independent and
+	// share one entry across every package that references them.
+	callerPkg *types.Package
+}
+
 type Processor struct {
 	directives  *directive.Scanner
 	origins     *OriginScanner
 	fieldsCache *cache.Cache[*types.Struct, structFields]
-	structCache *cache.Cache[token.Position, *Struct]
+	structCache *cache.Cache[structKey, *Struct]
 
 	enforce    pattern.List //exhaustruct:optional
 	ignore     pattern.List //exhaustruct:optional
@@ -46,7 +65,7 @@ func NewProcessor(directives *directive.Scanner, origins *OriginScanner, opts ..
 		directives:  directives,
 		origins:     origins,
 		fieldsCache: cache.New[*types.Struct, structFields](cachePreallocSize),
-		structCache: cache.New[token.Position, *Struct](cachePreallocSize),
+		structCache: cache.New[structKey, *Struct](cachePreallocSize),
 	}
 
 	for _, opt := range opts {
@@ -82,27 +101,26 @@ func (p *Processor) ResolveStruct(
 		return nil
 	}
 
-	// Positions are taken unadjusted: they locate the declaration on disk, and
-	// //line directives point at files that hold no Go source.
-	position := fset.PositionFor(pos, false)
-
-	// Check cache before allocating
-	if position.IsValid() {
-		if cached, ok := p.structCache.Get(position); ok {
-			return cached
-		}
+	key := structKey{name: typeName, strct: strct, callerPkg: nil}
+	if typeName == nil {
+		key.callerPkg = callerPkg
 	}
 
-	s := p.buildStruct(typeName, position, callerPkg)
+	// Check cache before allocating
+	if cached, ok := p.structCache.Get(key); ok {
+		return cached
+	}
+
+	// Positions are taken unadjusted: they locate the declaration on disk, and
+	// //line directives point at files that hold no Go source.
+	s := p.buildStruct(typeName, fset.PositionFor(pos, false), callerPkg)
 
 	p.populateFields(fset, s, strct)
 	p.resolveStructOrigin(fset, s)
 	p.resolveStructDirectives(fset, s)
 	p.matchStructPatterns(s)
 
-	if s.Position.IsValid() {
-		p.structCache.Set(s.Position, s)
-	}
+	p.structCache.Set(key, s)
 
 	return s
 }
