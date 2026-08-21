@@ -935,3 +935,36 @@ func Test_Struct_SkippedFields_PromotedPatterns(t *testing.T) {
 		})
 	}
 }
+
+// Test_Struct_SkippedFields_PositionalBlank covers a positional literal that
+// stops short of the field list. Go rejects such a literal, so no compiling
+// fixture reaches this path and the literal here is parsed rather than built.
+//
+// Blank fields stay in Items to keep positions aligned with the declaration:
+// dropping them would shift every field after one, and a literal ending before
+// the blank would look complete.
+func Test_Struct_SkippedFields_PositionalBlank(t *testing.T) {
+	t.Parallel()
+
+	fset := token.NewFileSet()
+	pos := fset.AddFile("testdata/structs.go", -1, 10000).Pos(0)
+	pkg := types.NewPackage("example.com/dep", "dep")
+
+	typeName, strct, _ := synthNamed(t, pkg, pos, "Padded",
+		types.NewField(pos, pkg, "A", types.Typ[types.Byte], false),
+		types.NewField(pos, pkg, "_", types.NewArray(types.Typ[types.Byte], 3), false),
+		types.NewField(pos, pkg, "B", types.Typ[types.Byte], false))
+
+	fp := astutil.NewFileParser()
+	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+
+	resolved := proc.ResolveStruct(fset, typeName, strct, pos, pkg)
+	require.NotNil(t, resolved)
+
+	require.Len(t, resolved.Fields.Items, 3, "the blank field holds its position")
+
+	// Two elements supplied, so only B is left; were the blank field dropped,
+	// two elements would cover the whole list and nothing would be reported.
+	assert.Equal(t, "B", structure.FormatFieldNames(
+		resolved.SkippedFields(parseLiteral(t, `Padded{1, x}`), "example.com/dep")))
+}
