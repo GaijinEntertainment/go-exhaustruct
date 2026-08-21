@@ -151,3 +151,73 @@ func TestList_MatchFullString_NilList(t *testing.T) {
 
 	assert.False(t, list.MatchFullString("anything"), "nil list should not match anything")
 }
+
+// TestList_MatchFullString_Alternation covers alternations whose shorter branch
+// precedes a longer one. Go's regexp is leftmost-first, so a search commits to
+// the shorter branch and the match stops short of the end — even though the
+// pattern can match the whole string.
+func TestList_MatchFullString_Alternation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		pattern string
+		target  string
+		want    bool
+	}{
+		{"shorter branch first", `.*\.(Config|ConfigOption)`, "example.com/pkg.ConfigOption", true},
+		{"longer branch first", `.*\.(ConfigOption|Config)`, "example.com/pkg.ConfigOption", true},
+		{"shorter branch still matches", `.*\.(Config|ConfigOption)`, "example.com/pkg.Config", true},
+		{"prefix of a branch does not match", `.*\.(Config|ConfigOption)`, "example.com/pkg.Conf", false},
+		{"branch is a strict prefix of target", `.*\.(Config|ConfigOption)`, "example.com/pkg.Configs", false},
+		{"nested alternation", `.*\.(A|AB|ABC)Suffix`, "example.com/pkg.ABCSuffix", true},
+		{"optional group", `.*\.Config(Option)?`, "example.com/pkg.ConfigOption", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			list, err := pattern.NewList(tt.pattern)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.want, list.MatchFullString(tt.target))
+		})
+	}
+}
+
+// TestList_MatchFullString_AuthorAnchors covers patterns an author anchored
+// themselves. A pattern matches the whole target however it is written, so the
+// anchors are redundant, and the ones written inside a group or a branch must
+// keep meaning what the author meant.
+func TestList_MatchFullString_AuthorAnchors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		pattern string
+		target  string
+		want    bool
+	}{
+		{"both anchors", `^example\.com/pkg\.Config$`, "example.com/pkg.Config", true},
+		{"start anchor only", `^example\.com/pkg\.Config`, "example.com/pkg.Config", true},
+		{"end anchor only", `example\.com/pkg\.Config$`, "example.com/pkg.Config", true},
+		{"anchors around an alternation", `^.*\.(Config|ConfigOption)$`, "example.com/pkg.ConfigOption", true},
+		{"anchors inside each branch", `^a$|^example\.com/pkg\.Config$`, "example.com/pkg.Config", true},
+		{"end anchor inside one branch", `a$|example\.com/pkg\.Config`, "example.com/pkg.Config", true},
+		{"text anchors", `\Aexample\.com/pkg\.Config\z`, "example.com/pkg.Config", true},
+		{"anchored pattern still rejects a longer target", `^pkg\.Config$`, "pkg.ConfigOption", false},
+		{"case-insensitive flag", `(?i)EXAMPLE\.COM/PKG\.CONFIG`, "example.com/pkg.Config", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			list, err := pattern.NewList(tt.pattern)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.want, list.MatchFullString(tt.target))
+		})
+	}
+}

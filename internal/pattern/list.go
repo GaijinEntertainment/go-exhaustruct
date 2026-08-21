@@ -40,7 +40,9 @@ func (l List) MatchFullString(target string) bool {
 
 	for i := range len(l) {
 		// A match spanning [0, len(target)) covers every byte of target, so the
-		// matched substring is target itself — no need to allocate it for comparison.
+		// matched substring is target itself -- no need to allocate it for
+		// comparison. Patterns match leftmost-longest, so the span of the match
+		// found at 0 is the longest one there is.
 		if loc := l[i].FindStringIndex(target); loc != nil && loc[0] == 0 && loc[1] == len(target) {
 			return true
 		}
@@ -58,6 +60,17 @@ func compilePattern(pattern string) (*regexp.Regexp, error) {
 	if err != nil {
 		return nil, e.NewFrom("compile regular expression", err, fields.F("pattern", pattern))
 	}
+
+	// Match leftmost-longest. The default is leftmost-first, under which
+	// `.*\.(Config|ConfigOption)` commits to the Config branch against
+	// "pkg.ConfigOption" and stops short of the end, so testing the span of the
+	// match rejects a pattern that does match the whole string. The longest
+	// match at position 0 spans the target whenever any match does.
+	//
+	// The pattern is compiled as the author wrote it. Wrapping it to anchor
+	// would put the author's own anchors inside a group and make what a pattern
+	// means depend on how it is written.
+	re.Longest()
 
 	return re, nil
 }
