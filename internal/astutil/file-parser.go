@@ -24,12 +24,12 @@ type ParseCallback func(fset *token.FileSet, file *ast.File) []analysis.Diagnost
 //
 // Safe for concurrent use.
 type FileParser struct {
-	mu         sync.RWMutex `exhaustruct:"optional"`
+	mu         sync.RWMutex //exhaustruct:optional
 	parsed     map[string]bool
-	callbacks  []ParseCallback `exhaustruct:"optional"`
-	parseFlags parser.Mode     `exhaustruct:"optional"`
-	hits       atomic.Uint64   `exhaustruct:"optional"`
-	misses     atomic.Uint64   `exhaustruct:"optional"`
+	callbacks  []ParseCallback //exhaustruct:optional
+	parseFlags parser.Mode     //exhaustruct:optional
+	hits       atomic.Uint64   //exhaustruct:optional
+	misses     atomic.Uint64   //exhaustruct:optional
 }
 
 type Option func(*FileParser)

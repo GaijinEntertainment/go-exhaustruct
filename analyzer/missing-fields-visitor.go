@@ -109,10 +109,13 @@ func (lv literalVisitor) process() {
 
 // resolveLiteral extracts struct type information from the composite literal,
 // retrieves cached metadata, and looks up directives.
+//
+// The named result carries the zero value on the paths that report ok=false,
+// where the caller discards it and there is no struct to describe.
 func (lv literalVisitor) resolveLiteral() (lit literal, ok bool) {
 	typeName, strct, pos := lv.resolveLiteralType()
 	if strct == nil {
-		return literal{}, false //nolint:exhaustruct
+		return lit, false
 	}
 
 	s, diags := lv.processor.ResolveStruct(
@@ -124,7 +127,7 @@ func (lv literalVisitor) resolveLiteral() (lit literal, ok bool) {
 	}
 
 	if s == nil {
-		return literal{}, false //nolint:exhaustruct
+		return lit, false
 	}
 
 	litPos := lv.pass.Fset.Position(lv.lit.Pos())

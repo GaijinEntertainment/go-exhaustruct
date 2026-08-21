@@ -438,7 +438,7 @@ func Test_Struct_isFieldRequired_combinations(t *testing.T) {
 			}
 
 			// Empty literal to trigger check of all fields.
-			lit := &ast.CompositeLit{Elts: []ast.Expr{}} //nolint:exhaustruct
+			lit := &ast.CompositeLit{Elts: []ast.Expr{}}
 
 			skipped := s.SkippedFields(lit, tt.callerPkg)
 

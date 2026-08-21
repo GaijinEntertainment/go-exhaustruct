@@ -14,7 +14,7 @@ type Config struct {
 	// Each regular expression must match the full type name, including package path.
 	// For example, to match type `net/http.Cookie` regular expression should be
 	// `.*/http\.Cookie`, but not `http\.Cookie`.
-	EnforcePatterns Patterns `exhaustruct:"optional"`
+	EnforcePatterns Patterns //exhaustruct:optional
 
 	// IgnorePatterns is a list of regular expressions to match type names that
 	// should be skipped from checking. Anonymous structs can be matched by
@@ -25,7 +25,7 @@ type Config struct {
 	// Each regular expression must match the full type name, including package path.
 	// For example, to match type `net/http.Cookie` regular expression should be
 	// `.*/http\.Cookie`, but not `http\.Cookie`.
-	IgnorePatterns Patterns `exhaustruct:"optional"`
+	IgnorePatterns Patterns //exhaustruct:optional
 
 	// OptionalPatterns is a list of regular expressions to match type names where
 	// all fields are treated as optional. Anonymous structs can be matched by
@@ -34,10 +34,10 @@ type Config struct {
 	// Each regular expression must match the full type name, including package path.
 	// For example, to match type `net/http.Cookie` regular expression should be
 	// `.*/http\.Cookie`, but not `http\.Cookie`.
-	OptionalPatterns Patterns `exhaustruct:"optional"`
+	OptionalPatterns Patterns //exhaustruct:optional
 
 	// AllowEmpty allows empty structures, effectively excluding them from the check.
-	AllowEmpty bool `exhaustruct:"optional"`
+	AllowEmpty bool //exhaustruct:optional
 
 	// AllowEmptyPatterns is a list of regular expressions to match type names that
 	// should be allowed to be empty. Anonymous structs can be matched by
@@ -46,22 +46,22 @@ type Config struct {
 	// Each regular expression must match the full type name, including package path.
 	// For example, to match type `net/http.Cookie` regular expression should be
 	// `.*/http\.Cookie`, but not `http\.Cookie`.
-	AllowEmptyPatterns Patterns `exhaustruct:"optional"`
+	AllowEmptyPatterns Patterns //exhaustruct:optional
 
 	// AllowEmptyReturns allows empty structures in return statements.
-	AllowEmptyReturns bool `exhaustruct:"optional"`
+	AllowEmptyReturns bool //exhaustruct:optional
 
 	// AllowEmptyDeclarations allows empty structures in variable declarations.
-	AllowEmptyDeclarations bool `exhaustruct:"optional"`
+	AllowEmptyDeclarations bool //exhaustruct:optional
 
 	// ReportFullTypePath enables full package path in error messages instead of
 	// short package name. This helps when configuring include/exclude patterns,
 	// as import aliases can make short names ambiguous.
-	ReportFullTypePath bool `exhaustruct:"optional"`
+	ReportFullTypePath bool //exhaustruct:optional
 
 	// ExplicitMode enables opt-in checking. When true, only types marked with
 	// //exhaustruct:enforce directive or matching enforce-rx patterns are checked.
-	ExplicitMode bool `exhaustruct:"optional"`
+	ExplicitMode bool //exhaustruct:optional
 }
 
 // bindToFlagSet binds the config fields to the provided flag set.

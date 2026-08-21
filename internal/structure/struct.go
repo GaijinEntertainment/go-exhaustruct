@@ -13,11 +13,11 @@ type fieldInfo struct {
 	// name is the name of the field.
 	name string
 	// exported indicates if the field is exported.
-	exported bool `exhaustruct:"optional"`
+	exported bool //exhaustruct:optional
 	// enforced indicates if the field is enforced via directive.
-	enforced bool `exhaustruct:"optional"`
+	enforced bool //exhaustruct:optional
 	// optional indicates if the field is optional via directive.
-	optional bool `exhaustruct:"optional"`
+	optional bool //exhaustruct:optional
 }
 
 // structFields contains field information for a struct, independent of type name.
@@ -33,22 +33,22 @@ type Struct struct {
 	FullPath    string
 	PackageName string
 
-	Position token.Position `exhaustruct:"optional"`
-	Fields   Fields         `exhaustruct:"optional"`
+	Position token.Position //exhaustruct:optional
+	Fields   Fields         //exhaustruct:optional
 
-	Enforced bool `exhaustruct:"optional"`
-	Ignored  bool `exhaustruct:"optional"`
-	Optional bool `exhaustruct:"optional"`
+	Enforced bool //exhaustruct:optional
+	Ignored  bool //exhaustruct:optional
+	Optional bool //exhaustruct:optional
 
-	PatternEnforced bool `exhaustruct:"optional"`
-	PatternIgnored  bool `exhaustruct:"optional"`
-	PatternOptional bool `exhaustruct:"optional"`
+	PatternEnforced bool //exhaustruct:optional
+	PatternIgnored  bool //exhaustruct:optional
+	PatternOptional bool //exhaustruct:optional
 
-	AllowEmptyDecl bool `exhaustruct:"optional"`
+	AllowEmptyDecl bool //exhaustruct:optional
 
 	// Detected via OriginScanner AST inspection before types.Unalias.
-	IsAlias   bool `exhaustruct:"optional"`
-	IsDerived bool `exhaustruct:"optional"`
+	IsAlias   bool //exhaustruct:optional
+	IsDerived bool //exhaustruct:optional
 }
 
 // PackagePath returns the package path of the struct type.
@@ -187,12 +187,12 @@ func (s *Struct) isFieldRequired(f Field, externalPkg bool) bool {
 
 type Field struct {
 	Name     string
-	Exported bool `exhaustruct:"optional"`
-	Enforced bool `exhaustruct:"optional"`
-	Optional bool `exhaustruct:"optional"`
+	Exported bool //exhaustruct:optional
+	Enforced bool //exhaustruct:optional
+	Optional bool //exhaustruct:optional
 
-	PatternEnforced bool `exhaustruct:"optional"`
-	PatternOptional bool `exhaustruct:"optional"`
+	PatternEnforced bool //exhaustruct:optional
+	PatternOptional bool //exhaustruct:optional
 }
 
 // Fields is a collection of struct fields with shared package metadata.

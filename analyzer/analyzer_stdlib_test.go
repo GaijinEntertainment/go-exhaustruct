@@ -57,7 +57,7 @@ func TestAnalyzer_StdlibExportData(t *testing.T) {
 func loadFromExportData(t *testing.T, pattern string) *packages.Package {
 	t.Helper()
 
-	cfg := &packages.Config{ //nolint:exhaustruct // remaining fields are loader defaults
+	cfg := &packages.Config{
 		// NeedDeps is deliberately absent: it is what makes the loader
 		// type-check dependencies from source.
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |

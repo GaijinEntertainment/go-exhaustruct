@@ -62,12 +62,12 @@ func Test_Scanner_ProcessFiles_MultipleFiles(t *testing.T) {
 	_, _, size := scanner.Stats()
 	assert.Equal(t, uint64(2), size)
 
-	pos1 := token.Position{Filename: "file1.go", Line: 3} //nolint:exhaustruct // only Filename and Line needed
+	pos1 := token.Position{Filename: "file1.go", Line: 3}
 	d, diags := scanner.Lookup(fset, pos1)
 	assert.Equal(t, directive.Directives{directive.Ignore}, d)
 	assert.Nil(t, diags) // cache hit, no diagnostics
 
-	pos2 := token.Position{Filename: "file2.go", Line: 3} //nolint:exhaustruct // only Filename and Line needed
+	pos2 := token.Position{Filename: "file2.go", Line: 3}
 
 	d, diags = scanner.Lookup(fset, pos2)
 	assert.Equal(t, directive.Directives{directive.Enforce}, d)
@@ -88,7 +88,7 @@ func Test_Scanner_Lookup(t *testing.T) {
 
 	scanner.ProcessFiles(fset, file)
 
-	pos := token.Position{Filename: "test.go", Line: 3} //nolint:exhaustruct // only Filename and Line needed
+	pos := token.Position{Filename: "test.go", Line: 3}
 
 	d, diags := scanner.Lookup(fset, pos)
 	assert.Equal(t, directive.Directives{directive.Optional}, d)
@@ -115,7 +115,7 @@ func Test_Scanner_Lookup_EmptyFilename(t *testing.T) {
 	fp := astutil.NewFileParser()
 	scanner := directive.NewScanner(fp)
 
-	pos := token.Position{} //nolint:exhaustruct // testing empty filename
+	pos := token.Position{}
 
 	d, diags := scanner.Lookup(fset, pos)
 	assert.Nil(t, d)
@@ -135,7 +135,7 @@ func Test_Scanner_Lookup_ParseError(t *testing.T) {
 	fp := astutil.NewFileParser()
 	scanner := directive.NewScanner(fp)
 
-	pos := token.Position{Filename: "nonexistent.go", Line: 1} //nolint:exhaustruct // only Filename and Line needed
+	pos := token.Position{Filename: "nonexistent.go", Line: 1}
 
 	d, diags := scanner.Lookup(fset, pos)
 	assert.Nil(t, d)
@@ -154,7 +154,6 @@ func Test_Scanner_Lookup_GoRoot(t *testing.T) {
 	fp := astutil.NewFileParser()
 	scanner := directive.NewScanner(fp)
 
-	//nolint:exhaustruct // only Filename and Line needed
 	pos := token.Position{Filename: "$GOROOT/src/strings/builder.go", Line: 30}
 
 	d, diags := scanner.Lookup(fset, pos)
@@ -175,7 +174,7 @@ func Test_Scanner_Lookup_NoDirectiveAtLine(t *testing.T) {
 	scanner := directive.NewScanner(fp)
 	scanner.ProcessFiles(fset, file)
 
-	pos := token.Position{Filename: "test.go", Line: 1} //nolint:exhaustruct // only Filename and Line needed
+	pos := token.Position{Filename: "test.go", Line: 1}
 	d, _ := scanner.Lookup(fset, pos)
 	assert.Nil(t, d)
 }
@@ -194,7 +193,7 @@ func Test_Scanner_Lookup_AfterAdd(t *testing.T) {
 
 	scanner.ProcessFiles(fset, file)
 
-	pos := token.Position{Filename: "shared.go", Line: 3} //nolint:exhaustruct // only Filename and Line needed
+	pos := token.Position{Filename: "shared.go", Line: 3}
 	d, diags := scanner.Lookup(fset, pos)
 	assert.Equal(t, directive.Directives{directive.Enforce}, d)
 	assert.Nil(t, diags) // cache hit, no diagnostics
@@ -213,7 +212,7 @@ func Test_Scanner_Lookup_ProcessFilename(t *testing.T) {
 	fp := astutil.NewFileParser()
 	scanner := directive.NewScanner(fp)
 
-	pos := token.Position{Filename: filename, Line: 4} //nolint:exhaustruct // only Filename and Line needed
+	pos := token.Position{Filename: filename, Line: 4}
 
 	d, diags := scanner.Lookup(fset, pos)
 	assert.Equal(t, directive.Directives{directive.Optional}, d)
@@ -297,7 +296,7 @@ var x int //exhaustruct:enforce
 			scanner := directive.NewScanner(fp)
 			scanner.ProcessFiles(fset, file)
 
-			pos := token.Position{Filename: "test.go", Line: tt.line} //nolint:exhaustruct
+			pos := token.Position{Filename: "test.go", Line: tt.line}
 			got, _ := scanner.Lookup(fset, pos)
 
 			assert.Equal(t, tt.want, got)
@@ -369,14 +368,14 @@ func Test_Scanner_Testdata(t *testing.T) {
 
 	// Verify expected directives
 	for line, want := range expectDirective {
-		pos := token.Position{Filename: "testdata/directives.go", Line: line} //nolint:exhaustruct
+		pos := token.Position{Filename: "testdata/directives.go", Line: line}
 		got, _ := scanner.Lookup(fset, pos)
 		assert.Equal(t, want, got, "line %d: expected %v, got %v", line, want, got)
 	}
 
 	// Verify no directives where expected
 	for _, line := range expectNoDirective {
-		pos := token.Position{Filename: "testdata/directives.go", Line: line} //nolint:exhaustruct
+		pos := token.Position{Filename: "testdata/directives.go", Line: line}
 		got, _ := scanner.Lookup(fset, pos)
 		assert.Empty(t, got, "line %d: expected no directive, got %v", line, got)
 	}
@@ -400,7 +399,7 @@ func Test_Scanner_Lookup_Concurrent(t *testing.T) {
 
 	// Lookup same position concurrently WITHOUT pre-populating.
 	// Verifies thread-safety of on-demand parsing.
-	pos := token.Position{Filename: filename, Line: 4} //nolint:exhaustruct
+	pos := token.Position{Filename: filename, Line: 4}
 
 	var wg sync.WaitGroup
 

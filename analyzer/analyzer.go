@@ -61,7 +61,7 @@ func NewAnalyzerWithConfig(config Config) (*analysis.Analyzer, error) {
 }
 
 func newBaseAnalyzer(run func(*analysis.Pass) (any, error)) *analysis.Analyzer {
-	return &analysis.Analyzer{ //nolint:exhaustruct
+	return &analysis.Analyzer{
 		Name:     "exhaustruct",
 		Doc:      "Checks if all structure fields are initialized",
 		Run:      run,

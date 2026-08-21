@@ -17,10 +17,10 @@ type Processor struct {
 	fieldsCache *cache.Cache[*types.Struct, structFields]
 	structCache *cache.Cache[token.Position, *Struct]
 
-	enforce    pattern.List `exhaustruct:"optional"`
-	ignore     pattern.List `exhaustruct:"optional"`
-	optional   pattern.List `exhaustruct:"optional"`
-	allowEmpty pattern.List `exhaustruct:"optional"`
+	enforce    pattern.List //exhaustruct:optional
+	ignore     pattern.List //exhaustruct:optional
+	optional   pattern.List //exhaustruct:optional
+	allowEmpty pattern.List //exhaustruct:optional
 }
 
 type Option func(*Processor)
