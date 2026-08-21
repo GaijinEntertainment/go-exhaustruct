@@ -153,6 +153,12 @@ func TestAnalyzerTypes(t *testing.T) {
 			testFixes:   false,
 		},
 		{
+			name:        "blank",
+			config:      analyzer.Config{},
+			testPackage: "testdata/types/blank",
+			testFixes:   false,
+		},
+		{
 			name: "anonymous",
 			config: analyzer.Config{
 				EnforcePatterns: []string{`.*\.<anonymous>`},

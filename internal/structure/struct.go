@@ -8,6 +8,9 @@ import (
 
 const AnonymousName = "<anonymous>"
 
+// BlankFieldName is the name go/types gives a blank struct field.
+const BlankFieldName = "_"
+
 // outermost marks the promotion walk's first level, where a field owns itself
 // rather than inheriting an owner from the level above.
 const outermost = -1
@@ -168,6 +171,14 @@ func (s *Struct) skippedIn(fs *Fields, keys map[string]bool, callerPkgPath strin
 
 	for i, f := range fs.Items {
 		if keys[f.Name] {
+			continue
+		}
+
+		// A blank field has no name to write, so a keyed literal can never
+		// initialize it and reporting it yields a finding nobody can act on.
+		// Positional literals do supply a value for it, which skippedPositional
+		// accounts for by keeping blank fields in Items.
+		if f.Name == BlankFieldName {
 			continue
 		}
 
