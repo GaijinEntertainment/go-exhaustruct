@@ -123,17 +123,67 @@ func (lv literalVisitor) resolveLiteral() (lit literal, ok bool) {
 		return lit, false
 	}
 
-	// Unadjusted: the directive was written in the physical file, whatever a
-	// //line directive renames it to.
-	dirs := lv.processor.Directives().Lookup(
-		lv.pass.Fset, lv.pass.Fset.PositionFor(lv.lit.Pos(), false),
-	)
+	dirs := lv.useSiteDirectives()
 
 	return literal{
 		strct:    s,
 		ignored:  dirs.Contains(directive.Ignore),
 		enforced: dirs.Contains(directive.Enforce),
 	}, true
+}
+
+// useSiteDirectives collects the directives that apply to the literal.
+//
+// A directive is written above the statement holding a literal, not above every
+// literal nested inside it, so the search climbs out of the expression the
+// literal sits in and reads the statement holding it. Enumerating the node
+// kinds a literal may be written within cannot be complete -- parentheses,
+// selectors, operators, calls, sends and index expressions each nest literals,
+// and the list grew by one every time a shape was missed -- so the walk asks
+// what a node is instead: it climbs through expressions, and through the specs
+// and declarations a var block is built from, until it reaches a statement.
+//
+// It stops there. A statement is where a directive is written, and going above
+// one would let a directive on an `if` or a `for` reach every literal in the
+// block below it.
+func (lv literalVisitor) useSiteDirectives() directive.Directives {
+	var dirs directive.Directives
+
+	for _, node := range slices.Backward(lv.stack) {
+		if !carriesUseSiteDirective(node) {
+			break
+		}
+
+		// Unadjusted: the directive was written in the physical file, whatever
+		// a //line directive renames it to.
+		found := lv.processor.Directives().Lookup(
+			lv.pass.Fset, lv.pass.Fset.PositionFor(node.Pos(), false),
+		)
+
+		for _, d := range found {
+			if !dirs.Contains(d) {
+				dirs = append(dirs, d)
+			}
+		}
+
+		if _, isStatement := node.(ast.Stmt); isStatement {
+			break
+		}
+	}
+
+	return dirs
+}
+
+// carriesUseSiteDirective reports whether a directive written above node can
+// apply to a composite literal nested inside it.
+func carriesUseSiteDirective(node ast.Node) bool {
+	switch node.(type) {
+	case ast.Expr, ast.Spec, ast.Decl, ast.Stmt:
+		return true
+
+	default:
+		return false
+	}
 }
 
 // resolveLiteralType resolves the composite literal's type and definition position.
@@ -409,6 +459,9 @@ func (lv literalVisitor) isChildOfVariableDeclaration() bool {
 		case *ast.ValueSpec:
 			return true
 
+		case *ast.ParenExpr:
+			continue
+
 		case *ast.UnaryExpr:
 			if p.Op == token.AND {
 				continue
@@ -436,6 +489,9 @@ func (lv literalVisitor) getParentReturnStmt() (*ast.ReturnStmt, bool) {
 		case *ast.ReturnStmt:
 			return p, true
 
+		case *ast.ParenExpr:
+			continue
+
 		case *ast.UnaryExpr:
 			if p.Op == token.AND {
 				continue
@@ -460,6 +516,8 @@ func (lv literalVisitor) isErrorReturnStatement(n *ast.ReturnStmt) bool {
 	}
 
 	for _, ri := range slices.Backward(n.Results) {
+		ri = unparen(ri)
+
 		if ri == lv.lit {
 			continue
 		}
@@ -471,7 +529,7 @@ func (lv literalVisitor) isErrorReturnStatement(n *ast.ReturnStmt) bool {
 			}
 
 		case *ast.UnaryExpr:
-			if ri.X == lv.lit {
+			if unparen(ri.X) == lv.lit {
 				continue
 			}
 
@@ -485,4 +543,18 @@ func (lv literalVisitor) isErrorReturnStatement(n *ast.ReturnStmt) bool {
 	}
 
 	return false
+}
+
+// unparen strips redundant parentheses, which gofmt keeps and which would
+// otherwise break the walks that match a literal against its enclosing
+// expression.
+func unparen(expr ast.Expr) ast.Expr {
+	for {
+		paren, ok := expr.(*ast.ParenExpr)
+		if !ok {
+			return expr
+		}
+
+		expr = paren.X
+	}
 }

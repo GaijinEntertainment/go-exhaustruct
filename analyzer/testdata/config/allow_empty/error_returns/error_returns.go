@@ -55,3 +55,28 @@ func shouldFailNestedWithError() ([]TestStruct, error) {
 	// Struct in slice is checked even with non-nil error
 	return []TestStruct{{}}, os.ErrNotExist // want "error_returns.TestStruct is missing field A"
 }
+
+func shouldPassEmptyInParenthesizedErrorReturn() (TestStruct, error) {
+	return (TestStruct{}), fmt.Errorf("boom")
+}
+
+// The error result is parenthesized, and is still the error accompanying the
+// literal under check.
+func shouldPassEmptyWithParenthesizedErrorResult() (TestStruct, error) {
+	return TestStruct{}, (&BError{"boom"})
+}
+
+// The literal under check is itself an error type and parenthesized. Telling it
+// apart from an error returned beside it means looking through the parentheses
+// on both sides of the comparison: taken at face value the literal counts as
+// its own error, and its emptiness goes unreported.
+func shouldFailParenthesizedErrorLiteral() (*BError, error) {
+	return (&BError{}), nil // want "error_returns.BError is missing field msg"
+}
+
+// Repeated parentheses, which unparen strips to the literal underneath. Peeling
+// one layer leaves a ParenExpr that is not the literal under check, so it
+// counts as its own error again.
+func shouldFailRepeatedlyParenthesizedErrorLiteral() (*BError, error) {
+	return ((&BError{})), nil // want "error_returns.BError is missing field msg"
+}
