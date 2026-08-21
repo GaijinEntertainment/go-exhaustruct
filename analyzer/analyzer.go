@@ -108,5 +108,5 @@ func run(pass *analysis.Pass, config *Config, processor *structure.Processor) {
 	}
 
 	newMissingFieldsVisitor(pass, config, processor).run()
-	runTagMigration(pass)
+	newTagMigrationVisitor(pass, processor).run()
 }

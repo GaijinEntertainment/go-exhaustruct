@@ -36,6 +36,18 @@ func TestAnalyzerPromotedFields(t *testing.T) {
 	analysistest.Run(t, go127TestdataPath, a, "go127/promoted")
 }
 
+// TestAnalyzerIgnoredTags covers deprecated tags on a type excluded by pattern.
+func TestAnalyzerIgnoredTags(t *testing.T) {
+	t.Parallel()
+
+	a, err := analyzer.NewAnalyzerWithConfig(analyzer.Config{
+		IgnorePatterns: []string{`.*\.Excluded.*`, `.*\.<anonymous>`},
+	})
+	require.NoError(t, err)
+
+	analysistest.RunWithSuggestedFixes(t, testdataPath, a, "testdata/config/ignored_tags")
+}
+
 // TestAnalyzerDependencyDirectives covers directives that are malformed in a
 // dependency. A diagnostic about them would land on a file the analyzed package
 // does not own and usually cannot edit, so the consuming package reports only
@@ -215,6 +227,14 @@ func TestAnalyzerTypes(t *testing.T) {
 			config:      analyzer.Config{},
 			testPackage: "testdata/types/tags",
 			testFixes:   true,
+		},
+		{
+			name: "deprecated tags on a parenthesised declaration",
+			config: analyzer.Config{
+				IgnorePatterns: []string{`.*\.ExcludedParen`},
+			},
+			testPackage: "testdata/types/paren_tags",
+			testFixes:   false,
 		},
 	}
 

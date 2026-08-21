@@ -3,17 +3,20 @@ package tags
 // Simple deprecated tag - only exhaustruct tag
 type Simple struct {
 	Required string
-	Optional string `exhaustruct:"optional"` // want `struct tag "exhaustruct" is not supported anymore`
+	// want +1 `struct tag "exhaustruct" is not supported anymore`
+	Optional string `exhaustruct:"optional"`
 }
 
 // Tag with other keys - should preserve other tags in fix
 type WithOtherTags struct {
-	Field string `json:"field" exhaustruct:"optional"` // want `struct tag "exhaustruct" is not supported anymore`
+	// want +1 `struct tag "exhaustruct" is not supported anymore`
+	Field string `json:"field" exhaustruct:"optional"`
 }
 
 // Tag at start of tag string
 type TagAtStart struct {
-	Field string `exhaustruct:"optional" json:"field"` // want `struct tag "exhaustruct" is not supported anymore`
+	// want +1 `struct tag "exhaustruct" is not supported anymore`
+	Field string `exhaustruct:"optional" json:"field"`
 }
 
 // Modern format - no warning expected
@@ -24,11 +27,171 @@ type Modern struct {
 
 // Embedded field with deprecated tag
 type WithEmbedded struct {
-	Simple `exhaustruct:"optional"` // want `struct tag "exhaustruct" is not supported anymore`
+	// want +1 `struct tag "exhaustruct" is not supported anymore`
+	Simple `exhaustruct:"optional"`
 }
 
 // Invalid tag values - should just be removed
 type WithInvalidTag struct {
 	Field1 string `exhaustruct:"enforce"` // want `struct tag "exhaustruct" is not supported anymore`
 	Field2 string `exhaustruct:"foo"`     // want `struct tag "exhaustruct" is not supported anymore`
+}
+
+// Single-line struct: appending a line comment would comment out the rest of
+// the line, including the closing brace, so the directive takes a line above
+// the field.
+type OneLine struct{ Field string `exhaustruct:"optional"` } // want `struct tag "exhaustruct" is not supported anymore`
+
+// Tag written as an interpreted string literal rather than a raw one.
+type InterpretedTag struct {
+	// want +1 `struct tag "exhaustruct" is not supported anymore`
+	Field    string "exhaustruct:\"optional\""
+	Required string
+}
+
+// Ignored wholesale, and its dead tags migrate all the same.
+//
+//exhaustruct:ignore
+type IgnoredByDirective struct {
+	// want +1 `struct tag "exhaustruct" is not supported anymore`
+	Field string `exhaustruct:"optional"`
+}
+
+// A tag key ending in "exhaustruct" is a different key and has to survive the
+// migration untouched.
+type NeighbouringKey struct {
+	// want +1 `struct tag "exhaustruct" is not supported anymore`
+	Field string `fooexhaustruct:"keep" exhaustruct:"optional"`
+}
+
+// An escaped quote does not end a tag value, so the entry after it has to
+// survive the migration whole.
+type EscapedQuoteInValue struct {
+	Field string `json:"x" exhaustruct:"foo\"bar" yaml:"y"` // want `struct tag "exhaustruct" is not supported anymore`
+}
+
+// Lookup answers with the first of two identical keys, so a fix that stopped
+// there would leave the field deprecated.
+type DuplicateKey struct {
+	// want +1 `struct tag "exhaustruct" is not supported anymore`
+	Field string `exhaustruct:"optional" exhaustruct:"optional"`
+}
+
+// Fields sharing a line leave nowhere to append the directive: one line comment
+// would swallow the fields after it.
+type FieldsShareLine struct {
+	First string `exhaustruct:"optional"`; Second string `exhaustruct:"optional"`; Third int // want `struct tag "exhaustruct" is not supported anymore` `struct tag "exhaustruct" is not supported anymore`
+}
+
+// A block comment running past the tag's line cannot be commented out: the
+// directive would bury its opening delimiter and leave the closing one stray.
+type BlockCommentAfterTag struct {
+	Field string `exhaustruct:"optional"` /* want `struct tag "exhaustruct" is not supported anymore`
+	*/
+	Other int
+}
+
+// A directive already trailing the field must survive: appending the migrated
+// one to that line would fold both into a single comment, of which the parser
+// reads only the first word.
+type TrailingDirective struct {
+	Field string `exhaustruct:"optional"` //exhaustruct:enforce // want `struct tag "exhaustruct" is not supported anymore`
+}
+
+// The same holds for a comment that carries no directive at all: appending
+// would bury it inside the migrated one.
+type TrailingComment struct {
+	Field string `exhaustruct:"optional"` // keep this note // want `struct tag "exhaustruct" is not supported anymore`
+}
+
+// A directive between the field's type and its tag governs the field, so the
+// tag is removed and nothing is written over it. Dropping the whole tag stops
+// short of the comment.
+type DirectiveBeforeTag struct {
+	Field string /*exhaustruct:enforce*/ `exhaustruct:"optional"` // want `struct tag "exhaustruct" is not supported anymore`
+}
+
+// A comment in that position carries no directive, and is kept all the same.
+type CommentBeforeTag struct {
+	Field string /* note */ `exhaustruct:"optional"` // want `struct tag "exhaustruct" is not supported anymore`
+}
+
+// A directive written above the field is the author's own answer, and a newer
+// one than the tag: repeating it would put two directives in one group, which
+// the scanner refuses to read.
+type LeadingDirective struct {
+	//exhaustruct:optional
+	Field string `exhaustruct:"optional"` // want `struct tag "exhaustruct" is not supported anymore`
+}
+
+// A directive after the closing brace of a single-line struct targets the
+// declaration, and governs the field on that line too. The tag goes and
+// nothing is written over it, so the struct keeps its single line and the
+// directive keeps its target.
+type ClosingComment struct{ Field string `exhaustruct:"optional"` } //exhaustruct:enforce // want `struct tag "exhaustruct" is not supported anymore`
+
+// An interpreted tag can decode to a byte no raw literal may hold, so the
+// entries kept are written back as an interpreted string.
+type NulInValue struct {
+	// want +1 `struct tag "exhaustruct" is not supported anymore`
+	Field string "exhaustruct:\"optional\" json:\"\x00\""
+}
+
+// Every byte above the ASCII space belongs to the key reflect is reading, so a
+// key opening with a non-breaking space keeps it through the migration.
+type NonBreakingSpaceInKey struct {
+	// want +1 `struct tag "exhaustruct" is not supported anymore`
+	Field string "\u00a0json:\"x\" exhaustruct:\"optional\""
+}
+
+// A semicolon is not whitespace, so the directive cannot take the tag's place
+// without swallowing it.
+type SemicolonAfterTag struct {
+	Field string `exhaustruct:"optional"`; // want `struct tag "exhaustruct" is not supported anymore`
+}
+
+// A directive inside a nested struct targets its own field, not the field that
+// struct is the type of.
+type NestedDirective struct {
+	// want +4 `struct tag "exhaustruct" is not supported anymore`
+	Field struct {
+		//exhaustruct:optional
+		Inner string
+	} `exhaustruct:"optional"`
+	Other int
+}
+
+// A block directive before the field name targets the field all the same.
+type DirectiveBeforeName struct {
+	/*exhaustruct:enforce*/ Field string `exhaustruct:"optional"` // want `struct tag "exhaustruct" is not supported anymore`
+	Other int
+}
+
+// The last field can share the closing brace's line, and a directive written
+// after that brace targets the field.
+type ClosingSharesFieldLine struct {
+	First  int
+	Second string `exhaustruct:"optional"` } //exhaustruct:enforce // want `struct tag "exhaustruct" is not supported anymore`
+
+// An anonymous struct carries tags too, and nothing ignores this one.
+func anonymousWithTag() {
+	_ = struct {
+		// want +1 `struct tag "exhaustruct" is not supported anymore`
+		Field string `exhaustruct:"optional"`
+	}{Field: "x"}
+}
+
+// An ignore reaching the field's line belongs to the statement around it and
+// answers nothing about optionality, so the tag still migrates to a directive.
+func ignoreSharesFieldLine() {
+	//exhaustruct:ignore
+	_ = struct{ Field string `exhaustruct:"optional"` }{} // want `struct tag "exhaustruct" is not supported anymore`
+}
+
+// One declaration can spread its names over several lines, and each name reads
+// the directive written at its own line.
+type MultilineNames struct {
+	Required int
+	First,
+	Second string `exhaustruct:"optional"` // want `struct tag "exhaustruct" is not supported anymore`
 }
