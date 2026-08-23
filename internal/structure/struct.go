@@ -135,7 +135,7 @@ func (s *Struct) skippedNamed(lit *ast.CompositeLit, externalPkg bool) []Field {
 		}
 	}
 
-	missing := make([]Field, 0, len(s.Fields.Items)-len(present))
+	missing := make([]Field, 0, len(s.Fields.Items))
 
 	for _, f := range s.Fields.Items {
 		if !present[f.Name] && s.isFieldRequired(f, externalPkg) {

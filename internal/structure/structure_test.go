@@ -46,6 +46,37 @@ func Test_Struct_PackagePath(t *testing.T) {
 	}
 }
 
+func Test_Struct_SkippedFields_MoreNamedElementsThanFields(t *testing.T) {
+	t.Parallel()
+
+	s := &structure.Struct{ //nolint:exhaustruct_v5
+		Name:        "Outer",
+		FullPath:    "repro.Outer",
+		PackageName: "repro",
+		Fields: structure.Fields{
+			PackagePath: "repro",
+			Items: []structure.Field{
+				{Name: "Inner", Exported: true}, //nolint:exhaustruct_v5
+				{Name: "Child", Exported: true}, //nolint:exhaustruct_v5
+			},
+		},
+	}
+
+	keys := []string{"InnerOne", "InnerTwo", "Child"}
+	lit := &ast.CompositeLit{Elts: make([]ast.Expr, 0, len(keys))} //nolint:exhaustruct,exhaustruct_v5
+
+	for _, key := range keys {
+		lit.Elts = append(lit.Elts, &ast.KeyValueExpr{ //nolint:exhaustruct,exhaustruct_v5
+			Key:   ast.NewIdent(key),
+			Value: ast.NewIdent("value"),
+		})
+	}
+
+	assert.NotPanics(t, func() {
+		s.SkippedFields(lit, "repro")
+	})
+}
+
 func Test_FormatFieldNames(t *testing.T) {
 	t.Parallel()
 
