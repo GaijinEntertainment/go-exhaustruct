@@ -308,7 +308,10 @@ func restOfLineBlank(fset *token.FileSet, src []byte, pos token.Pos) bool {
 		return false
 	}
 
-	if line := f.Line(pos); line < f.LineCount() {
+	// Unadjusted: LineStart counts the lines of the file on disk, and a //line
+	// directive renumbers what Position reports without moving a byte. Reading
+	// the adjusted number back into LineStart lands on another line entirely.
+	if line := f.PositionFor(pos, false).Line; line < f.LineCount() {
 		return spanBlank(fset, src, pos, f.LineStart(line+1))
 	}
 
