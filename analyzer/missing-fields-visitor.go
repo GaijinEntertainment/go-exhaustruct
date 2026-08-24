@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"go/version"
 	"slices"
 
 	"golang.org/x/tools/go/analysis"
@@ -436,7 +437,7 @@ func (lv literalVisitor) checkLiteral(lit literal) (*token.Pos, string) {
 
 	strct := lit.strct
 
-	missingFields := strct.SkippedFields(lv.lit, lv.pass.Pkg.Path())
+	missingFields := strct.SkippedFields(lv.lit, lv.pass.Pkg.Path(), lv.canNamePromoted())
 
 	if len(missingFields) == 0 {
 		return nil, ""
@@ -454,6 +455,40 @@ func (lv literalVisitor) checkLiteral(lit literal) (*token.Pos, string) {
 	}
 
 	return &pos, fmt.Sprintf("%s is missing fields %s", displayName, structure.FormatFieldNames(missingFields))
+}
+
+// promotedKeysVersion is the first language version that lets a composite
+// literal name a promoted field in place of the embedded field carrying it
+// (golang/go#77245).
+const promotedKeysVersion = "go1.27"
+
+// canNamePromoted reports whether the literal may write a promoted field as a
+// key. The version of the file holding it decides, not the one the module
+// declares: a //go:build constraint sets a single file apart from its package.
+func (lv literalVisitor) canNamePromoted() bool {
+	return canNamePromotedIn(lv.fileGoVersion())
+}
+
+// canNamePromotedIn reports whether a file of the given language version may
+// write a promoted field as a key. A version that is missing or not a Go
+// version reads as the newest one, as go/types reads it: the literal has
+// already type-checked with whatever keys it names.
+func canNamePromotedIn(goVersion string) bool {
+	return !version.IsValid(goVersion) || version.Compare(goVersion, promotedKeysVersion) >= 0
+}
+
+// fileGoVersion returns the language version of the file the literal is written
+// in, falling back to the package's own when the file carries none.
+func (lv literalVisitor) fileGoVersion() string {
+	if len(lv.stack) > 0 {
+		if file, ok := lv.stack[0].(*ast.File); ok {
+			if v := lv.pass.TypesInfo.FileVersions[file]; v != "" {
+				return v
+			}
+		}
+	}
+
+	return lv.pass.Pkg.GoVersion()
 }
 
 func (lv literalVisitor) isChildOfVariableDeclaration() bool {

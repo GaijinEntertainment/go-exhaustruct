@@ -440,7 +440,7 @@ func Test_Struct_isFieldRequired_combinations(t *testing.T) {
 			// Empty literal to trigger check of all fields.
 			lit := &ast.CompositeLit{Elts: []ast.Expr{}}
 
-			skipped := s.SkippedFields(lit, tt.callerPkg)
+			skipped := s.SkippedFields(lit, tt.callerPkg, promotedKeys)
 
 			if tt.wantRequired {
 				require.Len(t, skipped, 1)

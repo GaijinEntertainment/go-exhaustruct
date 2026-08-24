@@ -282,11 +282,16 @@ func example() {
 }
 ```
 
+The Go version of the file holding the literal decides this, not the version
+the module declares. Below 1.27 the embedded field is the only way in, so it is
+reported whole in every case.
+
 An embedded field the enclosing type leaves unrequired is descended into all
 the same, because a field marked `//exhaustruct:enforce` below it outranks the
-type holding it. The embedded field itself stays unreported. An embedded field
-marked optional in its own right is not descended into, since that excludes
-what it promotes along with it:
+type holding it. The embedded field itself stays unreported where a promoted
+name reaches the enforced field; below 1.27 it is the one key that does, so it
+is what is reported. An embedded field marked optional in its own right is not
+descended into, since that excludes what it promotes along with it:
 
 ```go
 type Inner struct {

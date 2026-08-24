@@ -86,15 +86,17 @@ func (s *Struct) IsOptional() bool {
 
 // SkippedFields returns missing required fields for a composite literal.
 // callerPkgPath is used to determine if unexported fields are accessible.
+// canNamePromoted tells whether the literal may write a promoted field as a key,
+// which Go permits since 1.27 (golang/go#77245).
 // For positional literals: returns fields after the last provided element.
 // For named literals: returns fields not present in the literal.
-func (s *Struct) SkippedFields(lit *ast.CompositeLit, callerPkgPath string) []Field {
+func (s *Struct) SkippedFields(lit *ast.CompositeLit, callerPkgPath string, canNamePromoted bool) []Field {
 	// An empty literal supplies nothing and can still be written in either
 	// form, so it is read as a keyed literal with no keys. The two then answer
 	// alike: neither can name a blank field, and both reach a field enforced
 	// under an embedded one.
 	if isNamedLiteral(lit) || len(lit.Elts) == 0 {
-		return s.skippedNamed(lit, callerPkgPath)
+		return s.skippedNamed(lit, callerPkgPath, canNamePromoted)
 	}
 
 	return s.skippedPositional(len(lit.Elts), s.Fields.PackagePath != callerPkgPath)
@@ -135,7 +137,7 @@ func (s *Struct) skippedPositional(count int, externalPkg bool) []Field {
 	return missing
 }
 
-func (s *Struct) skippedNamed(lit *ast.CompositeLit, callerPkgPath string) []Field {
+func (s *Struct) skippedNamed(lit *ast.CompositeLit, callerPkgPath string, canNamePromoted bool) []Field {
 	present := make(map[string]bool, len(lit.Elts))
 
 	for _, elt := range lit.Elts {
@@ -146,7 +148,7 @@ func (s *Struct) skippedNamed(lit *ast.CompositeLit, callerPkgPath string) []Fie
 		}
 	}
 
-	missing := s.skippedIn(&s.Fields, present, callerPkgPath)
+	missing := s.skippedIn(&s.Fields, present, callerPkgPath, canNamePromoted)
 
 	if len(missing) == 0 {
 		return nil
@@ -164,9 +166,16 @@ func (s *Struct) skippedNamed(lit *ast.CompositeLit, callerPkgPath string) []Fie
 // embedded field is either named directly, partially filled through promoted
 // names — in which case its own missing fields are reported, each nameable from
 // the same literal — or absent altogether and reported as one missing field.
-func (s *Struct) skippedIn(fs *Fields, keys map[string]bool, callerPkgPath string) []Field {
+func (s *Struct) skippedIn(fs *Fields, keys map[string]bool, callerPkgPath string, canNamePromoted bool) []Field {
 	externalPkg := fs.PackagePath != callerPkgPath
-	promoted := fs.promotedKeys(keys)
+
+	// Below Go 1.27 no key can reach a field through promotion, so the literal
+	// names direct fields only and nothing has to be grouped.
+	var promoted map[int]map[string]bool
+
+	if canNamePromoted {
+		promoted = fs.promotedKeys(keys)
+	}
 
 	// Capacity is a hint, not a contract: keys may name fields absent from
 	// Items, since unexported fields are pruned for types whose fields come from
@@ -186,22 +195,14 @@ func (s *Struct) skippedIn(fs *Fields, keys map[string]bool, callerPkgPath strin
 			continue
 		}
 
-		// An embedded field the enclosing type made optional still carries
-		// fields that are enforced in their own right, and such a field
-		// outranks the type holding it. Descending finds them; the field
-		// itself stays unreported, since nothing requires it. A field made
-		// optional in its own right is not descended into: that excludes what
-		// it promotes along with it.
 		if !s.isFieldRequired(f, externalPkg) {
-			if f.Embedded != nil && !s.isFieldOptedOut(f) {
-				missing = append(missing, s.skippedIn(f.Embedded, promoted[i], callerPkgPath)...)
-			}
+			missing = append(missing, s.skippedUnder(f, promoted[i], callerPkgPath, externalPkg, canNamePromoted)...)
 
 			continue
 		}
 
 		if len(promoted[i]) > 0 {
-			missing = append(missing, s.skippedIn(f.Embedded, promoted[i], callerPkgPath)...)
+			missing = append(missing, s.skippedIn(f.Embedded, promoted[i], callerPkgPath, canNamePromoted)...)
 
 			continue
 		}
@@ -210,6 +211,66 @@ func (s *Struct) skippedIn(fs *Fields, keys map[string]bool, callerPkgPath strin
 	}
 
 	return missing
+}
+
+// skippedUnder returns the required fields keys leave uninitialized under an
+// embedded field nothing requires. externalPkg tells whether f itself is
+// declared outside the caller's package.
+//
+// An embedded field the enclosing type made optional still carries fields that
+// are enforced in their own right, and such a field outranks the type holding
+// it. Descending finds them; the field itself stays unreported, since nothing
+// requires it. A field made optional in its own right is not descended into:
+// that excludes what it promotes along with it.
+//
+// Below Go 1.27 a literal cannot name a promoted field, so the embedded field
+// is the one key that reaches what is enforced under it, and it is what is
+// reported. Where that field is unexported and the caller external, no key
+// reaches them at all.
+func (s *Struct) skippedUnder(
+	f Field,
+	keys map[string]bool,
+	callerPkgPath string,
+	externalPkg bool,
+	canNamePromoted bool,
+) []Field {
+	if f.Embedded == nil || s.isFieldOptedOut(f) {
+		return nil
+	}
+
+	if canNamePromoted {
+		return s.skippedIn(f.Embedded, keys, callerPkgPath, canNamePromoted)
+	}
+
+	writable := !externalPkg || f.Exported
+	if writable && s.requiresAnyBelow(f.Embedded, callerPkgPath) {
+		return []Field{f}
+	}
+
+	return nil
+}
+
+// requiresAnyBelow reports whether leaving the embedded field holding fs
+// unwritten leaves a required field unwritten with it. Fields no key reaches
+// count for nothing, as they do in the descent itself.
+func (s *Struct) requiresAnyBelow(fs *Fields, callerPkgPath string) bool {
+	externalPkg := fs.PackagePath != callerPkgPath
+
+	for _, f := range fs.Items {
+		if f.Name == BlankFieldName || (externalPkg && !f.Exported) {
+			continue
+		}
+
+		if s.isFieldRequired(f, externalPkg) {
+			return true
+		}
+
+		if f.Embedded != nil && !s.isFieldOptedOut(f) && s.requiresAnyBelow(f.Embedded, callerPkgPath) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // promotedKeys groups the keys that reach a field of fs through an embedded one,

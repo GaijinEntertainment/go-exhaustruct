@@ -70,7 +70,14 @@ type OptionalDirect struct {
 
 func shouldFailEnforcedThroughOptionalEmbedded() {
 	_ = OptionalDirect{Loose: ""} // want "embedded.OptionalDirect is missing field Strict"
-	_ = OptionalHolder{Own: 1}    // want "embedded.OptionalHolder is missing field Strict"
 	_ = OptionalDirect{}          // want "embedded.OptionalDirect is missing field Strict"
-	_ = OptionalHolder{}          // want "embedded.OptionalHolder is missing field Strict"
+}
+
+// This module declares Go 1.24, so a literal here cannot write Strict as a key:
+// EnforcedInside is the one key that reaches it, and that is what is reported.
+// go127/promoted covers the same shape where Strict itself can be written.
+func shouldFailEnforcedBelowGo127() {
+	_ = OptionalHolder{Own: 1} // want "embedded.OptionalHolder is missing field EnforcedInside"
+	_ = OptionalHolder{}       // want "embedded.OptionalHolder is missing field EnforcedInside"
+	_ = OptionalHolder{EnforcedInside: EnforcedInside{Loose: "", Strict: ""}}
 }

@@ -30,7 +30,7 @@ func BenchmarkSkippedFields_Promoted(b *testing.B) {
 			b.ReportAllocs()
 
 			for b.Loop() {
-				_ = strct.SkippedFields(lit, benchPkgPath)
+				_ = strct.SkippedFields(lit, benchPkgPath, promotedKeys)
 			}
 		})
 	}

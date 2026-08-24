@@ -17,6 +17,13 @@ import (
 	"dev.gaijin.team/go/exhaustruct/v5/internal/structure"
 )
 
+// SkippedFields' canNamePromoted argument, named at the call sites so each test
+// shows whether its literal may write a promoted field as a key.
+const (
+	promotedKeys   = true
+	noPromotedKeys = false
+)
+
 func Test_Processor_Get(t *testing.T) {
 	t.Parallel()
 
@@ -288,8 +295,8 @@ func Test_Struct_SkippedFields(t *testing.T) {
 		t.Parallel()
 
 		lit := td.getLiteral(t, "_positionalComplete")
-		assert.Nil(t, info.SkippedFields(lit, externalPkg))
-		assert.Nil(t, info.SkippedFields(lit, samePkg))
+		assert.Nil(t, info.SkippedFields(lit, externalPkg, promotedKeys))
+		assert.Nil(t, info.SkippedFields(lit, samePkg, promotedKeys))
 	})
 
 	t.Run("positional incomplete", func(t *testing.T) {
@@ -302,20 +309,20 @@ func Test_Struct_SkippedFields(t *testing.T) {
 		}
 
 		// Positional literals now also filter by isFieldRequired.
-		skipped := info.SkippedFields(lit, samePkg)
+		skipped := info.SkippedFields(lit, samePkg, promotedKeys)
 		require.Len(t, skipped, 1)
 		assert.Equal(t, "unexportedRequired", skipped[0].Name)
 
 		// External: unexportedRequired is filtered (unexported), no required fields remain.
-		assert.Nil(t, info.SkippedFields(lit, externalPkg))
+		assert.Nil(t, info.SkippedFields(lit, externalPkg, promotedKeys))
 	})
 
 	t.Run("named complete", func(t *testing.T) {
 		t.Parallel()
 
 		lit := td.getLiteral(t, "_namedComplete")
-		assert.Nil(t, info.SkippedFields(lit, externalPkg))
-		assert.Nil(t, info.SkippedFields(lit, samePkg))
+		assert.Nil(t, info.SkippedFields(lit, externalPkg, promotedKeys))
+		assert.Nil(t, info.SkippedFields(lit, samePkg, promotedKeys))
 	})
 
 	t.Run("named missing unexported", func(t *testing.T) {
@@ -323,9 +330,9 @@ func Test_Struct_SkippedFields(t *testing.T) {
 
 		lit := td.getLiteral(t, "_namedMissingUnexported")
 
-		assert.Nil(t, info.SkippedFields(lit, externalPkg))
+		assert.Nil(t, info.SkippedFields(lit, externalPkg, promotedKeys))
 
-		skipped := info.SkippedFields(lit, samePkg)
+		skipped := info.SkippedFields(lit, samePkg, promotedKeys)
 		require.Len(t, skipped, 1)
 		assert.Equal(t, "unexportedRequired", skipped[0].Name)
 	})
@@ -335,11 +342,11 @@ func Test_Struct_SkippedFields(t *testing.T) {
 
 		lit := td.getLiteral(t, "_namedMissingExported")
 
-		skipped := info.SkippedFields(lit, externalPkg)
+		skipped := info.SkippedFields(lit, externalPkg, promotedKeys)
 		require.Len(t, skipped, 1)
 		assert.Equal(t, "ExportedRequired", skipped[0].Name)
 
-		skipped = info.SkippedFields(lit, samePkg)
+		skipped = info.SkippedFields(lit, samePkg, promotedKeys)
 		require.Len(t, skipped, 2)
 		assert.Equal(t, "ExportedRequired", skipped[0].Name)
 		assert.Equal(t, "unexportedRequired", skipped[1].Name)
@@ -351,11 +358,11 @@ func Test_Struct_SkippedFields(t *testing.T) {
 		lit := td.getLiteral(t, "_empty")
 
 		// Empty literals use positional logic with isFieldRequired filtering.
-		skipped := info.SkippedFields(lit, externalPkg)
+		skipped := info.SkippedFields(lit, externalPkg, promotedKeys)
 		require.Len(t, skipped, 1)
 		assert.Equal(t, "ExportedRequired", skipped[0].Name)
 
-		skipped = info.SkippedFields(lit, samePkg)
+		skipped = info.SkippedFields(lit, samePkg, promotedKeys)
 		require.Len(t, skipped, 2)
 		assert.Equal(t, "ExportedRequired", skipped[0].Name)
 		assert.Equal(t, "unexportedRequired", skipped[1].Name)
@@ -369,8 +376,8 @@ func Test_Struct_SkippedFields(t *testing.T) {
 
 		lit := &ast.CompositeLit{Elts: []ast.Expr{}}
 
-		assert.Nil(t, info.SkippedFields(lit, externalPkg))
-		assert.Nil(t, info.SkippedFields(lit, samePkg))
+		assert.Nil(t, info.SkippedFields(lit, externalPkg, promotedKeys))
+		assert.Nil(t, info.SkippedFields(lit, samePkg, promotedKeys))
 	})
 }
 
@@ -756,7 +763,7 @@ func Test_Struct_SkippedFields_Promoted(t *testing.T) {
 			strct := promotedFixture(t)
 			lit := parseLiteral(t, tt.literal)
 
-			assert.Equal(t, tt.want, structure.FormatFieldNames(strct.SkippedFields(lit, "example.com/dep")))
+			assert.Equal(t, tt.want, structure.FormatFieldNames(strct.SkippedFields(lit, "example.com/dep", promotedKeys)))
 		})
 	}
 }
@@ -787,7 +794,7 @@ func Test_Struct_SkippedFields_PromotedShadowed(t *testing.T) {
 	// Outer.x shadows Inner.x, so `x` initializes the outer field and Inner is
 	// left untouched.
 	assert.Equal(t, "Inner",
-		structure.FormatFieldNames(strct.SkippedFields(parseLiteral(t, `Outer{x: 1}`), "example.com/dep")))
+		structure.FormatFieldNames(strct.SkippedFields(parseLiteral(t, `Outer{x: 1}`), "example.com/dep", promotedKeys)))
 }
 
 // promotedFixture builds A{B; a}, B{C; b}, C{c} — all in one package.
@@ -845,6 +852,104 @@ func parseLiteral(t *testing.T, src string) *ast.CompositeLit {
 	return lit
 }
 
+// Test_Struct_SkippedFields_BelowGo127 covers a caller whose language version
+// predates promoted composite-literal keys. Wrapper embeds an unexported
+// struct, so that caller can name neither the embedded field nor the exported
+// field under it, and its literal is as complete as it can be written.
+func Test_Struct_SkippedFields_BelowGo127(t *testing.T) {
+	t.Parallel()
+
+	fset := token.NewFileSet()
+	pos := fset.AddFile("testdata/structs.go", -1, 10000).Pos(0)
+	pkg := types.NewPackage("example.com/dep", "dep")
+
+	_, _, hiddenNamed := synthNamed(t, pkg, pos, "hidden",
+		types.NewField(pos, pkg, "X", types.Typ[types.Int], false))
+
+	wrapperName, wrapperStruct, _ := synthNamed(t, pkg, pos, "Wrapper",
+		types.NewField(pos, pkg, "hidden", hiddenNamed, true),
+		types.NewField(pos, pkg, "Own", types.Typ[types.Int], false))
+
+	fp := astutil.NewFileParser()
+	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+
+	strct := proc.ResolveStruct(fset, wrapperName, wrapperStruct, pos, pkg)
+	require.NotNil(t, strct)
+
+	lit := parseLiteral(t, `Wrapper{Own: 1}`)
+
+	assert.Equal(t, "X",
+		structure.FormatFieldNames(strct.SkippedFields(lit, "example.com/user", promotedKeys)))
+	assert.Empty(t,
+		structure.FormatFieldNames(strct.SkippedFields(lit, "example.com/user", noPromotedKeys)))
+}
+
+// Test_Struct_SkippedFields_EnforcedBelowGo127 covers a field enforced in its
+// own right under an embedded field the type left unrequired, for a caller that
+// cannot write a promoted key. The embedded field is the one key that reaches
+// the enforced field, so it is what the literal is missing.
+func Test_Struct_SkippedFields_EnforcedBelowGo127(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		opts []structure.Option
+		want string
+	}{
+		{
+			"a field below is enforced",
+			[]structure.Option{
+				structure.WithOptional(mustList(t, `.*\.Outer$`)),
+				structure.WithEnforce(mustList(t, `.*\.Outer#a2`)),
+			},
+			"Inner",
+		},
+		{
+			"nothing below is enforced",
+			[]structure.Option{structure.WithOptional(mustList(t, `.*\.Outer$`))},
+			"",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			strct := outerWithInnerFixture(t, tt.opts...)
+			lit := parseLiteral(t, `Outer{Own: 1}`)
+
+			assert.Equal(t, tt.want,
+				structure.FormatFieldNames(strct.SkippedFields(lit, "example.com/dep", noPromotedKeys)))
+		})
+	}
+}
+
+// outerWithInnerFixture builds Outer{Inner; Own}, Inner{a1, a2} in one package,
+// resolved by a processor carrying opts.
+func outerWithInnerFixture(t *testing.T, opts ...structure.Option) *structure.Struct {
+	t.Helper()
+
+	fset := token.NewFileSet()
+	pos := fset.AddFile("testdata/structs.go", -1, 10000).Pos(0)
+	pkg := types.NewPackage("example.com/dep", "dep")
+
+	_, _, innerNamed := synthNamed(t, pkg, pos, "Inner",
+		types.NewField(pos, pkg, "a1", types.Typ[types.Int], false),
+		types.NewField(pos, pkg, "a2", types.Typ[types.Int], false))
+
+	outerName, outerStruct, _ := synthNamed(t, pkg, pos, "Outer",
+		types.NewField(pos, pkg, "Inner", innerNamed, true),
+		types.NewField(pos, pkg, "Own", types.Typ[types.Int], false))
+
+	fp := astutil.NewFileParser()
+	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp), opts...)
+
+	strct := proc.ResolveStruct(fset, outerName, outerStruct, pos, pkg)
+	require.NotNil(t, strct)
+
+	return strct
+}
+
 // Test_Struct_SkippedFields_EmbeddedPointer covers an embedded pointer. Go does
 // not promote through one into a composite literal, so the field stays ordinary
 // and is reported by its own name rather than descended into.
@@ -872,7 +977,7 @@ func Test_Struct_SkippedFields_EmbeddedPointer(t *testing.T) {
 
 	// `c` names nothing reachable, so C itself is what the literal left out.
 	assert.Equal(t, "C",
-		structure.FormatFieldNames(strct.SkippedFields(parseLiteral(t, `A{c: 1, a: 2}`), "example.com/dep")))
+		structure.FormatFieldNames(strct.SkippedFields(parseLiteral(t, `A{c: 1, a: 2}`), "example.com/dep", promotedKeys)))
 }
 
 // Test_Struct_SkippedFields_OptedOutEmbedded covers an embedded field made
@@ -906,30 +1011,11 @@ func Test_Struct_SkippedFields_OptedOutEmbedded(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			fset := token.NewFileSet()
-			pos := fset.AddFile("testdata/structs.go", -1, 10000).Pos(0)
-			pkg := types.NewPackage("example.com/dep", "dep")
-
-			_, _, innerNamed := synthNamed(t, pkg, pos, "Inner",
-				types.NewField(pos, pkg, "a1", types.Typ[types.Int], false),
-				types.NewField(pos, pkg, "a2", types.Typ[types.Int], false))
-
-			outerName, outerStruct, _ := synthNamed(t, pkg, pos, "Outer",
-				types.NewField(pos, pkg, "Inner", innerNamed, true),
-				types.NewField(pos, pkg, "Own", types.Typ[types.Int], false))
-
-			fp := astutil.NewFileParser()
-			proc := structure.NewProcessor(
-				directive.NewScanner(fp), structure.NewOriginScanner(fp), tt.opts...,
-			)
-
-			strct := proc.ResolveStruct(fset, outerName, outerStruct, pos, pkg)
-			require.NotNil(t, strct)
-
+			strct := outerWithInnerFixture(t, tt.opts...)
 			lit := parseLiteral(t, `Outer{Own: 1}`)
 
 			assert.Equal(t, tt.want,
-				structure.FormatFieldNames(strct.SkippedFields(lit, "example.com/dep")))
+				structure.FormatFieldNames(strct.SkippedFields(lit, "example.com/dep", promotedKeys)))
 		})
 	}
 }
@@ -990,7 +1076,7 @@ func Test_Struct_SkippedFields_PromotedPatterns(t *testing.T) {
 			require.NotNil(t, strct)
 
 			lit := parseLiteral(t, `A{b: 1, a: 2, c1: 3}`)
-			assert.Equal(t, tt.want, structure.FormatFieldNames(strct.SkippedFields(lit, "example.com/dep")))
+			assert.Equal(t, tt.want, structure.FormatFieldNames(strct.SkippedFields(lit, "example.com/dep", promotedKeys)))
 		})
 	}
 }
@@ -1025,5 +1111,5 @@ func Test_Struct_SkippedFields_PositionalBlank(t *testing.T) {
 	// Two elements supplied, so only B is left; were the blank field dropped,
 	// two elements would cover the whole list and nothing would be reported.
 	assert.Equal(t, "B", structure.FormatFieldNames(
-		resolved.SkippedFields(parseLiteral(t, `Padded{1, x}`), "example.com/dep")))
+		resolved.SkippedFields(parseLiteral(t, `Padded{1, x}`), "example.com/dep", promotedKeys)))
 }

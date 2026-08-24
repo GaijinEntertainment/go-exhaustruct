@@ -73,6 +73,33 @@ func fEmpty[T empty]()                 {}
 	}
 }
 
+// Test_canNamePromotedIn covers the version gate on promoted keys. An unknown
+// version has to read as the newest one: go/types allows every feature under
+// it, so a literal it accepted with promoted keys would otherwise be reported
+// for naming them.
+func Test_canNamePromotedIn(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		give string
+		want bool
+	}{
+		{"go1.26", false},
+		{"go1.27", true},
+		{"go1.28", true},
+		{"", true},
+		{"1.27", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.give, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, canNamePromotedIn(tt.give))
+		})
+	}
+}
+
 func checkSource(t *testing.T, src string) *types.Package {
 	t.Helper()
 
