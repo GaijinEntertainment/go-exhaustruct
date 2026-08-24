@@ -3,6 +3,8 @@
 // embedded field in one literal does not compile, so every case here picks one.
 package promoted
 
+import "go127/dep"
+
 type C struct{ c int }
 
 type B struct {
@@ -63,6 +65,16 @@ type OptionalHolder struct {
 func shouldFailEnforcedThroughOptionalEmbedded() {
 	_ = OptionalHolder{Own: 1} // want "promoted.OptionalHolder is missing field Strict"
 	_ = OptionalHolder{}       // want "promoted.OptionalHolder is missing field Strict"
+}
+
+// Derived takes its fields from another package, so the unexported hidden is
+// not writable here. Its exported X is, by promotion.
+type Derived dep.Base
+
+func shouldFailPromotedThroughInaccessibleEmbedded() {
+	_ = Derived{Own: 1}       // want "promoted.Derived is missing field X"
+	_ = dep.Base{Own: 1}      // want "dep.Base is missing field X"
+	_ = Derived{Own: 1, X: 2}
 }
 
 // OptedOut marks the embedded field itself optional, which carries the fields
