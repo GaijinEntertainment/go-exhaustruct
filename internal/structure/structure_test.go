@@ -239,7 +239,7 @@ func Test_Struct_isFieldRequired_combinations(t *testing.T) {
 			structPatternEnforced: false,
 			structPatternOptional: false,
 			callerPkg:             externalPkg,
-			wantRequired:          true, // enforced overrides external
+			wantRequired:          false, // no caller can write the field
 		},
 		// Optional field not required
 		{
@@ -339,7 +339,8 @@ func Test_Struct_isFieldRequired_combinations(t *testing.T) {
 			callerPkg:             samePkg,
 			wantRequired:          true,
 		},
-		// Field-specific pattern-enforced forces required even for unexported external fields.
+		// A field-specific pattern reaches no further than a directive does: an
+		// unexported field of another package's struct stays unrequired.
 		{
 			name:                  "field-specific pattern-enforced unexported external",
 			fieldEnforced:         false,
@@ -351,7 +352,7 @@ func Test_Struct_isFieldRequired_combinations(t *testing.T) {
 			structPatternEnforced: false,
 			structPatternOptional: false,
 			callerPkg:             externalPkg,
-			wantRequired:          true,
+			wantRequired:          false,
 		},
 		// Field-specific pattern-optional makes a field not required.
 		{

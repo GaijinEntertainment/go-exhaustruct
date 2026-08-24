@@ -37,3 +37,12 @@ type OnlyUnexported struct {
 	a string
 	b int
 }
+
+// EnforcedUnexported marks an unexported field enforced. The directive is
+// written without knowing who reads the type, and no other package can write
+// the field, so it reaches only literals in this one.
+type EnforcedUnexported struct {
+	A string
+	//exhaustruct:enforce
+	b int
+}

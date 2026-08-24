@@ -393,6 +393,14 @@ func (s *Struct) isFieldOptedOut(f Field) bool {
 }
 
 func (s *Struct) isFieldRequired(f Field, externalPkg bool) bool {
+	// An unexported field declared in another package cannot be written at the
+	// use site, so nothing may require it. Accessibility outranks every
+	// directive and pattern below, which the author of the declaring package
+	// writes without knowing who reads the type.
+	if externalPkg && !f.Exported {
+		return false
+	}
+
 	// explicit field directives win over everything
 	if f.Enforced {
 		return true
@@ -416,11 +424,6 @@ func (s *Struct) isFieldRequired(f Field, externalPkg bool) bool {
 
 	// optionality can be inherited from the structure settings
 	if s.IsOptional() {
-		return false
-	}
-
-	// unexported fields are only required for same-package usage
-	if externalPkg && !f.Exported {
 		return false
 	}
 
