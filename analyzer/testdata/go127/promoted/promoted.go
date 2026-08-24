@@ -44,3 +44,22 @@ func shouldFailDeepestLeafOnly() {
 func shouldFailOuterAndPromoted() {
 	_ = A{c: 1} // want "promoted.A is missing fields b, a"
 }
+
+// OptedOut marks the embedded field itself optional, which carries the fields
+// it promotes out of the check along with it. A type marked optional carries
+// nothing of the kind, which is what OptionalHolder above shows.
+type optedOutInner struct {
+	A int
+	B int
+}
+
+type OptedOut struct {
+	//exhaustruct:optional
+	optedOutInner
+
+	Own int
+}
+
+func shouldPassEmbeddedFieldOptedOut() {
+	_ = OptedOut{Own: 1}
+}

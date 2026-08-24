@@ -45,3 +45,30 @@ func shouldFailMissingExternalField() {
 		External: external.Simple{A: ""}, // want "external.Simple is missing field B"
 	}
 }
+
+// EnforcedInside carries a field enforced in its own right, which outranks a
+// type that marks every field optional. Reaching it through an embedded field
+// has to answer the same as naming it directly.
+type EnforcedInside struct {
+	Loose string
+	//exhaustruct:enforce
+	Strict string
+}
+
+//exhaustruct:optional
+type OptionalHolder struct {
+	EnforcedInside
+	Own int
+}
+
+//exhaustruct:optional
+type OptionalDirect struct {
+	Loose string
+	//exhaustruct:enforce
+	Strict string
+}
+
+func shouldFailEnforcedThroughOptionalEmbedded() {
+	_ = OptionalDirect{Loose: ""} // want "embedded.OptionalDirect is missing field Strict"
+	_ = OptionalHolder{Own: 1}    // want "embedded.OptionalHolder is missing field Strict"
+}

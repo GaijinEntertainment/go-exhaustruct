@@ -182,7 +182,17 @@ func (s *Struct) skippedIn(fs *Fields, keys map[string]bool, callerPkgPath strin
 			continue
 		}
 
+		// An embedded field the enclosing type made optional still carries
+		// fields that are enforced in their own right, and such a field
+		// outranks the type holding it. Descending finds them; the field
+		// itself stays unreported, since nothing requires it. A field made
+		// optional in its own right is not descended into: that excludes what
+		// it promotes along with it.
 		if !s.isFieldRequired(f, externalPkg) {
+			if f.Embedded != nil && !s.isFieldOptedOut(f) {
+				missing = append(missing, s.skippedIn(f.Embedded, promoted[i], callerPkgPath)...)
+			}
+
 			continue
 		}
 
@@ -307,6 +317,14 @@ func (fs *Fields) embeddedLevels(owner int) []embeddedLevel {
 	}
 
 	return levels
+}
+
+// isFieldOptedOut reports whether f was made optional in its own right rather
+// than by the type holding it. Such a field carries its subtree out of the
+// check with it, where a type marked optional carries nothing: a field enforced
+// under one still outranks it.
+func (s *Struct) isFieldOptedOut(f Field) bool {
+	return f.Optional || (f.PatternOptional && !s.PatternOptional)
 }
 
 func (s *Struct) isFieldRequired(f Field, externalPkg bool) bool {
