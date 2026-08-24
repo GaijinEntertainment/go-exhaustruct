@@ -272,7 +272,8 @@ func (v *tagMigrationVisitor) source(pos token.Pos) []byte {
 }
 
 // spanBlank reports whether the source between from and to holds nothing but
-// whitespace.
+// whitespace. The scan stops at the first byte that is not, so asking about
+// the rest of a line costs the gap in front of whatever comes next on it.
 func spanBlank(fset *token.FileSet, src []byte, from, to token.Pos) bool {
 	f := fset.File(from)
 	if f == nil || src == nil || to < from {
@@ -284,7 +285,19 @@ func spanBlank(fset *token.FileSet, src []byte, from, to token.Pos) bool {
 		return false
 	}
 
-	return strings.TrimSpace(string(src[start:end])) == ""
+	for _, b := range src[start:end] {
+		if !isGoSpace(b) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// isGoSpace reports whether b is one of the four bytes Go reads as whitespace
+// between tokens.
+func isGoSpace(b byte) bool {
+	return b == ' ' || b == '\t' || b == '\r' || b == '\n'
 }
 
 // restOfLineBlank reports whether nothing but whitespace follows pos on its
