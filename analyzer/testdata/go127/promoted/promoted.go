@@ -77,6 +77,24 @@ func shouldFailPromotedThroughInaccessibleEmbedded() {
 	_ = Derived{Own: 1, X: 2}
 }
 
+// Shadowing carries a field enforced in its own right out of reach: `x` in a
+// literal of Shadowing writes the direct field, and nothing writes Hidden.x.
+type Hidden struct {
+	//exhaustruct:enforce
+	x int
+}
+
+//exhaustruct:optional
+type Shadowing struct {
+	Hidden
+
+	x int
+}
+
+func shouldPassEnforcedFieldShadowed() {
+	_ = Shadowing{x: 1}
+}
+
 // OptedOut marks the embedded field itself optional, which carries the fields
 // it promotes out of the check along with it. A type marked optional carries
 // nothing of the kind, which is what OptionalHolder above shows.

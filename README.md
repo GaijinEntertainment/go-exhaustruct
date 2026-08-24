@@ -320,6 +320,11 @@ func example() {
 }
 ```
 
+A field no literal can write is required by nothing, whatever a directive or a
+pattern says about it: an unexported field of another package's struct, a
+promoted field a shallower one shadows, and a name two embedded fields promote
+at one depth, which Go resolves to nothing at all.
+
 ### Derived Types and Aliases
 
 Type aliases and derived types inherit **field-level** directives from their

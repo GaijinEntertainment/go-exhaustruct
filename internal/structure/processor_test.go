@@ -980,6 +980,73 @@ func Test_Struct_SkippedFields_EmbeddedPointer(t *testing.T) {
 		structure.FormatFieldNames(strct.SkippedFields(parseLiteral(t, `A{c: 1, a: 2}`), "example.com/dep", promotedKeys)))
 }
 
+// Test_Struct_SkippedFields_Shadowed covers a promoted field a direct field of
+// the outer type shadows. No literal of that type can write the deeper one, so
+// neither a pattern nor a directive may require it.
+func Test_Struct_SkippedFields_Shadowed(t *testing.T) {
+	t.Parallel()
+
+	fset := token.NewFileSet()
+	pos := fset.AddFile("testdata/structs.go", -1, 10000).Pos(0)
+	pkg := types.NewPackage("example.com/dep", "dep")
+
+	_, _, innerNamed := synthNamed(t, pkg, pos, "Inner",
+		types.NewField(pos, pkg, "x", types.Typ[types.Int], false))
+
+	outerName, outerStruct, _ := synthNamed(t, pkg, pos, "Outer",
+		types.NewField(pos, pkg, "Inner", innerNamed, true),
+		types.NewField(pos, pkg, "x", types.Typ[types.Int], false))
+
+	fp := astutil.NewFileParser()
+	proc := structure.NewProcessor(
+		directive.NewScanner(fp), structure.NewOriginScanner(fp),
+		structure.WithOptional(mustList(t, `.*\.Outer$`)),
+		structure.WithEnforce(mustList(t, `.*\.Outer#x`)),
+	)
+
+	strct := proc.ResolveStruct(fset, outerName, outerStruct, pos, pkg)
+	require.NotNil(t, strct)
+
+	// `x` writes the direct field. Inner.x carries the same path and is
+	// enforced by it, yet no key reaches it.
+	assert.Empty(t, structure.FormatFieldNames(
+		strct.SkippedFields(parseLiteral(t, `Outer{x: 1}`), "example.com/dep", promotedKeys)))
+}
+
+// Test_Struct_SkippedFields_ShadowedAmbiguous covers one name promoted by two
+// embedded fields at the same depth. Go resolves such a name to nothing, so no
+// literal can write either field and a pattern reaches neither.
+func Test_Struct_SkippedFields_ShadowedAmbiguous(t *testing.T) {
+	t.Parallel()
+
+	fset := token.NewFileSet()
+	pos := fset.AddFile("testdata/structs.go", -1, 10000).Pos(0)
+	pkg := types.NewPackage("example.com/dep", "dep")
+
+	_, _, leftNamed := synthNamed(t, pkg, pos, "Left",
+		types.NewField(pos, pkg, "x", types.Typ[types.Int], false))
+
+	_, _, rightNamed := synthNamed(t, pkg, pos, "Right",
+		types.NewField(pos, pkg, "x", types.Typ[types.Int], false))
+
+	outerName, outerStruct, _ := synthNamed(t, pkg, pos, "Outer",
+		types.NewField(pos, pkg, "Left", leftNamed, true),
+		types.NewField(pos, pkg, "Right", rightNamed, true))
+
+	fp := astutil.NewFileParser()
+	proc := structure.NewProcessor(
+		directive.NewScanner(fp), structure.NewOriginScanner(fp),
+		structure.WithOptional(mustList(t, `.*\.Outer$`)),
+		structure.WithEnforce(mustList(t, `.*\.Outer#x`)),
+	)
+
+	strct := proc.ResolveStruct(fset, outerName, outerStruct, pos, pkg)
+	require.NotNil(t, strct)
+
+	assert.Empty(t, structure.FormatFieldNames(
+		strct.SkippedFields(parseLiteral(t, `Outer{}`), "example.com/dep", promotedKeys)))
+}
+
 // Test_Struct_SkippedFields_OptedOutEmbedded covers an embedded field made
 // optional in its own right. Nothing it promotes is required, where a type
 // marked optional leaves a field enforced under it standing.

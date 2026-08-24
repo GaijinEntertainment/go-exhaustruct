@@ -393,11 +393,9 @@ func (s *Struct) isFieldOptedOut(f Field) bool {
 }
 
 func (s *Struct) isFieldRequired(f Field, externalPkg bool) bool {
-	// An unexported field declared in another package cannot be written at the
-	// use site, so nothing may require it. Accessibility outranks every
-	// directive and pattern below, which the author of the declaring package
-	// writes without knowing who reads the type.
-	if externalPkg && !f.Exported {
+	// Reach outranks every directive and pattern below, which are written
+	// without knowing which literal reads them.
+	if f.unreachable(externalPkg) {
 		return false
 	}
 
@@ -439,11 +437,77 @@ type Field struct {
 	PatternEnforced bool //exhaustruct:optional
 	PatternOptional bool //exhaustruct:optional
 
+	// Shadowed marks a promoted field a literal of the outermost type resolves
+	// to another field of the same name, or to none at all. Such a field has no
+	// key to write and nothing may require it.
+	Shadowed bool //exhaustruct:optional
+
 	// Embedded holds the fields promoted by an embedded struct field, which a
 	// literal may name in place of this field since Go 1.27. Nil for every
 	// other field, including embedded pointers — a literal cannot reach through
 	// those.
 	Embedded *Fields //exhaustruct:optional
+}
+
+// unreachable reports whether no literal can write f: an unexported field
+// declared in another package, or a promoted field another one shadows.
+func (f Field) unreachable(externalPkg bool) bool {
+	return f.Shadowed || (externalPkg && !f.Exported)
+}
+
+// markShadowed marks every promoted field a literal of the type holding fs
+// cannot name. Go resolves a promoted name to its shallowest occurrence, so a
+// deeper field of that name is out of reach, and two at one depth are ambiguous
+// and reach nothing at all.
+//
+// The walk starts at the outermost struct, which is the only level a literal
+// writes keys at, and is why this is not folded into the per-level metadata.
+func markShadowed(fs *Fields) {
+	claimed := make(map[string]bool)
+
+	for level := []*Fields{fs}; len(level) > 0; {
+		atDepth := namesAtDepth(level)
+
+		level = markLevel(level, claimed, atDepth)
+
+		for name := range atDepth {
+			claimed[name] = true
+		}
+	}
+}
+
+// namesAtDepth counts the fields of one promotion depth carrying each name.
+func namesAtDepth(level []*Fields) map[string]int {
+	counts := make(map[string]int)
+
+	for _, f := range level {
+		for _, item := range f.Items {
+			counts[item.Name]++
+		}
+	}
+
+	return counts
+}
+
+// markLevel marks the fields of one depth that a shallower or an equally deep
+// field puts out of reach, and returns the structs embedded at that depth,
+// which make up the next one.
+func markLevel(level []*Fields, claimed map[string]bool, atDepth map[string]int) []*Fields {
+	var next []*Fields
+
+	for _, f := range level {
+		for i := range f.Items {
+			item := &f.Items[i]
+
+			item.Shadowed = claimed[item.Name] || atDepth[item.Name] > 1
+
+			if item.Embedded != nil {
+				next = append(next, item.Embedded)
+			}
+		}
+	}
+
+	return next
 }
 
 // Fields is a collection of struct fields with shared package metadata.
