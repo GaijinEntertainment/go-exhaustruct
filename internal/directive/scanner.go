@@ -1,8 +1,10 @@
 package directive
 
 import (
+	"cmp"
 	"go/ast"
 	"go/token"
+	"slices"
 
 	"golang.org/x/tools/go/analysis"
 
@@ -164,43 +166,58 @@ func (*Scanner) parseFileDirectives(fset *token.FileSet, file *ast.File) (fileDi
 			return false
 		}
 
+		// A directive sharing its line with code targets that line; one on a
+		// line of its own targets the line below, which it already carries.
 		line := fset.PositionFor(n.Pos(), false).Line
-		if d, ok := directives[line]; ok {
-			d.targetLine = line
-			directives[line] = d
+		for i := range directives[line] {
+			directives[line][i].targetLine = line
 		}
 
 		return true
 	})
 
-	result := make(fileDirectives, len(directives))
+	byTarget := make(map[int][]parsedDirective, len(directives))
 
-	for line, d := range directives {
-		_, exists := result[d.targetLine]
-		if !exists {
-			result[d.targetLine] = d.directives
-			continue
+	for _, ds := range directives {
+		for _, d := range ds {
+			byTarget[d.targetLine] = append(byTarget[d.targetLine], d)
 		}
+	}
 
-		pos := d.pos
+	result := make(fileDirectives, len(byTarget))
 
-		// directives from block comments win over inline comments
-		if line != d.targetLine {
-			result[d.targetLine] = d.directives
-			pos = directives[d.targetLine].pos
-		}
+	for target, ds := range byTarget {
+		slices.SortFunc(ds, func(a, b parsedDirective) int {
+			// a directive on a line of its own wins over one written inline
+			if aOwn, bOwn := a.line != target, b.line != target; aOwn != bOwn {
+				if aOwn {
+					return -1
+				}
 
-		diagnostics = append(diagnostics, analysis.Diagnostic{
-			Pos:     pos,
-			Message: "directive ignored, conflicting directive already exists for the same target line",
+				return 1
+			}
+
+			return cmp.Compare(a.pos, b.pos)
 		})
+
+		result[target] = ds[0].directives
+
+		for _, d := range ds[1:] {
+			diagnostics = append(diagnostics, analysis.Diagnostic{
+				Pos:     d.pos,
+				Message: "directive ignored, conflicting directive already exists for the same target line",
+			})
+		}
 	}
 
 	return result, diagnostics
 }
 
 type parsedDirective struct {
-	pos        token.Pos
+	pos token.Pos
+	// line is the line the directive is written on, which decides whether it
+	// targets its own line or the one below.
+	line       int
 	targetLine int
 	directives Directives
 }
@@ -208,9 +225,12 @@ type parsedDirective struct {
 func parseCommentDirectives(
 	fset *token.FileSet,
 	comments []*ast.CommentGroup,
-) (map[int]parsedDirective, []analysis.Diagnostic) {
+) (map[int][]parsedDirective, []analysis.Diagnostic) {
 	var (
-		directives  = make(map[int]parsedDirective)
+		// Keyed by the line the directive is written on, and holding every
+		// directive on it: two comment groups can share one line, and both
+		// reach the reduction by target line.
+		directives  = make(map[int][]parsedDirective)
 		diagnostics []analysis.Diagnostic
 	)
 
@@ -246,11 +266,15 @@ func parseCommentDirectives(
 			}
 
 			hasDirective = true
-			directives[fset.PositionFor(pos, false).Line] = parsedDirective{
+
+			line := fset.PositionFor(pos, false).Line
+
+			directives[line] = append(directives[line], parsedDirective{
 				pos:        pos,
+				line:       line,
 				targetLine: fset.PositionFor(cg.End(), false).Line + 1,
 				directives: parsed,
-			}
+			})
 		}
 	}
 

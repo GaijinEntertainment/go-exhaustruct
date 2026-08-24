@@ -560,3 +560,81 @@ func Test_Scanner_LineDirectiveBeforePackage(t *testing.T) {
 	hits, _, _ := parser.Stats()
 	assert.Equal(t, uint64(1), hits)
 }
+
+// Test_Scanner_TwoDirectivesOnOneLine covers two comment groups sharing one
+// source line. Both target that line, so the second is a conflict; keying the
+// collection by the line alone dropped it before the conflict was found, and
+// whichever directive the second carried took effect in silence.
+func Test_Scanner_TwoDirectivesOnOneLine(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		give      string
+		wantDiags int
+		want      directive.Directives
+	}{
+		{
+			name:      "two block directives around one declaration",
+			give:      "/*exhaustruct:optional*/ var v int /*exhaustruct:enforce*/\n",
+			wantDiags: 1,
+			want:      directive.Directives{directive.Optional},
+		},
+		{
+			name:      "restating one directive is still a conflict",
+			give:      "/*exhaustruct:optional*/ var v int /*exhaustruct:optional*/\n",
+			wantDiags: 1,
+			want:      directive.Directives{directive.Optional},
+		},
+		{
+			name:      "a single block directive stands alone",
+			give:      "/*exhaustruct:enforce*/ var v int\n",
+			wantDiags: 0,
+			want:      directive.Directives{directive.Enforce},
+		},
+		{
+			name:      "a directive on a line of its own outranks one written inline",
+			give:      "//exhaustruct:optional\nvar v int /*exhaustruct:enforce*/\n",
+			wantDiags: 1,
+			want:      directive.Directives{directive.Optional},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			fset := token.NewFileSet()
+
+			file, err := parser.ParseFile(fset, "oneline.go", "package p\n\n"+tt.give, parser.ParseComments)
+			require.NoError(t, err)
+
+			scanner := directive.NewScanner(astutil.NewFileParser())
+
+			diags := scanner.ProcessFiles(fset, file)
+			assert.Len(t, diags, tt.wantDiags)
+
+			if tt.wantDiags > 0 {
+				// The conflict belongs to the directive that lost, which is the
+				// one written second on the line.
+				ignored := file.Comments[len(file.Comments)-1]
+
+				assert.Equal(t,
+					fset.PositionFor(ignored.Pos(), false),
+					fset.PositionFor(diags[0].Pos, false),
+					"the diagnostic has to name the ignored comment")
+			}
+
+			var target token.Pos
+
+			for _, decl := range file.Decls {
+				if gd, ok := decl.(*ast.GenDecl); ok && gd.Tok == token.VAR {
+					target = gd.Pos()
+				}
+			}
+
+			require.NotEqual(t, token.NoPos, target)
+			assert.Equal(t, tt.want, scanner.Lookup(fset, fset.PositionFor(target, false)))
+		})
+	}
+}
