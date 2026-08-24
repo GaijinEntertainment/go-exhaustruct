@@ -176,6 +176,15 @@ func (*Scanner) parseFileDirectives(fset *token.FileSet, file *ast.File) (fileDi
 		return true
 	})
 
+	result, conflicts := reduceByTarget(directives)
+
+	return result, append(diagnostics, conflicts...)
+}
+
+// reduceByTarget keeps one directive set for each target line -- the one
+// written on a line of its own, or else the first written -- and reports every
+// other directive aimed at that line as a conflict.
+func reduceByTarget(directives map[int][]parsedDirective) (fileDirectives, []analysis.Diagnostic) {
 	byTarget := make(map[int][]parsedDirective, len(directives))
 
 	for _, ds := range directives {
@@ -183,6 +192,8 @@ func (*Scanner) parseFileDirectives(fset *token.FileSet, file *ast.File) (fileDi
 			byTarget[d.targetLine] = append(byTarget[d.targetLine], d)
 		}
 	}
+
+	var diagnostics []analysis.Diagnostic
 
 	result := make(fileDirectives, len(byTarget))
 
