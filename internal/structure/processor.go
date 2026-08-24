@@ -198,6 +198,8 @@ func (p *Processor) resolveStructFields(fset *token.FileSet, strct *types.Struct
 
 func (p *Processor) populateFields(fset *token.FileSet, s *Struct, strct *types.Struct) {
 	s.Fields = p.buildFields(s, p.getStructFields(fset, strct))
+
+	markShadowed(&s.Fields)
 }
 
 // buildFields turns resolved field data into the Struct's own view of it,
