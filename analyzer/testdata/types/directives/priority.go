@@ -55,3 +55,62 @@ func shouldPassCombinedIgnoreEnforce() {
 func shouldHandleInlineDirective() {
 	_ = PriorityIgnored{} //exhaustruct:enforce // want "directives.PriorityIgnored is missing fields A, B"
 }
+
+// Wrapper nests a literal inside another, so a directive written above the
+// statement and one written above the nested literal reach that literal from
+// two levels of the expression it sits in.
+type Wrapper struct {
+	Inner PriorityEnforced
+	Tag   string
+}
+
+// IgnoredNested has type-level ignore, so only a directive reaching the nested
+// literal can leave it checked.
+//
+//exhaustruct:ignore
+type IgnoredNested struct {
+	A string
+	B int
+}
+
+type WrapperOfIgnored struct {
+	Inner IgnoredNested
+	Tag   string
+}
+
+func shouldPassStatementIgnoreBeatsNestedEnforce() {
+	// Both reach the nested literal, and the ignore wins: the walk collects
+	// every directive up to the statement rather than stopping at the first.
+	//exhaustruct:ignore
+	_ = Wrapper{
+		//exhaustruct:enforce
+		Inner: PriorityEnforced{},
+		Tag:   "",
+	}
+}
+
+func shouldFailStatementEnforceReachesNestedLiteral() {
+	//exhaustruct:enforce
+	_ = WrapperOfIgnored{
+		Inner: IgnoredNested{}, // want "directives.IgnoredNested is missing fields A, B"
+		Tag:   "",
+	}
+}
+
+// A directive written beside the token a multiline literal closes on belongs to
+// that literal, which the line it opened on identifies.
+func shouldPassIgnoreBesideClosingBrace() {
+	_ = PriorityEnforced{
+		A: "",
+	} //exhaustruct:ignore
+}
+
+// Constructs closing on one line are nested, and the directive beside the token
+// belongs to the innermost of them -- not to the statement they all close with.
+func shouldFailIgnoreBesideClosingBraceLeavesSibling() (PriorityEnforced, IgnoredNested) {
+	return PriorityEnforced{ // want "directives.PriorityEnforced is missing field B"
+		A: "",
+	}, IgnoredNested{
+		A: "",
+	} //exhaustruct:ignore
+}
