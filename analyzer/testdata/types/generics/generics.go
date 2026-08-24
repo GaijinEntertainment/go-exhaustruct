@@ -101,3 +101,56 @@ type methodStructish interface {
 func shouldFailMethodConstraintLiteral[T methodStructish]() T {
 	return T{A: 1} // want "generics.T is missing field B"
 }
+
+// sameShape and alsoSameShape are two declarations of one shape, and only one
+// of them makes B optional. Neither stands for the type set, so a union of both
+// leaves the constraint without a core -- whichever order it lists them in.
+type sameShape struct {
+	A int
+	//exhaustruct:optional
+	B string
+}
+
+type alsoSameShape struct {
+	A int
+	B string
+}
+
+type twoShapes interface {
+	sameShape | alsoSameShape
+}
+
+type twoShapesReversed interface {
+	alsoSameShape | sameShape
+}
+
+func shouldPassTwoDeclarationsOfOneShape[T twoShapes]() T {
+	return T{A: 1}
+}
+
+func shouldPassTwoDeclarationsOfOneShapeReversed[T twoShapesReversed]() T {
+	return T{A: 1}
+}
+
+// equivalentOrders and alsoEquivalentOrders annotate one field in either order,
+// which names the same optionality. The two are one core, and the literal is
+// checked against it.
+type equivalentOrders struct {
+	A int
+	//exhaustruct:optional,enforce
+	B string
+}
+
+type alsoEquivalentOrders struct {
+	A int
+	//exhaustruct:enforce,optional
+	B string
+}
+
+type equivalentAnnotations interface {
+	equivalentOrders | alsoEquivalentOrders
+}
+
+func shouldFailEquivalentAnnotationOrders[T equivalentAnnotations]() T {
+	return T{A: 1} // want "generics.T is missing field B"
+}

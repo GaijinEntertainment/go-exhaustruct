@@ -216,7 +216,7 @@ func (lv literalVisitor) resolveLiteralType() (name *types.TypeName, strct *type
 		// A literal of a type parameter is written against its constraint's
 		// core type, which the type checker has already validated the keys
 		// against.
-		if strct = coreStruct(t); strct == nil {
+		if strct = coreStruct(lv.pass.Fset, lv.processor.Directives(), t); strct == nil {
 			return nil, nil, token.NoPos
 		}
 
@@ -261,17 +261,43 @@ func typeNameOf(typ types.Type) *types.TypeName {
 // coreStruct returns the struct type every term of a type parameter's
 // constraint shares, or nil when the constraint has no such core type and a
 // composite literal of the parameter is therefore not possible.
-func coreStruct(tp *types.TypeParam) *types.Struct {
-	strct, _ := coreResolver{walking: map[*types.Interface]bool{}}.constraintCore(tp.Constraint())
+func coreStruct(fset *token.FileSet, directives *directive.Scanner, tp *types.TypeParam) *types.Struct {
+	r := coreResolver{
+		fset:       fset,
+		directives: directives,
+		walking:    map[*types.Interface]bool{},
+		done:       map[*types.Interface]coreResult{},
+	}
+
+	strct, _ := r.constraintCore(tp.Constraint())
 
 	return strct
 }
 
-// coreResolver walks the interfaces a constraint embeds, holding the ones on
-// the path it is walking. Marking an interface for the whole walk instead ends
-// a cycle just the same, and reads the second branch of a diamond as one.
+// coreResolver walks the interfaces a constraint embeds. walking holds the ones
+// on the path being walked, so a cycle ends without a second branch of a
+// diamond reading as one; done holds the ones the walk finished, so a diamond
+// costs one visit per interface rather than one per path down to it. Stacked
+// diamonds otherwise multiply: n layers open 2^n paths over 3n+1 declarations.
+//
+// constraint: Go rejects a recursive interface, so an entry in done can never
+// hold a result the walking guard truncated. That guard is there so a type
+// built outside the type checker cannot recurse without end.
 type coreResolver struct {
-	walking map[*types.Interface]bool
+	fset *token.FileSet
+	// directives reads what a term's fields are annotated with, which is what
+	// tells two declarations of one shape apart. Nil where no scanner is at
+	// hand, and two such declarations then answer as one core.
+	directives *directive.Scanner
+	walking    map[*types.Interface]bool
+	done       map[*types.Interface]coreResult
+}
+
+// coreResult is what one interface resolved to, kept so a branch reaching it a
+// second time answers without walking it again.
+type coreResult struct {
+	core *types.Struct
+	ok   bool
 }
 
 // constraintCore resolves the struct shared by every term of a constraint,
@@ -284,6 +310,7 @@ type coreResolver struct {
 // type, so it leaves the core of its siblings standing. ok is false only for a
 // term that names a type no literal can be written for, which leaves the whole
 // constraint without a core.
+
 func (r coreResolver) constraintCore(typ types.Type) (core *types.Struct, ok bool) {
 	iface, isIface := typ.Underlying().(*types.Interface)
 	if !isIface {
@@ -296,8 +323,17 @@ func (r coreResolver) constraintCore(typ types.Type) (core *types.Struct, ok boo
 		return nil, true
 	}
 
+	if res, walked := r.done[iface]; walked {
+		return res.core, res.ok
+	}
+
 	r.walking[iface] = true
-	defer delete(r.walking, iface)
+
+	defer func() {
+		delete(r.walking, iface)
+
+		r.done[iface] = coreResult{core: core, ok: ok}
+	}()
 
 	for embedded := range iface.EmbeddedTypes() {
 		for _, term := range unionTerms(embedded) {
@@ -310,7 +346,7 @@ func (r coreResolver) constraintCore(typ types.Type) (core *types.Struct, ok boo
 				continue
 			}
 
-			if core != nil && !types.Identical(core, strct) {
+			if core != nil && !r.sameCore(core, strct) {
 				return nil, false
 			}
 
@@ -319,6 +355,56 @@ func (r coreResolver) constraintCore(typ types.Type) (core *types.Struct, ok boo
 	}
 
 	return core, true
+}
+
+// sameCore reports whether two terms answer as one core: the same struct, which
+// an alias and a defined type both share, or two declarations of one shape
+// whose fields are annotated alike. Fields annotated apart make two cores, and
+// reading either declaration's would answer by the order the union lists its
+// terms.
+func (r coreResolver) sameCore(a, b *types.Struct) bool {
+	if a == b {
+		return true
+	}
+
+	if !types.Identical(a, b) {
+		return false
+	}
+
+	if r.directives == nil {
+		return true
+	}
+
+	for i := range a.NumFields() {
+		if r.fieldOptionality(a.Field(i)) != r.fieldOptionality(b.Field(i)) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// optionality is what a field's directives say about whether a literal has to
+// write the field. Field metadata reads these two and nothing else, so the
+// order they are written in and an ignore beside them leave two declarations
+// annotated alike.
+type optionality struct {
+	optional bool
+	enforced bool
+}
+
+// fieldOptionality reads what one field of a term is annotated with, at the
+// position it is declared at.
+//
+// Unadjusted: the directive was written in the physical file, whatever a //line
+// directive renames it to.
+func (r coreResolver) fieldOptionality(f *types.Var) optionality {
+	dirs := r.directives.Lookup(r.fset, r.fset.PositionFor(f.Pos(), false))
+
+	return optionality{
+		optional: dirs.Contains(directive.Optional),
+		enforced: dirs.Contains(directive.Enforce),
+	}
 }
 
 // termCore resolves one term of a constraint to the struct it stands for: the

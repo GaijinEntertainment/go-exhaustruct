@@ -68,7 +68,7 @@ func fMixedTerms[T mixedTerms]()       {}
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			core := coreStruct(typeParamOf(t, pkg, tt.give))
+			core := coreStruct(token.NewFileSet(), nil, typeParamOf(t, pkg, tt.give))
 
 			if !tt.wantCore {
 				assert.Nil(t, core)
@@ -109,35 +109,35 @@ func Test_canNamePromotedIn(t *testing.T) {
 	}
 }
 
-func checkSource(t *testing.T, src string) *types.Package {
-	t.Helper()
+func checkSource(tb testing.TB, src string) *types.Package {
+	tb.Helper()
 
 	fset := token.NewFileSet()
 
 	file, err := parser.ParseFile(fset, "constraints.go", src, 0)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	conf := types.Config{}
 	info := &types.Info{Defs: make(map[*ast.Ident]types.Object)}
 
 	pkg, err := conf.Check("p", fset, []*ast.File{file}, info)
-	require.NoError(t, err, "type-check failed")
+	require.NoError(tb, err, "type-check failed")
 
 	return pkg
 }
 
 // typeParamOf returns the single type parameter of the named function.
-func typeParamOf(t *testing.T, pkg *types.Package, fn string) *types.TypeParam {
-	t.Helper()
+func typeParamOf(tb testing.TB, pkg *types.Package, fn string) *types.TypeParam {
+	tb.Helper()
 
 	obj, ok := pkg.Scope().Lookup(fn).(*types.Func)
-	require.True(t, ok)
+	require.True(tb, ok)
 
 	sig, ok := obj.Type().(*types.Signature)
-	require.True(t, ok)
+	require.True(tb, ok)
 
 	params := sig.TypeParams()
-	require.Equal(t, 1, params.Len())
+	require.Equal(tb, 1, params.Len())
 
 	return params.At(0)
 }
