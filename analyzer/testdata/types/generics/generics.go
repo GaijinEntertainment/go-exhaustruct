@@ -81,3 +81,23 @@ type diamondStructish interface {
 func shouldFailDiamondConstraintLiteral[T diamondStructish]() T {
 	return T{A: 1} // want "generics.T is missing field B"
 }
+
+// stringish names a method and no type at all.
+type stringish interface {
+	String() string
+}
+
+// methodStructish restricts methods as well as types. The embedded interface
+// names no type, so it narrows the type set without erasing the core its
+// sibling term carries.
+type methodStructish interface {
+	~struct {
+		A int
+		B string
+	}
+	stringish
+}
+
+func shouldFailMethodConstraintLiteral[T methodStructish]() T {
+	return T{A: 1} // want "generics.T is missing field B"
+}

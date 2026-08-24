@@ -28,6 +28,9 @@ type s2 struct{ A int }
 type sameUnderlying interface{ s1 | s2 }
 type methodsOnly interface{ String() string }
 type empty interface{}
+type methodAndTerms interface{ ~struct{ A int; B string }; String() string }
+type embeddedMethods interface{ ~struct{ A int; B string }; methodsOnly }
+type mixedTerms interface{ ~struct{ A int } | ~int }
 
 func fDirect[T direct]()               {}
 func fNested[T nested]()               {}
@@ -36,6 +39,9 @@ func fTwoTerms[T twoTerms]()           {}
 func fSameUnderlying[T sameUnderlying]() {}
 func fMethodsOnly[T methodsOnly]()     {}
 func fEmpty[T empty]()                 {}
+func fMethodAndTerms[T methodAndTerms]() {}
+func fEmbeddedMethods[T embeddedMethods]() {}
+func fMixedTerms[T mixedTerms]()       {}
 `
 
 	pkg := checkSource(t, src)
@@ -50,7 +56,10 @@ func fEmpty[T empty]()                 {}
 		{"terms inherited from an embedded interface", "fNested", true, "A"},
 		{"terms inherited two levels up", "fDeeper", true, "A"},
 		{"distinct terms sharing an underlying struct", "fSameUnderlying", true, "A"},
+		{"a method declared beside the terms", "fMethodAndTerms", true, "A"},
+		{"a method-only interface embedded beside the terms", "fEmbeddedMethods", true, "A"},
 		{"terms disagree", "fTwoTerms", false, ""},
+		{"a term that is not a struct", "fMixedTerms", false, ""},
 		{"no terms, only methods", "fMethodsOnly", false, ""},
 		{"no terms at all", "fEmpty", false, ""},
 	}

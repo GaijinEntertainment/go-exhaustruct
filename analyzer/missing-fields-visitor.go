@@ -262,7 +262,9 @@ func typeNameOf(typ types.Type) *types.TypeName {
 // constraint shares, or nil when the constraint has no such core type and a
 // composite literal of the parameter is therefore not possible.
 func coreStruct(tp *types.TypeParam) *types.Struct {
-	return coreResolver{walking: map[*types.Interface]bool{}}.constraintCore(tp.Constraint())
+	strct, _ := coreResolver{walking: map[*types.Interface]bool{}}.constraintCore(tp.Constraint())
+
+	return strct
 }
 
 // coreResolver walks the interfaces a constraint embeds, holding the ones on
@@ -276,51 +278,59 @@ type coreResolver struct {
 // descending into the interfaces it embeds: a constraint may name its terms
 // itself or inherit them from another interface, and both describe one type
 // set.
-func (r coreResolver) constraintCore(typ types.Type) *types.Struct {
-	iface, ok := typ.Underlying().(*types.Interface)
-	if !ok {
-		return nil
+//
+// A constraint restricts methods as well as types, and the two are separate
+// contributions: a method-only interface narrows the type set without naming a
+// type, so it leaves the core of its siblings standing. ok is false only for a
+// term that names a type no literal can be written for, which leaves the whole
+// constraint without a core.
+func (r coreResolver) constraintCore(typ types.Type) (core *types.Struct, ok bool) {
+	iface, isIface := typ.Underlying().(*types.Interface)
+	if !isIface {
+		return nil, false
 	}
 
 	// An interface embedding itself contributes no core of its own; whichever
 	// branch opened it carries the answer.
 	if r.walking[iface] {
-		return nil
+		return nil, true
 	}
 
 	r.walking[iface] = true
 	defer delete(r.walking, iface)
 
-	var core *types.Struct
-
 	for embedded := range iface.EmbeddedTypes() {
 		for _, term := range unionTerms(embedded) {
-			strct := r.termCore(term)
+			strct, termOK := r.termCore(term)
+			if !termOK {
+				return nil, false
+			}
+
 			if strct == nil {
-				return nil
+				continue
 			}
 
 			if core != nil && !types.Identical(core, strct) {
-				return nil
+				return nil, false
 			}
 
 			core = strct
 		}
 	}
 
-	return core
+	return core, true
 }
 
 // termCore resolves one term of a constraint to the struct it stands for: the
 // term's own type, or the core of another interface it names.
-func (r coreResolver) termCore(term types.Type) *types.Struct {
+func (r coreResolver) termCore(term types.Type) (*types.Struct, bool) {
 	if _, ok := term.Underlying().(*types.Interface); ok {
 		return r.constraintCore(term)
 	}
 
-	strct, _ := term.Underlying().(*types.Struct)
+	strct, ok := term.Underlying().(*types.Struct)
 
-	return strct
+	return strct, ok
 }
 
 // unionTerms splits a constraint element into its terms. A single-term element
