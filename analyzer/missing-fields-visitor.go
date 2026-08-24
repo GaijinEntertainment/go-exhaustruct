@@ -192,14 +192,22 @@ func (lv literalVisitor) resolveLiteralType() (name *types.TypeName, strct *type
 	typ := lv.pass.TypesInfo.TypeOf(lv.lit)
 
 	// A literal may elide `&T` when the element type is a pointer, including a
-	// pointer reached through an alias or a defined pointer type. Strip it
-	// before naming the type, so the name describes the struct rather than the
-	// pointer to it.
+	// pointer reached through an alias or a defined pointer type. Such a
+	// pointer has a declaration of its own, which carries the directives and
+	// the patterns that select the literal -- an alias to a pointer answers
+	// like an alias to a struct.
+	name = typeNameOf(typ)
+
 	if ptr, ok := types.Unalias(typ).Underlying().(*types.Pointer); ok {
 		typ = ptr.Elem()
+
+		// A plain *T is written at the use site and declares nothing, so the
+		// struct it points at names the literal.
+		if name == nil {
+			name = typeNameOf(typ)
+		}
 	}
 
-	name = typeNameOf(typ)
 	typ = types.Unalias(typ)
 
 	switch t := typ.(type) {
