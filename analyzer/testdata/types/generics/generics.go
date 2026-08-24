@@ -61,3 +61,23 @@ type nestedStructish interface {
 func shouldFailNestedConstraintLiteral[T nestedStructish]() T {
 	return T{A: 1} // want "generics.T is missing field B"
 }
+
+// leftStructish and rightStructish both reach structish, so a constraint
+// embedding the two reaches it twice. The second branch has to answer with what
+// the first found rather than read the repeat as a cycle.
+type leftStructish interface {
+	structish
+}
+
+type rightStructish interface {
+	structish
+}
+
+type diamondStructish interface {
+	leftStructish
+	rightStructish
+}
+
+func shouldFailDiamondConstraintLiteral[T diamondStructish]() T {
+	return T{A: 1} // want "generics.T is missing field B"
+}

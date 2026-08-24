@@ -261,26 +261,40 @@ func typeNameOf(typ types.Type) *types.TypeName {
 // constraint shares, or nil when the constraint has no such core type and a
 // composite literal of the parameter is therefore not possible.
 func coreStruct(tp *types.TypeParam) *types.Struct {
-	return constraintCore(tp.Constraint(), make(map[*types.Interface]bool))
+	return coreResolver{walking: map[*types.Interface]bool{}}.constraintCore(tp.Constraint())
+}
+
+// coreResolver walks the interfaces a constraint embeds, holding the ones on
+// the path it is walking. Marking an interface for the whole walk instead ends
+// a cycle just the same, and reads the second branch of a diamond as one.
+type coreResolver struct {
+	walking map[*types.Interface]bool
 }
 
 // constraintCore resolves the struct shared by every term of a constraint,
 // descending into the interfaces it embeds: a constraint may name its terms
 // itself or inherit them from another interface, and both describe one type
-// set. Interfaces already walked are skipped, so a cyclic constraint ends.
-func constraintCore(typ types.Type, seen map[*types.Interface]bool) *types.Struct {
+// set.
+func (r coreResolver) constraintCore(typ types.Type) *types.Struct {
 	iface, ok := typ.Underlying().(*types.Interface)
-	if !ok || seen[iface] {
+	if !ok {
 		return nil
 	}
 
-	seen[iface] = true
+	// An interface embedding itself contributes no core of its own; whichever
+	// branch opened it carries the answer.
+	if r.walking[iface] {
+		return nil
+	}
+
+	r.walking[iface] = true
+	defer delete(r.walking, iface)
 
 	var core *types.Struct
 
 	for embedded := range iface.EmbeddedTypes() {
 		for _, term := range unionTerms(embedded) {
-			strct := termCore(term, seen)
+			strct := r.termCore(term)
 			if strct == nil {
 				return nil
 			}
@@ -298,9 +312,9 @@ func constraintCore(typ types.Type, seen map[*types.Interface]bool) *types.Struc
 
 // termCore resolves one term of a constraint to the struct it stands for: the
 // term's own type, or the core of another interface it names.
-func termCore(term types.Type, seen map[*types.Interface]bool) *types.Struct {
+func (r coreResolver) termCore(term types.Type) *types.Struct {
 	if _, ok := term.Underlying().(*types.Interface); ok {
-		return constraintCore(term, seen)
+		return r.constraintCore(term)
 	}
 
 	strct, _ := term.Underlying().(*types.Struct)
