@@ -362,6 +362,11 @@ apply to the struct's field definitions and are shared by all types using that
 underlying struct. Type-level directives control whether literals of that
 specific type are checked and must be specified separately for each type.
 
+A name given to a pointer follows the same rule. `type P = *Config` and
+`type Q *Config` each carry their own type-level directives, and a literal that
+elides `&Config` under one of them is checked and reported as that type. A plain
+`*Config` declares nothing, so `Config` names such a literal.
+
 ## Migration from v4
 
 ### New Features in v5
