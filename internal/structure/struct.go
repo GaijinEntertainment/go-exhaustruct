@@ -89,7 +89,11 @@ func (s *Struct) IsOptional() bool {
 // For positional literals: returns fields after the last provided element.
 // For named literals: returns fields not present in the literal.
 func (s *Struct) SkippedFields(lit *ast.CompositeLit, callerPkgPath string) []Field {
-	if isNamedLiteral(lit) {
+	// An empty literal supplies nothing and can still be written in either
+	// form, so it is read as a keyed literal with no keys. The two then answer
+	// alike: neither can name a blank field, and both reach a field enforced
+	// under an embedded one.
+	if isNamedLiteral(lit) || len(lit.Elts) == 0 {
 		return s.skippedNamed(lit, callerPkgPath)
 	}
 
