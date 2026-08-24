@@ -95,6 +95,49 @@ func shouldPassEnforcedFieldShadowed() {
 	_ = Shadowing{x: 1}
 }
 
+// D is reached twice at one depth from Ambiguous, and at two depths from
+// Layered and Twice. Go resolves a promoted name to its shallowest occurrence,
+// and to none at all where two occurrences share a depth.
+type D struct {
+	//exhaustruct:enforce
+	X int
+}
+
+type wrapA struct{ D }
+
+type wrapB struct{ D }
+
+//exhaustruct:optional
+type Ambiguous struct {
+	wrapA
+	wrapB
+}
+
+type mid struct{ D }
+
+//exhaustruct:optional
+type Layered struct {
+	D
+	mid
+}
+
+type Twice struct {
+	D
+	mid
+}
+
+func shouldPassAmbiguousPromotedName() {
+	_ = Ambiguous{}
+}
+
+func shouldFailShallowestPromotedName() {
+	_ = Layered{} // want "promoted.Layered is missing field X"
+}
+
+func shouldFailKeyFillsTheShallowestPath() {
+	_ = Twice{X: 1} // want "promoted.Twice is missing field mid"
+}
+
 // OptedOut marks the embedded field itself optional, which carries the fields
 // it promotes out of the check along with it. A type marked optional carries
 // nothing of the kind, which is what OptionalHolder above shows.

@@ -30,7 +30,7 @@ func BenchmarkSkippedFields_Promoted(b *testing.B) {
 			b.ReportAllocs()
 
 			for b.Loop() {
-				_ = strct.SkippedFields(lit, benchPkgPath, promotedKeys)
+				benchSkipped = strct.SkippedFields(lit, benchPkgPath, promotedKeys)
 			}
 		})
 	}
@@ -57,7 +57,7 @@ func BenchmarkSkippedFields_PartialAtEveryLevel(b *testing.B) {
 			b.ReportAllocs()
 
 			for b.Loop() {
-				_ = strct.SkippedFields(lit, benchPkgPath, promotedKeys)
+				benchSkipped = strct.SkippedFields(lit, benchPkgPath, promotedKeys)
 			}
 		})
 	}
@@ -158,4 +158,70 @@ func benchLiteral(b *testing.B, depth, width int) *ast.CompositeLit {
 	}
 
 	return lit
+}
+
+//nolint:gochecknoglobals // sink, so the skipped fields cannot be optimized away
+var benchSkipped []structure.Field
+
+// BenchmarkResolveStruct_SharedEmbedding measures the metadata of a type whose
+// embedding graph reaches the layer below it through two wrappers, so the paths
+// through it double with every layer while the declarations grow by three. The
+// walk opens each struct once, so the cost has to follow the declarations.
+func BenchmarkResolveStruct_SharedEmbedding(b *testing.B) {
+	for _, layers := range []int{4, 8, 12, 16} {
+		b.Run(fmt.Sprintf("layers%d", layers), func(b *testing.B) {
+			fset := token.NewFileSet()
+			pos := fset.AddFile("bench.go", -1, 1<<20).Pos(0)
+			pkg := types.NewPackage(benchPkgPath, "dep")
+			top := sharedEmbeddingFixture(pos, pkg, layers)
+
+			strct, ok := top.Underlying().(*types.Struct)
+			if !ok {
+				b.Fatal("fixture is not a struct")
+			}
+
+			b.ReportAllocs()
+
+			for b.Loop() {
+				// A processor answers a type once and remembers it, so each run
+				// needs one that has not seen this type. Building it is setup,
+				// and it allocates several times what the walk does.
+				b.StopTimer()
+
+				fp := astutil.NewFileParser()
+				proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+
+				b.StartTimer()
+
+				if proc.ResolveStruct(fset, top.Obj(), strct, pos, pkg) == nil {
+					b.Fatal("fixture did not resolve")
+				}
+			}
+		})
+	}
+}
+
+// sharedEmbeddingFixture builds layers of L{n}a and L{n}b, each embedding
+// L{n-1}, under an L{n} embedding both.
+func sharedEmbeddingFixture(pos token.Pos, pkg *types.Package, layers int) *types.Named {
+	named := func(name string, fields ...*types.Var) *types.Named {
+		typeName := types.NewTypeName(pos, pkg, name, nil)
+
+		return types.NewNamed(typeName, types.NewStruct(fields, nil), nil)
+	}
+
+	embeds := func(inner *types.Named) *types.Var {
+		return types.NewField(pos, pkg, inner.Obj().Name(), inner, true)
+	}
+
+	level := named("L0", types.NewField(pos, pkg, "F0", types.Typ[types.Int], false))
+
+	for i := 1; i <= layers; i++ {
+		left := named(fmt.Sprintf("L%da", i), embeds(level))
+		right := named(fmt.Sprintf("L%db", i), embeds(level))
+
+		level = named(fmt.Sprintf("L%d", i), embeds(left), embeds(right))
+	}
+
+	return level
 }
