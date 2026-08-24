@@ -875,6 +875,65 @@ func Test_Struct_SkippedFields_EmbeddedPointer(t *testing.T) {
 		structure.FormatFieldNames(strct.SkippedFields(parseLiteral(t, `A{c: 1, a: 2}`), "example.com/dep")))
 }
 
+// Test_Struct_SkippedFields_OptedOutEmbedded covers an embedded field made
+// optional in its own right. Nothing it promotes is required, where a type
+// marked optional leaves a field enforced under it standing.
+func Test_Struct_SkippedFields_OptedOutEmbedded(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		opts []structure.Option
+		want string
+	}{
+		{"nothing opted out", nil, "Inner"},
+		{
+			"the embedded field is optional",
+			[]structure.Option{structure.WithOptional(mustList(t, `.*\.Outer#Inner`))},
+			"",
+		},
+		{
+			"the type is optional, the field below is enforced",
+			[]structure.Option{
+				structure.WithOptional(mustList(t, `.*\.Outer$`)),
+				structure.WithEnforce(mustList(t, `.*\.Outer#a2`)),
+			},
+			"a2",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			fset := token.NewFileSet()
+			pos := fset.AddFile("testdata/structs.go", -1, 10000).Pos(0)
+			pkg := types.NewPackage("example.com/dep", "dep")
+
+			_, _, innerNamed := synthNamed(t, pkg, pos, "Inner",
+				types.NewField(pos, pkg, "a1", types.Typ[types.Int], false),
+				types.NewField(pos, pkg, "a2", types.Typ[types.Int], false))
+
+			outerName, outerStruct, _ := synthNamed(t, pkg, pos, "Outer",
+				types.NewField(pos, pkg, "Inner", innerNamed, true),
+				types.NewField(pos, pkg, "Own", types.Typ[types.Int], false))
+
+			fp := astutil.NewFileParser()
+			proc := structure.NewProcessor(
+				directive.NewScanner(fp), structure.NewOriginScanner(fp), tt.opts...,
+			)
+
+			strct := proc.ResolveStruct(fset, outerName, outerStruct, pos, pkg)
+			require.NotNil(t, strct)
+
+			lit := parseLiteral(t, `Outer{Own: 1}`)
+
+			assert.Equal(t, tt.want,
+				structure.FormatFieldNames(strct.SkippedFields(lit, "example.com/dep")))
+		})
+	}
+}
+
 // Test_Struct_SkippedFields_PromotedPatterns covers field patterns aimed at a
 // promoted field. Every level of the tree is addressed by the name a literal of
 // the outer type writes, so a pattern targets a promoted field by that name.

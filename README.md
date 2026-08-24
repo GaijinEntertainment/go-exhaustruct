@@ -282,6 +282,39 @@ func example() {
 }
 ```
 
+An embedded field the enclosing type leaves unrequired is descended into all
+the same, because a field marked `//exhaustruct:enforce` below it outranks the
+type holding it. The embedded field itself stays unreported. An embedded field
+marked optional in its own right is not descended into, since that excludes
+what it promotes along with it:
+
+```go
+type Inner struct {
+    ID string
+
+    //exhaustruct:enforce
+    Must string
+}
+
+//exhaustruct:optional
+type Holder struct {
+    Inner
+    Port int
+}
+
+//exhaustruct:optional
+type Own struct {
+    //exhaustruct:optional
+    Inner
+    Port int
+}
+
+func example() {
+    _ = Holder{Port: 8080} // missing field Must
+    _ = Own{Port: 8080}    // OK: Inner is optional in its own right
+}
+```
+
 ### Derived Types and Aliases
 
 Type aliases and derived types inherit **field-level** directives from their
