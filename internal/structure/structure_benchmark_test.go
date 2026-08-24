@@ -16,10 +16,10 @@ import (
 
 // BenchmarkSkippedFields_Promoted measures a literal that names promoted fields
 // rather than the embedded fields carrying them. Promotion is resolved against
-// a map built with the type's metadata, so the cost of a literal grows with the
-// keys it writes rather than with the depth of the tree behind them. The first
-// case embeds nothing and stands for the common literal, which must not pay for
-// any of this.
+// an index built with the type's metadata, and the literal's keys are arranged
+// once, so the cost of a literal grows with the keys it writes rather than with
+// the depth of the tree behind them. The first case embeds nothing and stands
+// for the common literal, which must not pay for any of this.
 func BenchmarkSkippedFields_Promoted(b *testing.B) {
 	cases := []struct{ depth, width int }{{1, 10}, {2, 5}, {3, 10}, {5, 30}}
 
@@ -34,6 +34,50 @@ func BenchmarkSkippedFields_Promoted(b *testing.B) {
 			}
 		})
 	}
+}
+
+// BenchmarkSkippedFields_PartialAtEveryLevel measures a literal that names one
+// field of every level, so the descent enters each of them and each returns
+// fields of its own. What every level reports has to reach the caller once,
+// not be copied again at each step of the unwind.
+func BenchmarkSkippedFields_PartialAtEveryLevel(b *testing.B) {
+	for _, depth := range []int{2, 4, 8, 16} {
+		b.Run(fmt.Sprintf("depth%d", depth), func(b *testing.B) {
+			const width = 10
+
+			strct, _ := benchFixture(b, depth, width)
+
+			keys := make([]string, 0, depth)
+			for level := 1; level <= depth; level++ {
+				keys = append(keys, fmt.Sprintf("f%d_0: 1", level))
+			}
+
+			lit := benchParse(b, "L1{"+strings.Join(keys, ", ")+"}")
+
+			b.ReportAllocs()
+
+			for b.Loop() {
+				_ = strct.SkippedFields(lit, benchPkgPath, promotedKeys)
+			}
+		})
+	}
+}
+
+// benchParse parses one composite literal written out in full.
+func benchParse(b *testing.B, src string) *ast.CompositeLit {
+	b.Helper()
+
+	expr, err := parser.ParseExpr(src)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	lit, ok := expr.(*ast.CompositeLit)
+	if !ok {
+		b.Fatalf("expected a composite literal, got %T", expr)
+	}
+
+	return lit
 }
 
 const benchPkgPath = "example.com/dep"

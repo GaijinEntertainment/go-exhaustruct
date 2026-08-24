@@ -1047,6 +1047,51 @@ func Test_Struct_SkippedFields_ShadowedAmbiguous(t *testing.T) {
 		strct.SkippedFields(parseLiteral(t, `Outer{}`), "example.com/dep", promotedKeys)))
 }
 
+// Test_Struct_SkippedFields_ShadowedAcrossPackages covers one unexported name
+// declared in two packages at one promotion depth. Go qualifies an unexported
+// name by the package that wrote it, so the two are different identifiers:
+// neither shadows the other, and a literal reaches the one its own package
+// declared.
+func Test_Struct_SkippedFields_ShadowedAcrossPackages(t *testing.T) {
+	t.Parallel()
+
+	fset := token.NewFileSet()
+	pos := fset.AddFile("testdata/structs.go", -1, 10000).Pos(0)
+	own := types.NewPackage("example.com/own", "own")
+	other := types.NewPackage("example.com/other", "other")
+
+	// An unexported embedded field of another package is kept, since a literal
+	// reaches the exported fields under it. Both packages call theirs hidden.
+	_, _, theirHidden := synthNamed(t, other, pos, "hidden",
+		types.NewField(pos, other, "Visible", types.Typ[types.Int], false))
+
+	_, _, theirsNamed := synthNamed(t, other, pos, "Theirs",
+		types.NewField(pos, other, "hidden", theirHidden, true))
+
+	_, _, ownHidden := synthNamed(t, own, pos, "hidden",
+		types.NewField(pos, own, "Local", types.Typ[types.Int], false))
+
+	_, _, mineNamed := synthNamed(t, own, pos, "Mine",
+		types.NewField(pos, own, "hidden", ownHidden, true))
+
+	outerName, outerStruct, _ := synthNamed(t, own, pos, "Outer",
+		types.NewField(pos, own, "Mine", mineNamed, true),
+		types.NewField(pos, own, "Theirs", theirsNamed, true))
+
+	fp := astutil.NewFileParser()
+	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+
+	strct := proc.ResolveStruct(fset, outerName, outerStruct, pos, own)
+	require.NotNil(t, strct)
+
+	assert.Equal(t, "Mine, Theirs", structure.FormatFieldNames(
+		strct.SkippedFields(parseLiteral(t, `Outer{}`), "example.com/own", promotedKeys)))
+
+	assert.Empty(t, structure.FormatFieldNames(
+		strct.SkippedFields(parseLiteral(t, `Outer{hidden: 1, Theirs: 2}`), "example.com/own", promotedKeys)),
+		"the key reaches the hidden this package declared")
+}
+
 // Test_Struct_SkippedFields_OptedOutEmbedded covers an embedded field made
 // optional in its own right. Nothing it promotes is required, where a type
 // marked optional leaves a field enforced under it standing.
