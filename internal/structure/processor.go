@@ -31,7 +31,7 @@ type structKey struct {
 type Processor struct {
 	directives  *directive.Scanner
 	origins     *OriginScanner
-	fieldsCache *cache.Cache[*types.Struct, structFields]
+	fieldsCache *cache.Cache[*types.Struct, *structFields]
 	structCache *cache.Cache[structKey, *Struct]
 
 	enforce    pattern.List //exhaustruct:optional
@@ -64,7 +64,7 @@ func NewProcessor(directives *directive.Scanner, origins *OriginScanner, opts ..
 	p := &Processor{
 		directives:  directives,
 		origins:     origins,
-		fieldsCache: cache.New[*types.Struct, structFields](cachePreallocSize),
+		fieldsCache: cache.New[*types.Struct, *structFields](cachePreallocSize),
 		structCache: cache.New[structKey, *Struct](cachePreallocSize),
 	}
 
@@ -147,7 +147,10 @@ func (*Processor) buildStruct(typeName *types.TypeName, pos token.Position, call
 	}
 }
 
-func (p *Processor) getStructFields(fset *token.FileSet, strct *types.Struct) structFields {
+// getStructFields returns the raw field data of strct. The result is shared
+// rather than copied, so one struct reached along several embedding edges is
+// one value, which is the identity the promotion walk prunes by.
+func (p *Processor) getStructFields(fset *token.FileSet, strct *types.Struct) *structFields {
 	if fields, ok := p.fieldsCache.Get(strct); ok {
 		return fields
 	}
@@ -159,8 +162,8 @@ func (p *Processor) getStructFields(fset *token.FileSet, strct *types.Struct) st
 	return fields
 }
 
-func (p *Processor) resolveStructFields(fset *token.FileSet, strct *types.Struct) structFields {
-	result := structFields{
+func (p *Processor) resolveStructFields(fset *token.FileSet, strct *types.Struct) *structFields {
+	result := &structFields{
 		packagePath: "",
 		fields:      make([]fieldInfo, 0, strct.NumFields()),
 	}
@@ -177,9 +180,7 @@ func (p *Processor) resolveStructFields(fset *token.FileSet, strct *types.Struct
 
 		if f.Embedded() {
 			if embedded, ok := embeddedStruct(f.Type()); ok {
-				sub := p.getStructFields(fset, embedded)
-
-				field.embedded = &sub
+				field.embedded = p.getStructFields(fset, embedded)
 			}
 		}
 
@@ -204,7 +205,7 @@ func (p *Processor) populateFields(fset *token.FileSet, s *Struct, strct *types.
 
 // buildFields turns resolved field data into the Struct's own view of it,
 // applying pattern matching and access filtering. Embedded structs are built
-// recursively, since a literal may name their fields directly.
+// too, since a literal may name their fields directly.
 //
 // Fields are external when declared in a different package than the struct type.
 // This happens for derived types and aliases from external packages.
@@ -215,7 +216,69 @@ func (p *Processor) populateFields(fset *token.FileSet, s *Struct, strct *types.
 // definition is simply impossible since it will cause import cycle - thus, such
 // filtering is safe. An unexported embedded field is the exception, since a
 // literal reaches the exported fields it promotes.
-func (p *Processor) buildFields(s *Struct, resolved structFields) Fields {
+//
+// The walk runs level by level and opens each struct once, at the depth it is
+// first reached and only where it is reached once. Go resolves a promoted name
+// to its shallowest occurrence and to none at all where two occurrences share a
+// depth, so every other reach promotes nothing a literal can write. Opening
+// them all would cost one subtree per path through the embedding graph, which
+// doubles with every layer that reaches the one below it twice.
+func (p *Processor) buildFields(s *Struct, resolved *structFields) Fields {
+	root, pending := p.levelFields(s, resolved)
+	opened := map[*structFields]bool{resolved: true}
+
+	for level := attribute(&root, pending); len(level) > 0; {
+		occurrences := make(map[*structFields]int, len(level))
+
+		for _, e := range level {
+			occurrences[e.resolved]++
+		}
+
+		var next []embeddedField
+
+		for _, e := range level {
+			if opened[e.resolved] || occurrences[e.resolved] > 1 {
+				continue
+			}
+
+			opened[e.resolved] = true
+
+			sub, below := p.levelFields(s, e.resolved)
+
+			e.owner.Items[e.index].Embedded = &sub
+			next = append(next, attribute(&sub, below)...)
+		}
+
+		for r := range occurrences {
+			opened[r] = true
+		}
+
+		level = next
+	}
+
+	return root
+}
+
+// embeddedField is one embedded struct waiting to be opened, and the field of
+// an already built level that holds it.
+type embeddedField struct {
+	owner    *Fields
+	index    int
+	resolved *structFields
+}
+
+// attribute names owner as the level the pending fields belong to.
+func attribute(owner *Fields, pending []embeddedField) []embeddedField {
+	for i := range pending {
+		pending[i].owner = owner
+	}
+
+	return pending
+}
+
+// levelFields builds the fields of one struct, without opening the structs it
+// embeds, which it returns instead.
+func (p *Processor) levelFields(s *Struct, resolved *structFields) (Fields, []embeddedField) {
 	fieldsExternal := resolved.packagePath != s.PackagePath()
 
 	fields := Fields{
@@ -223,6 +286,8 @@ func (p *Processor) buildFields(s *Struct, resolved structFields) Fields {
 		Items:       make([]Field, 0, len(resolved.fields)),
 		paths:       nil,
 	}
+
+	var pending []embeddedField
 
 	for _, sf := range resolved.fields {
 		// An unexported field declared in another package can never be written
@@ -237,7 +302,7 @@ func (p *Processor) buildFields(s *Struct, resolved structFields) Fields {
 		// every level shares the outer type's path.
 		fieldPath := s.FullPath + "#" + sf.name
 
-		field := Field{
+		fields.Items = append(fields.Items, Field{
 			Name:            sf.name,
 			Exported:        sf.exported,
 			Enforced:        sf.enforced,
@@ -245,18 +310,18 @@ func (p *Processor) buildFields(s *Struct, resolved structFields) Fields {
 			PatternEnforced: p.enforce.MatchFullString(fieldPath),
 			PatternOptional: p.optional.MatchFullString(fieldPath),
 			Embedded:        nil,
-		}
+		})
 
 		if sf.embedded != nil {
-			embedded := p.buildFields(s, *sf.embedded)
-
-			field.Embedded = &embedded
+			pending = append(pending, embeddedField{
+				owner:    nil,
+				index:    len(fields.Items) - 1,
+				resolved: sf.embedded,
+			})
 		}
-
-		fields.Items = append(fields.Items, field)
 	}
 
-	return fields
+	return fields, pending
 }
 
 // embeddedStruct returns the struct type an embedded field promotes fields
