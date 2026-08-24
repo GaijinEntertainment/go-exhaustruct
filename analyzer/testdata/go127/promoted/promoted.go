@@ -45,6 +45,26 @@ func shouldFailOuterAndPromoted() {
 	_ = A{c: 1} // want "promoted.A is missing fields b, a"
 }
 
+// EnforcedInside carries a field enforced in its own right, which outranks a
+// type that marks every field optional.
+type EnforcedInside struct {
+	Loose string
+	//exhaustruct:enforce
+	Strict string
+}
+
+//exhaustruct:optional
+type OptionalHolder struct {
+	EnforcedInside
+
+	Own int
+}
+
+func shouldFailEnforcedThroughOptionalEmbedded() {
+	_ = OptionalHolder{Own: 1} // want "promoted.OptionalHolder is missing field Strict"
+	_ = OptionalHolder{}       // want "promoted.OptionalHolder is missing field Strict"
+}
+
 // OptedOut marks the embedded field itself optional, which carries the fields
 // it promotes out of the check along with it. A type marked optional carries
 // nothing of the kind, which is what OptionalHolder above shows.
