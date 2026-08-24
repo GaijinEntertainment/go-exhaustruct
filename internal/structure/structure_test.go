@@ -452,3 +452,29 @@ func Test_Struct_isFieldRequired_combinations(t *testing.T) {
 		})
 	}
 }
+
+// Test_Struct_SkippedFields_Unindexed covers a Struct assembled without the
+// processor, which carries no promotion index. A key of such a type names a
+// field of the type itself or nothing at all.
+func Test_Struct_SkippedFields_Unindexed(t *testing.T) {
+	t.Parallel()
+
+	const samePkg = "test"
+
+	s := &structure.Struct{
+		Name:        "Test",
+		FullPath:    "test.Test",
+		PackageName: "test",
+		Fields: structure.Fields{
+			PackagePath: samePkg,
+			Items: []structure.Field{
+				{Name: "A", Exported: true},
+				{Name: "B", Exported: true},
+			},
+		},
+	}
+
+	skipped := s.SkippedFields(parseLiteral(t, `Test{A: 1}`), samePkg, promotedKeys)
+
+	assert.Equal(t, "B", structure.FormatFieldNames(skipped))
+}

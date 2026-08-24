@@ -199,7 +199,7 @@ func (p *Processor) resolveStructFields(fset *token.FileSet, strct *types.Struct
 func (p *Processor) populateFields(fset *token.FileSet, s *Struct, strct *types.Struct) {
 	s.Fields = p.buildFields(s, p.getStructFields(fset, strct))
 
-	markShadowed(&s.Fields)
+	s.Fields.paths = indexPromotion(&s.Fields)
 }
 
 // buildFields turns resolved field data into the Struct's own view of it,
@@ -221,7 +221,7 @@ func (p *Processor) buildFields(s *Struct, resolved structFields) Fields {
 	fields := Fields{
 		PackagePath: resolved.packagePath,
 		Items:       make([]Field, 0, len(resolved.fields)),
-		owners:      nil,
+		paths:       nil,
 	}
 
 	for _, sf := range resolved.fields {
@@ -255,10 +255,6 @@ func (p *Processor) buildFields(s *Struct, resolved structFields) Fields {
 
 		fields.Items = append(fields.Items, field)
 	}
-
-	// Promotion depends only on the type, so it is resolved once here rather
-	// than for every literal of it.
-	fields.owners = fields.computeOwners()
 
 	return fields
 }

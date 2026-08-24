@@ -113,3 +113,24 @@ type OptedOut struct {
 func shouldPassEmbeddedFieldOptedOut() {
 	_ = OptedOut{Own: 1}
 }
+
+// hidden repeats the name of the unexported struct dep.Base embeds. The two are
+// declared in different packages, so they are different identifiers: a literal
+// written here reaches this one, and the one under Base shadows nothing.
+type hidden struct{ Local int }
+
+type withLocal struct{ hidden }
+
+type Collide struct {
+	withLocal
+
+	dep.Base
+}
+
+func shouldPassLocalNameOfAForeignUnexportedField() {
+	_ = Collide{hidden: hidden{Local: 1}, Base: dep.Base{X: 3, Own: 2}}
+}
+
+func shouldFailLocalNameOfAForeignUnexportedField() {
+	_ = Collide{Base: dep.Base{X: 3, Own: 2}} // want "promoted.Collide is missing field withLocal"
+}
