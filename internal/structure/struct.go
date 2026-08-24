@@ -3,6 +3,7 @@ package structure
 import (
 	"go/ast"
 	"go/token"
+	"go/types"
 	"strings"
 )
 
@@ -27,6 +28,12 @@ type fieldInfo struct {
 
 // structFields contains field information for a struct, independent of type name.
 type structFields struct {
+	// strct is the type this field data was read from, and the identity the
+	// promotion walk prunes by. A cached value would answer as well only while
+	// one goroutine fills the cache: two passes missing at once each build a
+	// value of their own, and one struct reached through two of them would then
+	// read as two.
+	strct *types.Struct
 	// packagePath is the package path where fields are declared.
 	packagePath string
 	// fields is the list of fields in declaration order.
