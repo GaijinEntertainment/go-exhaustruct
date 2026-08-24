@@ -214,7 +214,11 @@ func (lv literalVisitor) resolveLiteralType() (name *types.TypeName, strct *type
 	case *types.Named:
 		var ok bool
 
-		if strct, ok = t.Underlying().(*types.Struct); !ok {
+		// Every instantiation of a generic type shares one declaration, and the
+		// declaration is what carries the fields and the directives. Resolving
+		// the origin makes G[int] and G[string] answer as the type they are
+		// written from, out of one cache entry.
+		if strct, ok = t.Origin().Underlying().(*types.Struct); !ok {
 			return nil, nil, token.NoPos
 		}
 
