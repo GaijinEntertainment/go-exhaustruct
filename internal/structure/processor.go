@@ -211,7 +211,8 @@ func (p *Processor) populateFields(fset *token.FileSet, s *Struct, strct *types.
 // the struct can access unexported fields, therefore we can simply filter them
 // out to save up on storage. Usage of derived type from the package of structure
 // definition is simply impossible since it will cause import cycle - thus, such
-// filtering is safe.
+// filtering is safe. An unexported embedded field is the exception, since a
+// literal reaches the exported fields it promotes.
 func (p *Processor) buildFields(s *Struct, resolved structFields) Fields {
 	fieldsExternal := resolved.packagePath != s.PackagePath()
 
@@ -222,7 +223,11 @@ func (p *Processor) buildFields(s *Struct, resolved structFields) Fields {
 	}
 
 	for _, sf := range resolved.fields {
-		if fieldsExternal && !sf.exported {
+		// An unexported field declared in another package can never be written
+		// here. An embedded one is still kept: a literal reaches the exported
+		// fields under it by promotion, and the embedded field itself stays
+		// unreported, since nothing may require what nobody can write.
+		if fieldsExternal && !sf.exported && sf.embedded == nil {
 			continue
 		}
 
