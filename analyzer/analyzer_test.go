@@ -238,6 +238,12 @@ func typeCases() []typeCase {
 			testFixes:   true,
 		},
 		{
+			name:        "deprecated tags behind a line directive",
+			config:      analyzer.Config{},
+			testPackage: "testdata/types/lined_tags",
+			testFixes:   true,
+		},
+		{
 			name: "deprecated tags on a parenthesised declaration",
 			config: analyzer.Config{
 				IgnorePatterns: []string{`.*\.ExcludedParen`},
