@@ -6,7 +6,9 @@ import (
 	"go/token"
 	"go/types"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -980,6 +982,46 @@ func Test_Struct_SkippedFields_EmbeddedPointer(t *testing.T) {
 		structure.FormatFieldNames(strct.SkippedFields(parseLiteral(t, `A{c: 1, a: 2}`), "example.com/dep", promotedKeys)))
 }
 
+// Test_Processor_ResolveStruct_Concurrent covers passes resolving one type at
+// once. Every caller has to receive the same metadata value: a second one is
+// work already done, and it answers a question the first has answered.
+func Test_Processor_ResolveStruct_Concurrent(t *testing.T) {
+	t.Parallel()
+
+	fset := token.NewFileSet()
+	pos := fset.AddFile("testdata/structs.go", -1, 10000).Pos(0)
+	pkg := types.NewPackage("example.com/dep", "dep")
+
+	typeName, strct := synthStruct(pkg, pos, "Racy", "A", "B")
+
+	fp := astutil.NewFileParser()
+	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+
+	const callers = 64
+
+	resolved := make([]*structure.Struct, callers)
+
+	var wg sync.WaitGroup
+
+	wg.Add(callers)
+
+	for i := range callers {
+		go func() {
+			defer wg.Done()
+
+			resolved[i] = proc.ResolveStruct(fset, typeName, strct, pos, pkg)
+		}()
+	}
+
+	awaitGroup(t, &wg, "every caller of the type returning")
+
+	require.NotNil(t, resolved[0])
+
+	for i, got := range resolved {
+		assert.Same(t, resolved[0], got, "caller %d received a second metadata value", i)
+	}
+}
+
 // Test_Struct_SkippedFields_Shadowed covers a promoted field a direct field of
 // the outer type shadows. No literal of that type can write the deeper one, so
 // neither a pattern nor a directive may require it.
@@ -1224,4 +1266,28 @@ func Test_Struct_SkippedFields_PositionalBlank(t *testing.T) {
 	// two elements would cover the whole list and nothing would be reported.
 	assert.Equal(t, "B", structure.FormatFieldNames(
 		resolved.SkippedFields(parseLiteral(t, `Padded{1, x}`), "example.com/dep", promotedKeys)))
+}
+
+// syncTimeout bounds a step one test goroutine waits for another to reach. A
+// step that never runs then names itself, where an unbounded wait would take
+// the whole suite down with it.
+const syncTimeout = 5 * time.Second
+
+// awaitGroup waits for the group, and fails the test when a caller it holds
+// never returns.
+func awaitGroup(t *testing.T, wg *sync.WaitGroup, step string) {
+	t.Helper()
+
+	done := make(chan struct{})
+
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(syncTimeout):
+		t.Fatalf("%s did not happen", step)
+	}
 }

@@ -106,23 +106,21 @@ func (p *Processor) ResolveStruct(
 		key.callerPkg = callerPkg
 	}
 
-	// Check cache before allocating
-	if cached, ok := p.structCache.Get(key); ok {
-		return cached
-	}
+	// One entry per key, filled once: passes run concurrently, and two of them
+	// racing to build the same type would each pay for it and each hold a
+	// value the other does not.
+	return p.structCache.GetOrSet(key, func() *Struct {
+		// Positions are taken unadjusted: they locate the declaration on disk,
+		// and //line directives point at files that hold no Go source.
+		s := p.buildStruct(typeName, fset.PositionFor(pos, false), callerPkg)
 
-	// Positions are taken unadjusted: they locate the declaration on disk, and
-	// //line directives point at files that hold no Go source.
-	s := p.buildStruct(typeName, fset.PositionFor(pos, false), callerPkg)
+		p.populateFields(fset, s, strct)
+		p.resolveStructOrigin(fset, s)
+		p.resolveStructDirectives(fset, s)
+		p.matchStructPatterns(s)
 
-	p.populateFields(fset, s, strct)
-	p.resolveStructOrigin(fset, s)
-	p.resolveStructDirectives(fset, s)
-	p.matchStructPatterns(s)
-
-	p.structCache.Set(key, s)
-
-	return s
+		return s
+	})
 }
 
 // buildStruct creates Struct metadata from type info.
