@@ -47,3 +47,12 @@ func shouldFailNamedLiteralMissingRealField() {
 	_ = NoCompare{A: 1} // want "blank.NoCompare is missing field B"
 	_ = Padded{A: 1}    // want "blank.Padded is missing field B"
 }
+
+// An empty literal can still be written in either form, and the keyed form has
+// no way to name a blank field, so the finding names only the fields the
+// reader can fill.
+func shouldFailEmptyLiteralWithoutNamingBlank() {
+	_ = NoCompare{} // want "blank.NoCompare is missing fields A, B"
+	_ = Padded{}    // want "blank.Padded is missing fields A, B"
+	_ = Layout{}    // want "blank.Layout is missing field A"
+}

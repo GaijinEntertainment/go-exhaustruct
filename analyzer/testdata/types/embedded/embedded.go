@@ -71,4 +71,6 @@ type OptionalDirect struct {
 func shouldFailEnforcedThroughOptionalEmbedded() {
 	_ = OptionalDirect{Loose: ""} // want "embedded.OptionalDirect is missing field Strict"
 	_ = OptionalHolder{Own: 1}    // want "embedded.OptionalHolder is missing field Strict"
+	_ = OptionalDirect{}          // want "embedded.OptionalDirect is missing field Strict"
+	_ = OptionalHolder{}          // want "embedded.OptionalHolder is missing field Strict"
 }
