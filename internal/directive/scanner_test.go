@@ -417,6 +417,16 @@ func Test_Scanner_Testdata(t *testing.T) {
 		// Block comments
 		40: {directive.Optional}, // blockDocComment
 		47: {directive.Optional}, // blockInline
+
+		// A directive beside a closing token
+		126: {directive.Optional}, // closingBeside, written on line 128
+		135: {directive.Enforce},  // the inner value of nestedClosing, written on line 137
+		144: {directive.Optional}, // the second value of closesAndOpens, written on the same line
+
+		// Block comments spanning lines
+		115: {directive.Optional}, // blockClosingBesideCode (block opens on line 114)
+		117: {directive.Enforce},  // blockOpeningBesideCode (block closes on line 118)
+		122: {directive.Optional}, // blockClosingAlone (block spans lines 120-121)
 	}
 
 	// Lines where we expect NO directive
@@ -433,6 +443,12 @@ func Test_Scanner_Testdata(t *testing.T) {
 		80,  // directiveWithTwoSpaces
 		105, // NextField (inline above doesn't carry over)
 		109, // FieldAfterGap (gap breaks association)
+		116, // between the two spanning blocks
+		118, // the closing line of blockOpeningBesideCode carries no target
+		128, // the closing line itself targets the line the value opened on
+		130, // afterClosing (the directive above belongs to the value)
+		134, // nestedClosing: the outer value the innermost one closes with
+		137, // the closing line itself targets the line the inner value opened on
 	}
 
 	// Verify expected directives

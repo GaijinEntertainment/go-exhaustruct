@@ -108,3 +108,40 @@ type StructWithFieldComments struct {
 
 	FieldAfterGap int // line 108: NO directive (gap breaks association)
 }
+
+// === BLOCK COMMENTS SPANNING LINES ===
+
+/*exhaustruct:optional
+*/ var blockClosingBesideCode int // line 115: optional (block closes beside this code)
+
+var blockOpeningBesideCode int /*exhaustruct:enforce
+*/ // line 117: enforce (block opens beside this code)
+
+/*exhaustruct:optional
+*/
+var blockClosingAlone int // line 122: optional (block touches no code)
+
+// === DIRECTIVE BESIDE A CLOSING TOKEN ===
+
+var closingBeside = []int{
+	1,
+} //exhaustruct:optional // line 128: targets line 126, where the value opens
+
+var afterClosing int // line 130: NO directive (the one above belongs to the value)
+
+// === NESTED CONSTRUCTS CLOSING ON ONE LINE ===
+
+var nestedClosing = [][]int{
+	{
+		1,
+	}} //exhaustruct:enforce // line 137: targets line 135, where the inner value opens
+
+// === A LINE THAT CLOSES ONE CONSTRUCT AND OPENS ANOTHER ===
+
+var closesAndOpens = map[string][]int{
+	"a": {
+		1,
+	}, "b": { //exhaustruct:optional // line 144: targets itself, where the second value opens
+		2,
+	},
+}

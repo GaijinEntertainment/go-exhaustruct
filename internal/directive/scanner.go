@@ -160,25 +160,62 @@ func (*Scanner) parseFileDirectives(fset *token.FileSet, file *ast.File) (fileDi
 		return nil, diagnostics
 	}
 
+	retargetInline(directives, codeLines(fset, file))
+
+	result, conflicts := reduceByTarget(directives)
+
+	return result, append(diagnostics, conflicts...)
+}
+
+// codeLines maps every line of file that carries code to the line a directive
+// beside it targets, which is what tells such a directive from one written on a
+// line of its own.
+//
+// A line usually targets itself. The line a multiline construct closes on holds
+// no node that starts there, and targets the line the construct opened on
+// instead: that is the line a lookup asks for the construct by, so a directive
+// written beside the closing token reaches it. Constructs closing on one line
+// are nested, and the innermost is the one the directive stands beside, so the
+// latest opening line wins. A line that opens something of its own still
+// targets itself, which no opening line above it can outrank.
+func codeLines(fset *token.FileSet, file *ast.File) map[int]int {
+	lines := make(map[int]int)
+
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch n.(type) {
 		case nil, *ast.Comment, *ast.CommentGroup:
 			return false
 		}
 
-		// A directive sharing its line with code targets that line; one on a
-		// line of its own targets the line below, which it already carries.
-		line := fset.PositionFor(n.Pos(), false).Line
-		for i := range directives[line] {
-			directives[line][i].targetLine = line
+		start := fset.PositionFor(n.Pos(), false).Line
+
+		if end := fset.PositionFor(n.End(), false).Line; end != start {
+			if target, taken := lines[end]; !taken || start > target {
+				lines[end] = start
+			}
 		}
+
+		lines[start] = start
 
 		return true
 	})
 
-	result, conflicts := reduceByTarget(directives)
+	return lines
+}
 
-	return result, append(diagnostics, conflicts...)
+// retargetInline points a directive that shares a line with code at that line.
+// One whose comment stands alone keeps the line below, which it already
+// carries. A block comment spans lines and code can sit against either end of
+// it, so every line it covers is asked.
+func retargetInline(directives map[int][]parsedDirective, codeLines map[int]int) {
+	for _, ds := range directives {
+		for i := range ds {
+			if line, ok := ds[i].codeLine(codeLines); ok {
+				ds[i].targetLine = line
+				ds[i].inline = true
+			}
+		}
+	}
 }
 
 // reduceByTarget keeps one directive set for each target line -- the one
@@ -200,7 +237,7 @@ func reduceByTarget(directives map[int][]parsedDirective) (fileDirectives, []ana
 	for target, ds := range byTarget {
 		slices.SortFunc(ds, func(a, b parsedDirective) int {
 			// a directive on a line of its own wins over one written inline
-			if aOwn, bOwn := a.line != target, b.line != target; aOwn != bOwn {
+			if aOwn, bOwn := !a.inline, !b.inline; aOwn != bOwn {
 				if aOwn {
 					return -1
 				}
@@ -226,11 +263,28 @@ func reduceByTarget(directives map[int][]parsedDirective) (fileDirectives, []ana
 
 type parsedDirective struct {
 	pos token.Pos
-	// line is the line the directive is written on, which decides whether it
-	// targets its own line or the one below.
-	line       int
+	// line and endLine bound the comment the directive is written in. A line
+	// comment occupies one line; a block comment covers a range, and code
+	// beside any line of it makes the directive inline with that code.
+	line    int
+	endLine int
+	// inline records that the comment shares a line with the code it targets,
+	// which is what a directive written on its own line outranks.
+	inline     bool
 	targetLine int
 	directives Directives
+}
+
+// codeLine returns what the first line of the directive's comment that carries
+// code targets.
+func (d parsedDirective) codeLine(codeLines map[int]int) (int, bool) {
+	for line := d.line; line <= d.endLine; line++ {
+		if target, ok := codeLines[line]; ok {
+			return target, true
+		}
+	}
+
+	return 0, false
 }
 
 func parseCommentDirectives(
@@ -281,8 +335,12 @@ func parseCommentDirectives(
 			line := fset.PositionFor(pos, false).Line
 
 			directives[line] = append(directives[line], parsedDirective{
-				pos:        pos,
-				line:       line,
+				pos:     pos,
+				line:    line,
+				endLine: fset.PositionFor(comment.End(), false).Line,
+				inline:  false,
+				// The whole group carries the directive down to the code, so a
+				// note written under it does not cut the reach short.
 				targetLine: fset.PositionFor(cg.End(), false).Line + 1,
 				directives: parsed,
 			})
