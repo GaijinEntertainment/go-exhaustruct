@@ -81,3 +81,8 @@ func shouldFailEnforcedBelowGo127() {
 	_ = OptionalHolder{}       // want "embedded.OptionalHolder is missing field EnforcedInside"
 	_ = OptionalHolder{EnforcedInside: EnforcedInside{Loose: "", Strict: ""}}
 }
+
+// A directive cannot make a field required for a caller that cannot write it.
+func shouldPassEnforcedUnexportedExternal() {
+	_ = external.EnforcedUnexported{A: ""}
+}
