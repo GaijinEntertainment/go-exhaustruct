@@ -715,6 +715,38 @@ func Test_Processor_ResolveStruct_PositionCollision(t *testing.T) {
 	assert.Len(t, bbb.Fields.Items, 3)
 }
 
+// Test_Processor_ResolveStruct_NameCollision covers one type name declared in
+// two packages, resolved through one processor. Names collide across packages
+// far more readily than positions do, and a cache keyed by the name alone hands
+// the second lookup the fields of the first.
+func Test_Processor_ResolveStruct_NameCollision(t *testing.T) {
+	t.Parallel()
+
+	fset := token.NewFileSet()
+	pos := fset.AddFile("testdata/structs.go", -1, 10000).Pos(0)
+
+	first := types.NewPackage("example.com/first", "first")
+	second := types.NewPackage("example.com/second", "second")
+
+	firstName, firstStruct := synthStruct(first, pos, "Config", "X")
+	secondName, secondStruct := synthStruct(second, pos, "Config", "P", "Q", "R")
+
+	fp := astutil.NewFileParser()
+	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+
+	resolvedFirst := proc.ResolveStruct(fset, firstName, firstStruct, pos, first)
+	resolvedSecond := proc.ResolveStruct(fset, secondName, secondStruct, pos, second)
+
+	require.NotNil(t, resolvedFirst)
+	require.NotNil(t, resolvedSecond)
+
+	assert.Equal(t, "example.com/first.Config", resolvedFirst.FullPath)
+	assert.Len(t, resolvedFirst.Fields.Items, 1)
+
+	assert.Equal(t, "example.com/second.Config", resolvedSecond.FullPath)
+	assert.Len(t, resolvedSecond.Fields.Items, 3)
+}
+
 // synthStruct builds a named struct type whose TypeName and fields all sit at
 // pos, mimicking what gcimporter produces when it reads export data.
 func synthStruct(
