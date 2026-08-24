@@ -145,9 +145,8 @@ func (*Processor) buildStruct(typeName *types.TypeName, pos token.Position, call
 	}
 }
 
-// getStructFields returns the raw field data of strct. The result is shared
-// rather than copied, so one struct reached along several embedding edges is
-// one value, which is the identity the promotion walk prunes by.
+// getStructFields returns the raw field data of strct, from the cache when it
+// is there.
 func (p *Processor) getStructFields(fset *token.FileSet, strct *types.Struct) *structFields {
 	if fields, ok := p.fieldsCache.Get(strct); ok {
 		return fields
@@ -162,6 +161,7 @@ func (p *Processor) getStructFields(fset *token.FileSet, strct *types.Struct) *s
 
 func (p *Processor) resolveStructFields(fset *token.FileSet, strct *types.Struct) *structFields {
 	result := &structFields{
+		strct:       strct,
 		packagePath: "",
 		fields:      make([]fieldInfo, 0, strct.NumFields()),
 	}
@@ -223,23 +223,23 @@ func (p *Processor) populateFields(fset *token.FileSet, s *Struct, strct *types.
 // doubles with every layer that reaches the one below it twice.
 func (p *Processor) buildFields(s *Struct, resolved *structFields) Fields {
 	root, pending := p.levelFields(s, resolved)
-	opened := map[*structFields]bool{resolved: true}
+	opened := map[*types.Struct]bool{resolved.strct: true}
 
 	for level := attribute(&root, pending); len(level) > 0; {
-		occurrences := make(map[*structFields]int, len(level))
+		occurrences := make(map[*types.Struct]int, len(level))
 
 		for _, e := range level {
-			occurrences[e.resolved]++
+			occurrences[e.resolved.strct]++
 		}
 
 		var next []embeddedField
 
 		for _, e := range level {
-			if opened[e.resolved] || occurrences[e.resolved] > 1 {
+			if opened[e.resolved.strct] || occurrences[e.resolved.strct] > 1 {
 				continue
 			}
 
-			opened[e.resolved] = true
+			opened[e.resolved.strct] = true
 
 			sub, below := p.levelFields(s, e.resolved)
 
