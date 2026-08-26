@@ -305,8 +305,8 @@ func (p *Processor) levelFields(s *Struct, resolved *structFields) (Fields, []em
 			Exported:        sf.exported,
 			Enforced:        sf.enforced,
 			Optional:        sf.optional,
-			PatternEnforced: p.enforce.MatchFullString(fieldPath),
-			PatternOptional: p.optional.MatchFullString(fieldPath),
+			PatternEnforced: p.enforce.MatchFullStringExcept(fieldPath, s.FullPath),
+			PatternOptional: p.optional.MatchFullStringExcept(fieldPath, s.FullPath),
 			Embedded:        nil,
 		})
 

@@ -229,7 +229,7 @@ func (s *Struct) skippedUnder(
 	canNamePromoted bool,
 	missing []Field,
 ) []Field {
-	if f.Embedded == nil || s.isFieldOptedOut(f) {
+	if f.Embedded == nil || f.optedOut() {
 		return missing
 	}
 
@@ -259,7 +259,7 @@ func (s *Struct) requiresAnyBelow(fs *Fields, callerPkgPath string) bool {
 			return true
 		}
 
-		if f.Embedded != nil && !s.isFieldOptedOut(f) && s.requiresAnyBelow(f.Embedded, callerPkgPath) {
+		if f.Embedded != nil && !f.optedOut() && s.requiresAnyBelow(f.Embedded, callerPkgPath) {
 			return true
 		}
 	}
@@ -377,12 +377,12 @@ func directPaths(fs *Fields) map[string][]int {
 	return paths
 }
 
-// isFieldOptedOut reports whether f was made optional in its own right rather
-// than by the type holding it. Such a field carries its subtree out of the
-// check with it, where a type marked optional carries nothing: a field enforced
-// under one still outranks it.
-func (s *Struct) isFieldOptedOut(f Field) bool {
-	return f.Optional || (f.PatternOptional && !s.PatternOptional)
+// optedOut reports whether f was made optional in its own right rather than by
+// the type holding it. Such a field carries its subtree out of the check with
+// it, where a type marked optional carries nothing: a field enforced under one
+// still outranks it.
+func (f Field) optedOut() bool {
+	return f.Optional || f.PatternOptional
 }
 
 func (s *Struct) isFieldRequired(f Field, externalPkg bool) bool {
@@ -401,15 +401,15 @@ func (s *Struct) isFieldRequired(f Field, externalPkg bool) bool {
 		return false
 	}
 
-	// field-level patterns apply only when they specifically target the field —
-	// i.e., the pattern matches the field path but not the struct path. A broad
-	// pattern that also matches the struct is handled via s.IsEnforced/IsOptional
-	// and must not silently promote unrelated fields to required/optional.
-	if f.PatternEnforced && !s.PatternEnforced {
+	// A pattern that names the field in its own right outranks the settings of
+	// the type holding it. One broad enough to select the type as well names no
+	// field in particular, and is answered by s.IsEnforced/IsOptional below --
+	// PatternEnforced and PatternOptional are already false for it.
+	if f.PatternEnforced {
 		return true
 	}
 
-	if f.PatternOptional && !s.PatternOptional {
+	if f.PatternOptional {
 		return false
 	}
 
@@ -427,6 +427,8 @@ type Field struct {
 	Enforced bool //exhaustruct:optional
 	Optional bool //exhaustruct:optional
 
+	// PatternEnforced and PatternOptional record that a pattern names this
+	// field in its own right, and not by way of the type holding it.
 	PatternEnforced bool //exhaustruct:optional
 	PatternOptional bool //exhaustruct:optional
 

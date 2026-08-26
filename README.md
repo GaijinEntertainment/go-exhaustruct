@@ -158,19 +158,23 @@ mode rule 5 already checks the type. Rule 3 applies in both modes, which is why
 
 Field patterns (`Type#Field`) are a separate decision: they choose which fields
 are required inside a type that is already being checked, in either mode. A
-field-level enforce match is honoured only while no `-enforce-rx` pattern
-matches the enclosing type as well, since a type-level match takes over every
-field in it. Through the fields it takes over, a type-level pattern therefore
-does change what is reported in implicit mode:
+pattern matching the field path and not the path of the type holding it is a
+rule written for that field, and it outranks what the type says. One pattern
+broad enough to match both names no field in particular, and the type-level
+decision stands:
 
 ```shell
-# Host is required
+# Host is required: the pattern names the field and not the type
 exhaustruct -optional-rx 'pkg\.Config' -enforce-rx 'pkg\.Config#Host' ./...
 
-# Host is not: the type-level enforce pattern overrides the field-level one,
-# and -optional-rx on the type then decides
+# Host is required still: a second pattern for the type says nothing about
+# which of its fields the first one names
 exhaustruct -optional-rx 'pkg\.Config' -enforce-rx 'pkg\.Config#Host' \
   -enforce-rx 'pkg\.Config' ./...
+
+# Host is not required: one pattern matching the type as well as the field
+# names no field in particular, so -optional-rx on the type decides
+exhaustruct -optional-rx 'pkg\.Config' -enforce-rx 'pkg\.Config.*' ./...
 ```
 
 ## Configuration
