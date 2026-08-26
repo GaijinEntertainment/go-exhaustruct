@@ -23,10 +23,14 @@ func Test_buildTagDiagnostic_carriesAFix(t *testing.T) {
 	}
 
 	placement := tagPlacement{
-		canAppend:          true,
-		anchors:            []nameAnchor{{pos: token.Pos(1), startsLine: true}},
-		optionalityDecided: false,
-		gapBeforeTag:       false,
+		canAppend: true,
+		anchors: []nameAnchor{{
+			pos:                 token.Pos(1),
+			startsLine:          true,
+			optionalityDecided:  false,
+			sharesLineDirective: false,
+		}},
+		gapBeforeTag: false,
 	}
 
 	diag := buildTagDiagnostic(field, placement, optionalTagValue)
@@ -88,10 +92,14 @@ func Test_buildTagFix_appendedDirective(t *testing.T) {
 			}
 
 			placement := tagPlacement{
-				canAppend:          true,
-				anchors:            []nameAnchor{{pos: token.Pos(1), startsLine: true}},
-				optionalityDecided: false,
-				gapBeforeTag:       tt.giveGap,
+				canAppend: true,
+				anchors: []nameAnchor{{
+					pos:                 token.Pos(1),
+					startsLine:          true,
+					optionalityDecided:  false,
+					sharesLineDirective: false,
+				}},
+				gapBeforeTag: tt.giveGap,
 			}
 
 			fix := buildTagFix(field, placement, optionalTagValue)

@@ -195,3 +195,12 @@ type MultilineNames struct {
 	First,
 	Second string `exhaustruct:"optional"` // want `struct tag "exhaustruct" is not supported anymore`
 }
+
+// A directive answers the optionality of the name it precedes, not of every
+// name the declaration carries.
+type DirectiveOnOneName struct {
+	Required int
+	//exhaustruct:enforce
+	First,
+	Second string `exhaustruct:"optional"` // want `struct tag "exhaustruct" is not supported anymore`
+}
