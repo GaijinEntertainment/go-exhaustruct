@@ -221,3 +221,35 @@ func TestList_MatchFullString_AuthorAnchors(t *testing.T) {
 		})
 	}
 }
+
+// TestList_MatchFullStringExcept covers the pattern that names one target and
+// not the other. A list holding a broad pattern and a specific one answers by
+// the specific one, which is what tells a rule written for a field from one
+// that reaches the field through the type holding it.
+func TestList_MatchFullStringExcept(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		patterns []string
+		want     bool
+	}{
+		{"one broad pattern reaching both", []string{`.*Outer.*`}, false},
+		{"one pattern naming the field", []string{`.*\.Outer#Inner$`}, true},
+		{"one pattern naming the type", []string{`.*\.Outer$`}, false},
+		{"a pattern for each", []string{`.*\.Outer$`, `.*\.Outer#Inner$`}, true},
+		{"no pattern at all", nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			list, err := pattern.NewList(tt.patterns...)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.want,
+				list.MatchFullStringExcept("example.com/dep.Outer#Inner", "example.com/dep.Outer"))
+		})
+	}
+}

@@ -943,6 +943,14 @@ func Test_Struct_SkippedFields_EnforcedBelowGo127(t *testing.T) {
 			[]structure.Option{structure.WithOptional(mustList(t, `.*\.Outer$`))},
 			"",
 		},
+		{
+			"the embedded field is optional in its own right",
+			[]structure.Option{
+				structure.WithOptional(mustList(t, `.*\.Outer$`, `.*\.Outer#Inner$`)),
+				structure.WithEnforce(mustList(t, `.*\.Outer#a2`)),
+			},
+			"",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1121,6 +1129,33 @@ func Test_Struct_SkippedFields_ShadowedAmbiguous(t *testing.T) {
 		strct.SkippedFields(parseLiteral(t, `Outer{}`), "example.com/dep", promotedKeys)))
 }
 
+// Test_Struct_SkippedFields_BroadPattern covers one pattern matching the type
+// as well as a field under it. Such a pattern names no field in its own right,
+// so what the type says stands.
+func Test_Struct_SkippedFields_BroadPattern(t *testing.T) {
+	t.Parallel()
+
+	fset := token.NewFileSet()
+	pos := fset.AddFile("testdata/structs.go", -1, 10000).Pos(0)
+	pkg := types.NewPackage("example.com/dep", "dep")
+
+	typeName, strct := synthStruct(pkg, pos, "Outer", "A", "B")
+
+	fp := astutil.NewFileParser()
+	proc := structure.NewProcessor(
+		directive.NewScanner(fp), structure.NewOriginScanner(fp),
+		structure.WithOptional(mustList(t, `.*\.Outer$`)),
+		structure.WithEnforce(mustList(t, `.*\.Outer.*`)),
+	)
+
+	resolved := proc.ResolveStruct(fset, typeName, strct, pos, pkg)
+	require.NotNil(t, resolved)
+
+	assert.Empty(t, structure.FormatFieldNames(
+		resolved.SkippedFields(parseLiteral(t, `Outer{}`), "example.com/dep", promotedKeys)),
+		"a pattern reaching the type as well names no field of it in particular")
+}
+
 // Test_Struct_SkippedFields_ShadowedAcrossPackages covers one unexported name
 // declared in two packages at one promotion depth. Go qualifies an unexported
 // name by the package that wrote it, so the two are different identifiers:
@@ -1190,6 +1225,14 @@ func Test_Struct_SkippedFields_OptedOutEmbedded(t *testing.T) {
 				structure.WithEnforce(mustList(t, `.*\.Outer#a2`)),
 			},
 			"a2",
+		},
+		{
+			"one pattern names the type and another names the embedded field",
+			[]structure.Option{
+				structure.WithOptional(mustList(t, `.*\.Outer$`, `.*\.Outer#Inner$`)),
+				structure.WithEnforce(mustList(t, `.*\.Outer#a2`)),
+			},
+			"",
 		},
 	}
 
