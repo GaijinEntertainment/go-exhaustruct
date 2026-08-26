@@ -114,9 +114,20 @@ func (s *Scanner) ProcessFiles(fset *token.FileSet, files ...*ast.File) []analys
 	return diags
 }
 
+// LookupPos returns the directives written at the line of pos, read from the
+// physical file whatever a //line directive renames it to.
+//
+// A caller holding a token.Pos reaches the directives this way. token.Position
+// carries no sign of whether it was adjusted, so a lookup made with an adjusted
+// one finds nothing and says nothing about it.
+func (s *Scanner) LookupPos(fset *token.FileSet, pos token.Pos) Directives {
+	return s.Lookup(fset, fset.PositionFor(pos, false))
+}
+
 // Lookup returns the directives at the given source position, which must be
-// unadjusted — see astutil.PhysicalFilename. If the file is not in cache,
-// triggers FileParser.ProcessFilename to parse it.
+// unadjusted — see astutil.PhysicalFilename. Use LookupPos where the caller
+// holds a token.Pos. If the file is not in cache, triggers
+// FileParser.ProcessFilename to parse it.
 //
 // Diagnostics found by such an on-demand parse are not returned: the file
 // belongs to another package, which reports them through ProcessFiles.

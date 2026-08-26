@@ -238,7 +238,7 @@ func (v *tagMigrationVisitor) placeTag(st *ast.StructType, i int) tagPlacement {
 	// answer the checker itself acts on. Asking it, rather than the comments
 	// around the field, keeps the two from disagreeing about whose directive a
 	// comment is.
-	directives := v.processor.Directives().Lookup(fset, fset.PositionFor(field.Pos(), false))
+	directives := v.processor.Directives().LookupPos(fset, field.Pos())
 
 	fieldLine := fset.Position(field.Pos()).Line
 
