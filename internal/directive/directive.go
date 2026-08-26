@@ -43,6 +43,25 @@ func (ds Directives) Contains(d Directive) bool {
 	return slices.Contains(ds, d)
 }
 
+// Optionality is what a field's directives say about whether a literal has to
+// write the field. These two are all that field metadata reads, so the order a
+// comment lists them in, and an ignore written beside them, leave two fields
+// annotated alike.
+type Optionality struct {
+	Optional bool
+	Enforced bool
+}
+
+// Optionality projects ds onto what field metadata reads. Every consumer of a
+// field's directives reads them through this, so none of them can drift from
+// the others.
+func (ds Directives) Optionality() Optionality {
+	return Optionality{
+		Optional: ds.Contains(Optional),
+		Enforced: ds.Contains(Enforce),
+	}
+}
+
 // directivePrefix is the exact prefix for exhaustruct directives.
 // Format: exhaustruct:<directives> [optional comment], written in either
 // comment form.
