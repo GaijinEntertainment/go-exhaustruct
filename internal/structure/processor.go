@@ -183,10 +183,10 @@ func (p *Processor) resolveStructFields(fset *token.FileSet, strct *types.Struct
 		}
 
 		if p.directives != nil {
-			dirs := p.directives.LookupPos(fset, f.Pos())
+			o := p.directives.LookupPos(fset, f.Pos()).Optionality()
 
-			field.enforced = dirs.Contains(directive.Enforce)
-			field.optional = dirs.Contains(directive.Optional)
+			field.enforced = o.Enforced
+			field.optional = o.Optional
 		}
 
 		result.fields = append(result.fields, field)

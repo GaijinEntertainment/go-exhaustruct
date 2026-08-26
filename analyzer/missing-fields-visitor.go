@@ -392,24 +392,11 @@ func (r coreResolver) sameCore(a, b *types.Struct) bool {
 	return true
 }
 
-// optionality is what a field's directives say about whether a literal has to
-// write the field. Field metadata reads these two and nothing else, so the
-// order they are written in and an ignore beside them leave two declarations
-// annotated alike.
-type optionality struct {
-	optional bool
-	enforced bool
-}
-
 // fieldOptionality reads what one field of a term is annotated with, at the
-// position it is declared at.
-func (r coreResolver) fieldOptionality(f *types.Var) optionality {
-	dirs := r.directives.LookupPos(r.fset, f.Pos())
-
-	return optionality{
-		optional: dirs.Contains(directive.Optional),
-		enforced: dirs.Contains(directive.Enforce),
-	}
+// position it is declared at, through the projection the field metadata itself
+// is built from.
+func (r coreResolver) fieldOptionality(f *types.Var) directive.Optionality {
+	return r.directives.LookupPos(r.fset, f.Pos()).Optionality()
 }
 
 // termCore resolves one term of a constraint to the struct it stands for: the
