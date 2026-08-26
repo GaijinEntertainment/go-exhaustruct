@@ -109,6 +109,14 @@ func PhysicalFilename(fset *token.FileSet, pos token.Pos) string {
 	return fset.PositionFor(pos, false).Filename
 }
 
+// PhysicalLine returns the on-disk line a position sits on, ignoring //line
+// directives. A generator is free to repeat one virtual line number, so lines
+// compared as the same line -- and the source bytes read at one -- have to be
+// physical ones.
+func PhysicalLine(fset *token.FileSet, pos token.Pos) int {
+	return fset.PositionFor(pos, false).Line
+}
+
 // ProcessFilename parses a file from disk and triggers all callbacks.
 // Returns nil if already processed, if the file belongs to the Go
 // distribution, or if it cannot be read or parsed.
