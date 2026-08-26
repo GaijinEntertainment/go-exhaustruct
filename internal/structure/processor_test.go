@@ -1129,6 +1129,38 @@ func Test_Struct_SkippedFields_ShadowedAmbiguous(t *testing.T) {
 		strct.SkippedFields(parseLiteral(t, `Outer{}`), "example.com/dep", promotedKeys)))
 }
 
+// Test_Struct_ResolveStruct_AnonymousPerCaller covers one anonymous struct
+// resolved from two packages. An anonymous type has no declaration to be named
+// by, so the caller's package names it -- and one entry answering both callers
+// would give the second the first one's name and path.
+func Test_Struct_ResolveStruct_AnonymousPerCaller(t *testing.T) {
+	t.Parallel()
+
+	fset := token.NewFileSet()
+	pos := fset.AddFile("testdata/structs.go", -1, 10000).Pos(0)
+	first := types.NewPackage("example.com/first", "first")
+	second := types.NewPackage("example.com/second", "second")
+
+	strct := types.NewStruct([]*types.Var{
+		types.NewField(pos, first, "A", types.Typ[types.Int], false),
+	}, nil)
+
+	fp := astutil.NewFileParser()
+	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+
+	fromFirst := proc.ResolveStruct(fset, nil, strct, pos, first)
+	require.NotNil(t, fromFirst)
+
+	fromSecond := proc.ResolveStruct(fset, nil, strct, pos, second)
+	require.NotNil(t, fromSecond)
+
+	assert.Equal(t, "example.com/first."+structure.AnonymousName, fromFirst.FullPath)
+	assert.Equal(t, "first", fromFirst.PackageName)
+
+	assert.Equal(t, "example.com/second."+structure.AnonymousName, fromSecond.FullPath)
+	assert.Equal(t, "second", fromSecond.PackageName)
+}
+
 // Test_Struct_SkippedFields_BroadPattern covers one pattern matching the type
 // as well as a field under it. Such a pattern names no field in its own right,
 // so what the type says stands.
