@@ -171,16 +171,33 @@ func (*Scanner) parseFileDirectives(fset *token.FileSet, file *ast.File) (fileDi
 		return nil, diagnostics
 	}
 
-	retargetInline(directives, codeLines(fset, file))
+	retargetInline(directives, codeLines(fset, file, commentLines(directives)))
 
 	result, conflicts := reduceByTarget(directives)
 
 	return result, append(diagnostics, conflicts...)
 }
 
-// codeLines maps every line of file that carries code to the line a directive
-// beside it targets, which is what tells such a directive from one written on a
-// line of its own.
+// commentLines lists every line a directive comment covers. Only these are ever
+// asked of the code lines, so a file's whole line table need not be built to
+// answer them.
+func commentLines(directives map[int][]parsedDirective) map[int]bool {
+	lines := make(map[int]bool, len(directives))
+
+	for _, ds := range directives {
+		for _, d := range ds {
+			for line := d.line; line <= d.endLine; line++ {
+				lines[line] = true
+			}
+		}
+	}
+
+	return lines
+}
+
+// codeLines maps each line of file that carries code and is asked about to the
+// line a directive beside it targets, which is what tells such a directive from
+// one written on a line of its own.
 //
 // A line usually targets itself. The line a multiline construct closes on holds
 // no node that starts there, and targets the line the construct opened on
@@ -189,8 +206,8 @@ func (*Scanner) parseFileDirectives(fset *token.FileSet, file *ast.File) (fileDi
 // are nested, and the innermost is the one the directive stands beside, so the
 // latest opening line wins. A line that opens something of its own still
 // targets itself, which no opening line above it can outrank.
-func codeLines(fset *token.FileSet, file *ast.File) map[int]int {
-	lines := make(map[int]int)
+func codeLines(fset *token.FileSet, file *ast.File, asked map[int]bool) map[int]int {
+	lines := make(map[int]int, len(asked))
 
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch n.(type) {
@@ -200,13 +217,15 @@ func codeLines(fset *token.FileSet, file *ast.File) map[int]int {
 
 		start := fset.PositionFor(n.Pos(), false).Line
 
-		if end := fset.PositionFor(n.End(), false).Line; end != start {
+		if end := fset.PositionFor(n.End(), false).Line; end != start && asked[end] {
 			if target, taken := lines[end]; !taken || start > target {
 				lines[end] = start
 			}
 		}
 
-		lines[start] = start
+		if asked[start] {
+			lines[start] = start
+		}
 
 		return true
 	})
