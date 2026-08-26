@@ -84,6 +84,13 @@ func (c *Cache[K, V]) Set(key K, value V) {
 // the key until one of them returns.
 func (c *Cache[K, V]) GetOrSet(key K, compute func() V) V {
 	for {
+		// A filled key is the common answer and needs no more than the read lock
+		// a Get takes, which keys with nothing in common do not hold each other
+		// out of. The exclusive lock is for opening or joining a computation.
+		if v, ok := c.Get(key); ok {
+			return v
+		}
+
 		c.mu.Lock()
 
 		if v, ok := c.entries[key]; ok {
