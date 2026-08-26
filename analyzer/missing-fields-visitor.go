@@ -579,23 +579,12 @@ func (lv literalVisitor) fileGoVersion() string {
 	return lv.pass.Pkg.GoVersion()
 }
 
-func (lv literalVisitor) isChildOfVariableDeclaration() bool {
-	if len(lv.stack) < 2 { //nolint:mnd
-		return false
-	}
-
+// enclosingOfLiteral returns the node the literal is written into, climbing out
+// of the wrappers that leave what it is written as unchanged: parentheses, and
+// the address-of that makes a `&T{}`. Nil where no such node encloses it.
+func (lv literalVisitor) enclosingOfLiteral() ast.Node {
 	for i := len(lv.stack) - 1; i > 0; i-- {
-		parent := lv.stack[i-1]
-
-		switch p := parent.(type) {
-		case *ast.AssignStmt:
-			if p.Tok == token.DEFINE {
-				return true
-			}
-
-		case *ast.ValueSpec:
-			return true
-
+		switch p := lv.stack[i-1].(type) {
 		case *ast.ParenExpr:
 			continue
 
@@ -604,44 +593,36 @@ func (lv literalVisitor) isChildOfVariableDeclaration() bool {
 				continue
 			}
 
-			return false
+			return nil
 
 		default:
-			return false
+			return p
 		}
 	}
 
-	return false
+	return nil
 }
 
+// isChildOfVariableDeclaration reports whether the literal is the value a
+// variable is declared with.
+func (lv literalVisitor) isChildOfVariableDeclaration() bool {
+	switch p := lv.enclosingOfLiteral().(type) {
+	case *ast.AssignStmt:
+		return p.Tok == token.DEFINE
+
+	case *ast.ValueSpec:
+		return true
+
+	default:
+		return false
+	}
+}
+
+// getParentReturnStmt returns the return statement the literal is a result of.
 func (lv literalVisitor) getParentReturnStmt() (*ast.ReturnStmt, bool) {
-	if len(lv.stack) < 2 { //nolint:mnd
-		return nil, false
-	}
+	ret, ok := lv.enclosingOfLiteral().(*ast.ReturnStmt)
 
-	for i := len(lv.stack) - 1; i > 0; i-- {
-		parent := lv.stack[i-1]
-
-		switch p := parent.(type) {
-		case *ast.ReturnStmt:
-			return p, true
-
-		case *ast.ParenExpr:
-			continue
-
-		case *ast.UnaryExpr:
-			if p.Op == token.AND {
-				continue
-			}
-
-			return nil, false
-
-		default:
-			return nil, false
-		}
-	}
-
-	return nil, false
+	return ret, ok
 }
 
 //nolint:forcetypeassert,gochecknoglobals
