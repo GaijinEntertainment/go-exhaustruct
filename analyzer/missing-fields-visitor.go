@@ -155,11 +155,7 @@ func (lv literalVisitor) useSiteDirectives() directive.Directives {
 			break
 		}
 
-		// Unadjusted: the directive was written in the physical file, whatever
-		// a //line directive renames it to.
-		found := lv.processor.Directives().Lookup(
-			lv.pass.Fset, lv.pass.Fset.PositionFor(node.Pos(), false),
-		)
+		found := lv.processor.Directives().LookupPos(lv.pass.Fset, node.Pos())
 
 		for _, d := range found {
 			if !dirs.Contains(d) {
@@ -407,11 +403,8 @@ type optionality struct {
 
 // fieldOptionality reads what one field of a term is annotated with, at the
 // position it is declared at.
-//
-// Unadjusted: the directive was written in the physical file, whatever a //line
-// directive renames it to.
 func (r coreResolver) fieldOptionality(f *types.Var) optionality {
-	dirs := r.directives.Lookup(r.fset, r.fset.PositionFor(f.Pos(), false))
+	dirs := r.directives.LookupPos(r.fset, f.Pos())
 
 	return optionality{
 		optional: dirs.Contains(directive.Optional),
