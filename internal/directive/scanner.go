@@ -178,15 +178,18 @@ func (*Scanner) parseFileDirectives(fset *token.FileSet, file *ast.File) (fileDi
 	return result, append(diagnostics, conflicts...)
 }
 
-// commentLines lists every line a directive comment covers. Only these are ever
-// asked of the code lines, so a file's whole line table need not be built to
-// answer them.
+// commentLines lists the lines of a directive comment that code can share.
+// Only these are ever asked of the code lines, so a file's whole line table
+// need not be built to answer them.
+//
+// A comment holds every line between its first and its last, so code reaches
+// only those two: one before the comment opens, the other after it closes.
 func commentLines(directives map[int][]parsedDirective) map[int]bool {
 	lines := make(map[int]bool, len(directives))
 
 	for _, ds := range directives {
 		for _, d := range ds {
-			for line := d.line; line <= d.endLine; line++ {
+			for _, line := range d.sharableLines() {
 				lines[line] = true
 			}
 		}
@@ -295,13 +298,20 @@ type parsedDirective struct {
 // codeLine returns what the first line of the directive's comment that carries
 // code targets.
 func (d parsedDirective) codeLine(codeLines map[int]int) (int, bool) {
-	for line := d.line; line <= d.endLine; line++ {
+	for _, line := range d.sharableLines() {
 		if target, ok := codeLines[line]; ok {
 			return target, true
 		}
 	}
 
 	return 0, false
+}
+
+// sharableLines returns the lines of the directive's comment that code can
+// share: the one it is written on and the one its comment closes on, which are
+// one line for a line comment.
+func (d parsedDirective) sharableLines() [2]int {
+	return [2]int{d.line, d.endLine}
 }
 
 func parseCommentDirectives(
