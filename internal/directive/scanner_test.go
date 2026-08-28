@@ -609,7 +609,7 @@ func Test_Scanner_TwoDirectivesOnOneLine(t *testing.T) {
 			want:      directive.Directives{directive.Enforce},
 		},
 		{
-			name:      "a directive on a line of its own outranks one written inline",
+			name:      "a directive above the code is written first and wins over one beside it",
 			give:      "//exhaustruct:optional\nvar v int /*exhaustruct:enforce*/\n",
 			wantDiags: 1,
 			want:      directive.Directives{directive.Optional},

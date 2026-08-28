@@ -242,15 +242,14 @@ func retargetInline(directives map[int][]parsedDirective, codeLines map[int]int)
 		for i := range ds {
 			if line, ok := ds[i].codeLine(codeLines); ok {
 				ds[i].targetLine = line
-				ds[i].inline = true
 			}
 		}
 	}
 }
 
-// reduceByTarget keeps one directive set for each target line -- the one
-// written on a line of its own, or else the first written -- and reports every
-// other directive aimed at that line as a conflict.
+// reduceByTarget keeps one directive set for each target line -- the first
+// written -- and reports every other directive aimed at that line as a
+// conflict.
 func reduceByTarget(directives map[int][]parsedDirective) (fileDirectives, []analysis.Diagnostic) {
 	byTarget := make(map[int][]parsedDirective, len(directives))
 
@@ -266,15 +265,6 @@ func reduceByTarget(directives map[int][]parsedDirective) (fileDirectives, []ana
 
 	for target, ds := range byTarget {
 		slices.SortFunc(ds, func(a, b parsedDirective) int {
-			// a directive on a line of its own wins over one written inline
-			if aOwn, bOwn := !a.inline, !b.inline; aOwn != bOwn {
-				if aOwn {
-					return -1
-				}
-
-				return 1
-			}
-
 			return cmp.Compare(a.pos, b.pos)
 		})
 
@@ -296,11 +286,8 @@ type parsedDirective struct {
 	// line and endLine bound the comment the directive is written in. A line
 	// comment occupies one line; a block comment covers a range, and code
 	// beside any line of it makes the directive inline with that code.
-	line    int
-	endLine int
-	// inline records that the comment shares a line with the code it targets,
-	// which is what a directive written on its own line outranks.
-	inline     bool
+	line       int
+	endLine    int
 	targetLine int
 	directives Directives
 }
@@ -368,7 +355,6 @@ func parseCommentDirectives(
 				pos:     pos,
 				line:    line,
 				endLine: astutil.PhysicalLine(fset, comment.End()),
-				inline:  false,
 				// The whole group carries the directive down to the code, so a
 				// note written under it does not cut the reach short.
 				targetLine: astutil.PhysicalLine(fset, cg.End()) + 1,
