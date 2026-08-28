@@ -4,6 +4,7 @@ import (
 	"go/token"
 	"go/types"
 
+	"dev.gaijin.team/go/exhaustruct/v5/internal/astutil"
 	"dev.gaijin.team/go/exhaustruct/v5/internal/cache"
 	"dev.gaijin.team/go/exhaustruct/v5/internal/directive"
 	"dev.gaijin.team/go/exhaustruct/v5/internal/pattern"
@@ -110,9 +111,7 @@ func (p *Processor) ResolveStruct(
 	// racing to build the same type would each pay for it and each hold a
 	// value the other does not.
 	return p.structCache.GetOrSet(key, func() *Struct {
-		// Positions are taken unadjusted: they locate the declaration on disk,
-		// and //line directives point at files that hold no Go source.
-		s := p.buildStruct(typeName, fset.PositionFor(pos, false), callerPkg)
+		s := p.buildStruct(typeName, astutil.PhysicalPosition(fset, pos), callerPkg)
 
 		p.populateFields(fset, s, strct)
 		p.resolveStructOrigin(fset, s)

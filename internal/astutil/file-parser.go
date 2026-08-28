@@ -100,21 +100,25 @@ func (p *FileParser) ProcessFiles(fset *token.FileSet, files ...*ast.File) []ana
 	return allDiags
 }
 
-// PhysicalFilename returns the on-disk file a position belongs to, ignoring
-// //line directives. Generated code routinely remaps positions onto a virtual
-// file — a template or a grammar — that holds no Go source and often does not
-// exist at all, so anything reading or keying by file must ask for the physical
-// one.
-func PhysicalFilename(fset *token.FileSet, pos token.Pos) string {
-	return fset.PositionFor(pos, false).Filename
+// PhysicalPosition returns the on-disk position of pos, ignoring //line
+// directives. Generated code routinely remaps positions onto a virtual file — a
+// template or a grammar — that holds no Go source and often does not exist at
+// all, so anything reading, keying, or comparing by position must ask for the
+// physical one.
+func PhysicalPosition(fset *token.FileSet, pos token.Pos) token.Position {
+	return fset.PositionFor(pos, false)
 }
 
-// PhysicalLine returns the on-disk line a position sits on, ignoring //line
-// directives. A generator is free to repeat one virtual line number, so lines
-// compared as the same line -- and the source bytes read at one -- have to be
-// physical ones.
+// PhysicalFilename returns the on-disk file a position belongs to.
+func PhysicalFilename(fset *token.FileSet, pos token.Pos) string {
+	return PhysicalPosition(fset, pos).Filename
+}
+
+// PhysicalLine returns the on-disk line a position sits on. A generator is free
+// to repeat one virtual line number, so lines compared as the same line -- and
+// the source bytes read at one -- have to be physical ones.
 func PhysicalLine(fset *token.FileSet, pos token.Pos) int {
-	return fset.PositionFor(pos, false).Line
+	return PhysicalPosition(fset, pos).Line
 }
 
 // ProcessFilename parses a file from disk and triggers all callbacks.

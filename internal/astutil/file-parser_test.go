@@ -468,3 +468,34 @@ func TestFileParser_ProcessFilename_EmptyFilename(t *testing.T) {
 
 	assert.Empty(t, fp.ProcessFilename(fset, ""))
 }
+
+// TestPhysicalPosition covers what the three readers promise: the file on disk
+// and the line the bytes sit on, whatever a //line directive renames them.
+func TestPhysicalPosition(t *testing.T) {
+	t.Parallel()
+
+	const src = `//line generated.tmpl:100
+package p
+
+var V int
+`
+
+	fset := token.NewFileSet()
+
+	file, err := parser.ParseFile(fset, "real.go", src, parser.ParseComments)
+	require.NoError(t, err)
+
+	pos := file.Decls[0].Pos()
+
+	adjusted := fset.Position(pos)
+	require.Equal(t, "generated.tmpl", adjusted.Filename,
+		"the directive has to rename the position the test reads against")
+	require.Equal(t, 102, adjusted.Line)
+
+	physical := astutil.PhysicalPosition(fset, pos)
+	assert.Equal(t, "real.go", physical.Filename)
+	assert.Equal(t, 4, physical.Line)
+
+	assert.Equal(t, physical.Filename, astutil.PhysicalFilename(fset, pos))
+	assert.Equal(t, physical.Line, astutil.PhysicalLine(fset, pos))
+}

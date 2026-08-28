@@ -121,7 +121,7 @@ func (s *Scanner) ProcessFiles(fset *token.FileSet, files ...*ast.File) []analys
 // carries no sign of whether it was adjusted, so a lookup made with an adjusted
 // one finds nothing and says nothing about it.
 func (s *Scanner) LookupPos(fset *token.FileSet, pos token.Pos) Directives {
-	return s.Lookup(fset, fset.PositionFor(pos, false))
+	return s.Lookup(fset, astutil.PhysicalPosition(fset, pos))
 }
 
 // Lookup returns the directives at the given source position, which must be
@@ -215,9 +215,9 @@ func codeLines(fset *token.FileSet, file *ast.File, asked map[int]bool) map[int]
 			return false
 		}
 
-		start := fset.PositionFor(n.Pos(), false).Line
+		start := astutil.PhysicalLine(fset, n.Pos())
 
-		if end := fset.PositionFor(n.End(), false).Line; end != start && asked[end] {
+		if end := astutil.PhysicalLine(fset, n.End()); end != start && asked[end] {
 			if target, taken := lines[end]; !taken || start > target {
 				lines[end] = start
 			}
@@ -362,16 +362,16 @@ func parseCommentDirectives(
 
 			hasDirective = true
 
-			line := fset.PositionFor(pos, false).Line
+			line := astutil.PhysicalLine(fset, pos)
 
 			directives[line] = append(directives[line], parsedDirective{
 				pos:     pos,
 				line:    line,
-				endLine: fset.PositionFor(comment.End(), false).Line,
+				endLine: astutil.PhysicalLine(fset, comment.End()),
 				inline:  false,
 				// The whole group carries the directive down to the code, so a
 				// note written under it does not cut the reach short.
-				targetLine: fset.PositionFor(cg.End(), false).Line + 1,
+				targetLine: astutil.PhysicalLine(fset, cg.End()) + 1,
 				directives: parsed,
 			})
 		}
