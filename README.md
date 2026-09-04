@@ -204,6 +204,7 @@ exhaustruct -optional-rx 'pkg\.Config' -enforce-rx 'pkg\.Config.*' ./...
 | `-allow-empty-rx` | Regex pattern for types allowed to be empty (repeatable) |
 | `-allow-empty-returns` | Allow empty literals in return statements |
 | `-allow-empty-declarations` | Allow empty literals in `var` and `:=` declarations |
+| `-allow-empty-blank-assignments` | Allow empty literals the blank identifier receives, as in `var _ Iface = T{}` |
 
 ### Output Flags
 
@@ -439,6 +440,9 @@ declared in a signature, so it carries no type-level directive of its own.
   and `//exhaustruct:optional` can be placed on type definitions
 - **Field-level enforce**: `//exhaustruct:enforce` on fields forces them to be
   required even when the type is optional
+- **Blank assignments** (`-allow-empty-blank-assignments`): Allow empty literals
+  the blank identifier receives, such as the compile-time interface check
+  `var _ Iface = T{}`
 
 ### Flag Renames
 
