@@ -73,7 +73,15 @@ type Options struct {
 ## Comment Directives
 
 Comment directives provide fine-grained control over checking behavior.
-They can be placed on the line above or on the same line as the target.
+They can be placed on the line above or on the same line as the target, in
+either comment form: `//exhaustruct:optional` or `/*exhaustruct:optional*/`.
+The block form can also stand ahead of code on its own line, which is how a
+field name is annotated inline.
+
+The directive opens the comment, as `//go:build` does. A space after the
+comment marker makes the comment prose, and so does a space inside the
+directive list: `//exhaustruct:optional, enforce` reads as `optional` followed
+by prose, and is reported because the prose names a directive.
 
 ### On Type Definitions
 
@@ -260,6 +268,25 @@ func example() {
 }
 ```
 
+### Blank Fields
+
+A blank field (`_`) has no name a keyed literal can write, so a keyed or empty
+literal is never reported for leaving it out. A positional literal has to supply
+a value for it, as Go requires:
+
+```go
+type NoCompare struct {
+    _ [0]func()
+    A int
+}
+
+func example() {
+    _ = NoCompare{A: 1}          // OK
+    _ = NoCompare{}              // missing field A
+    _ = NoCompare{[0]func(){}, 1} // OK
+}
+```
+
 ### Embedded Fields
 
 From Go 1.27 a composite literal may name a promoted field in place of the
@@ -375,6 +402,29 @@ A name given to a pointer follows the same rule. `type P = *Config` and
 `type Q *Config` each carry their own type-level directives, and a literal that
 elides `&Config` under one of them is checked and reported as that type. A plain
 `*Config` declares nothing, so `Config` names such a literal.
+
+### Type Parameters
+
+A literal of a type parameter is checked against the struct its constraint's
+terms share, and reported under the parameter's name:
+
+```go
+type configish interface {
+    ~struct {
+        Host string
+        Port int
+    }
+}
+
+func New[T configish]() T {
+    return T{Host: "localhost"} // T is missing field Port
+}
+```
+
+Field-level directives on a term's declaration apply. Two declarations of one
+shape whose fields are annotated differently give the constraint no single
+answer, and literals of such a parameter are not checked. A type parameter is
+declared in a signature, so it carries no type-level directive of its own.
 
 ## Migration from v4
 
