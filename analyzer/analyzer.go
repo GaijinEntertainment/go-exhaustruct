@@ -94,7 +94,6 @@ func newProcessor(config *Config) (*structure.Processor, error) {
 
 	return structure.NewProcessor(
 		directive.NewScanner(fp),
-		structure.NewOriginScanner(fp),
 		structure.WithEnforce(enforce),
 		structure.WithIgnore(ignore),
 		structure.WithOptional(optional),
