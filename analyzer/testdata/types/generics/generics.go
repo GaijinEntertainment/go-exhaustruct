@@ -132,6 +132,22 @@ func shouldPassTwoDeclarationsOfOneShapeReversed[T twoShapesReversed]() T {
 	return T{A: 1}
 }
 
+// twoShapesBesideStruct embeds twoShapes beside a term of the same shape. The
+// type set is still the two declarations, which disagree, so the constraint has
+// no core: the answer of the embedded interface stands, and the sibling term
+// does not take its place.
+type twoShapesBesideStruct interface {
+	twoShapes
+	~struct {
+		A int
+		B string
+	}
+}
+
+func shouldPassNoCoreEmbeddedBesideStructTerm[T twoShapesBesideStruct]() T {
+	return T{A: 1}
+}
+
 // equivalentOrders and alsoEquivalentOrders annotate one field in either order,
 // which names the same optionality. The two are one core, and the literal is
 // checked against it.
