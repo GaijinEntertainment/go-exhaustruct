@@ -62,6 +62,11 @@ type Config struct {
 	// AllowEmptyDeclarations allows empty structures in variable declarations.
 	AllowEmptyDeclarations bool //exhaustruct:optional
 
+	// AllowEmptyBlankAssignments allows empty structures the blank identifier
+	// receives, in a declaration or an assignment. `var _ Iface = T{}`, which
+	// asserts at compile time that T implements Iface, is written this way.
+	AllowEmptyBlankAssignments bool //exhaustruct:optional
+
 	// ReportFullTypePath enables full package path in error messages instead of
 	// short package name. This helps when configuring include/exclude patterns,
 	// as import aliases can make short names ambiguous.
@@ -113,6 +118,9 @@ func (c *Config) bindToFlagSet(fs *flag.FlagSet) {
 
 	fs.BoolVar(&c.AllowEmptyDeclarations, "allow-empty-declarations", c.AllowEmptyDeclarations,
 		"Allow empty structures in variable declarations")
+
+	fs.BoolVar(&c.AllowEmptyBlankAssignments, "allow-empty-blank-assignments", c.AllowEmptyBlankAssignments,
+		"Allow empty structures the blank identifier receives, as in 'var _ Iface = T{}'")
 
 	fs.BoolVar(&c.ReportFullTypePath, "report-full-type-path", c.ReportFullTypePath,
 		"Report full package path in error messages (e.g., 'net/http.Cookie' instead of 'http.Cookie'). "+

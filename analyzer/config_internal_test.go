@@ -22,6 +22,7 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 			"enforce-rx", "ignore-rx", "optional-rx",
 			"allow-empty", "allow-empty-rx",
 			"allow-empty-returns", "allow-empty-declarations",
+			"allow-empty-blank-assignments",
 			"report-full-type-path",
 		}
 
@@ -77,12 +78,16 @@ func TestConfig_BindToFlagSet(t *testing.T) {
 		fs := flag.NewFlagSet("test", flag.ContinueOnError)
 		config.bindToFlagSet(fs)
 
-		args := []string{"-allow-empty", "-allow-empty-returns", "-allow-empty-declarations"}
+		args := []string{
+			"-allow-empty", "-allow-empty-returns", "-allow-empty-declarations",
+			"-allow-empty-blank-assignments",
+		}
 		require.NoError(t, fs.Parse(args))
 
 		assert.True(t, config.AllowEmpty)
 		assert.True(t, config.AllowEmptyReturns)
 		assert.True(t, config.AllowEmptyDeclarations)
+		assert.True(t, config.AllowEmptyBlankAssignments)
 	})
 
 	t.Run("flag parsing allow-empty-rx patterns", func(t *testing.T) {

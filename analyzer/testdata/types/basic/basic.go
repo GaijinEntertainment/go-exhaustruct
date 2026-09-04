@@ -33,3 +33,13 @@ func shouldFailEmpty() {
 func shouldFailPartial() {
 	_ = Test{A: "", B: 0, C: 0.0} // want "basic.Test is missing field D"
 }
+
+// Doer is what the compile-time check below asserts Test implements.
+type Doer interface {
+	Do()
+}
+
+func (Test) Do() {}
+
+// Reported unless AllowEmptyBlankAssignments is set.
+var _ Doer = Test{} // want "basic.Test is missing fields A, B, C, D"

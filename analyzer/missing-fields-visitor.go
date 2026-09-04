@@ -515,6 +515,10 @@ func (lv literalVisitor) checkEmptyAllowed(s *structure.Struct) bool {
 		return true
 	}
 
+	if lv.config.AllowEmptyBlankAssignments && lv.isBlankAssignment() {
+		return true
+	}
+
 	return false
 }
 
@@ -581,32 +585,42 @@ func (lv literalVisitor) fileGoVersion() string {
 
 // enclosingOfLiteral returns the node the literal is written into, climbing out
 // of the wrappers that leave what it is written as unchanged: parentheses, and
-// the address-of that makes a `&T{}`. Nil where no such node encloses it.
-func (lv literalVisitor) enclosingOfLiteral() ast.Node {
+// the address-of that makes a `&T{}`. The expression returned beside it is the
+// one that node holds directly: the literal itself, or the outermost wrapper
+// around it. Both are nil where no such node encloses the literal.
+func (lv literalVisitor) enclosingOfLiteral() (parent ast.Node, child ast.Expr) {
+	child = lv.lit
+
 	for i := len(lv.stack) - 1; i > 0; i-- {
 		switch p := lv.stack[i-1].(type) {
 		case *ast.ParenExpr:
+			child = p
+
 			continue
 
 		case *ast.UnaryExpr:
 			if p.Op == token.AND {
+				child = p
+
 				continue
 			}
 
-			return nil
+			return nil, nil
 
 		default:
-			return p
+			return p, child
 		}
 	}
 
-	return nil
+	return nil, nil
 }
 
 // isChildOfVariableDeclaration reports whether the literal is the value a
 // variable is declared with.
 func (lv literalVisitor) isChildOfVariableDeclaration() bool {
-	switch p := lv.enclosingOfLiteral().(type) {
+	parent, _ := lv.enclosingOfLiteral()
+
+	switch p := parent.(type) {
 	case *ast.AssignStmt:
 		return p.Tok == token.DEFINE
 
@@ -618,9 +632,42 @@ func (lv literalVisitor) isChildOfVariableDeclaration() bool {
 	}
 }
 
+// isBlankAssignment reports whether the literal is a value the blank identifier
+// receives, in a declaration or an assignment. A value is matched to its name
+// by position: `var _, x = T{}, U{}` discards the first literal and binds the
+// second.
+func (lv literalVisitor) isBlankAssignment() bool {
+	parent, child := lv.enclosingOfLiteral()
+
+	switch p := parent.(type) {
+	case *ast.ValueSpec:
+		i := slices.Index(p.Values, child)
+
+		return i >= 0 && i < len(p.Names) && isBlank(p.Names[i])
+
+	case *ast.AssignStmt:
+		i := slices.Index(p.Rhs, child)
+
+		return i >= 0 && i < len(p.Lhs) && isBlank(p.Lhs[i])
+
+	default:
+		return false
+	}
+}
+
+// isBlank reports whether expr is the blank identifier, parenthesized or not,
+// as go/types reads an assignment target.
+func isBlank(expr ast.Expr) bool {
+	ident, ok := unparen(expr).(*ast.Ident)
+
+	return ok && ident.Name == "_"
+}
+
 // getParentReturnStmt returns the return statement the literal is a result of.
 func (lv literalVisitor) getParentReturnStmt() (*ast.ReturnStmt, bool) {
-	ret, ok := lv.enclosingOfLiteral().(*ast.ReturnStmt)
+	parent, _ := lv.enclosingOfLiteral()
+
+	ret, ok := parent.(*ast.ReturnStmt)
 
 	return ret, ok
 }
