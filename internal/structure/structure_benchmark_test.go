@@ -121,7 +121,7 @@ func benchFixture(b *testing.B, depth, width int) (*structure.Struct, *ast.Compo
 		}
 
 		fp := astutil.NewFileParser()
-		proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+		proc := structure.NewProcessor(directive.NewScanner(fp))
 
 		resolved := proc.ResolveStruct(fset, typeName, strct, pos, pkg)
 		if resolved == nil {
@@ -189,7 +189,7 @@ func BenchmarkResolveStruct_SharedEmbedding(b *testing.B) {
 				b.StopTimer()
 
 				fp := astutil.NewFileParser()
-				proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+				proc := structure.NewProcessor(directive.NewScanner(fp))
 
 				b.StartTimer()
 

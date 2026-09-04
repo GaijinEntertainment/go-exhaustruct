@@ -31,7 +31,6 @@ type structKey struct {
 
 type Processor struct {
 	directives  *directive.Scanner
-	origins     *OriginScanner
 	fieldsCache *cache.Cache[*types.Struct, *structFields]
 	structCache *cache.Cache[structKey, *Struct]
 
@@ -61,10 +60,9 @@ func WithAllowEmpty(patterns pattern.List) Option {
 
 const cachePreallocSize = 64
 
-func NewProcessor(directives *directive.Scanner, origins *OriginScanner, opts ...Option) *Processor {
+func NewProcessor(directives *directive.Scanner, opts ...Option) *Processor {
 	p := &Processor{
 		directives:  directives,
-		origins:     origins,
 		fieldsCache: cache.New[*types.Struct, *structFields](cachePreallocSize),
 		structCache: cache.New[structKey, *Struct](cachePreallocSize),
 	}
@@ -114,7 +112,6 @@ func (p *Processor) ResolveStruct(
 		s := p.buildStruct(typeName, astutil.PhysicalPosition(fset, pos), callerPkg)
 
 		p.populateFields(fset, s, strct)
-		p.resolveStructOrigin(fset, s)
 		p.resolveStructDirectives(fset, s)
 		p.matchStructPatterns(s)
 
@@ -328,17 +325,6 @@ func embeddedStruct(typ types.Type) (*types.Struct, bool) {
 	strct, ok := types.Unalias(typ).Underlying().(*types.Struct)
 
 	return strct, ok
-}
-
-func (p *Processor) resolveStructOrigin(fset *token.FileSet, s *Struct) {
-	if !s.Position.IsValid() || s.Name == AnonymousName {
-		return
-	}
-
-	origin := p.origins.Lookup(fset, s.Position.Filename, s.Name)
-
-	s.IsAlias = origin == OriginAlias
-	s.IsDerived = origin == OriginDerived
 }
 
 func (p *Processor) resolveStructDirectives(fset *token.FileSet, s *Struct) {

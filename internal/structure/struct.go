@@ -57,10 +57,6 @@ type Struct struct {
 	PatternOptional bool //exhaustruct:optional
 
 	AllowEmptyDecl bool //exhaustruct:optional
-
-	// Detected via OriginScanner AST inspection before types.Unalias.
-	IsAlias   bool //exhaustruct:optional
-	IsDerived bool //exhaustruct:optional
 }
 
 // PackagePath returns the package path of the struct type.

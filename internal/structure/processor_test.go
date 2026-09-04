@@ -199,7 +199,6 @@ func Test_Processor_Get(t *testing.T) {
 		fp := astutil.NewFileParser()
 		proc := structure.NewProcessor(
 			directive.NewScanner(fp),
-			structure.NewOriginScanner(fp),
 		)
 
 		// Pass underlying struct type directly to simulate anonymous struct
@@ -220,7 +219,6 @@ func Test_Processor_Get(t *testing.T) {
 		fp := astutil.NewFileParser()
 		proc := structure.NewProcessor(
 			directive.NewScanner(fp),
-			structure.NewOriginScanner(fp),
 		)
 
 		typeName, strct, pos := td.resolveType(t, "IgnoredStruct")
@@ -436,7 +434,6 @@ func loadTestdata(t *testing.T) *testdata {
 
 	fp := astutil.NewFileParser()
 	dirScanner := directive.NewScanner(fp)
-	originScanner := structure.NewOriginScanner(fp)
 
 	dirScanner.ProcessFiles(fset, file)
 
@@ -445,7 +442,7 @@ func loadTestdata(t *testing.T) *testdata {
 		file:       file,
 		pkg:        pkg,
 		namedTypes: namedTypes,
-		processor:  structure.NewProcessor(dirScanner, originScanner),
+		processor:  structure.NewProcessor(dirScanner),
 	}
 }
 
@@ -526,7 +523,6 @@ func Test_Processor_WithPatterns(t *testing.T) {
 		fp := astutil.NewFileParser()
 		proc := structure.NewProcessor(
 			directive.NewScanner(fp),
-			structure.NewOriginScanner(fp),
 			structure.WithEnforce(mustList(t, `testdata\.MultiField`)),
 		)
 
@@ -546,7 +542,6 @@ func Test_Processor_WithPatterns(t *testing.T) {
 		fp := astutil.NewFileParser()
 		proc := structure.NewProcessor(
 			directive.NewScanner(fp),
-			structure.NewOriginScanner(fp),
 			structure.WithIgnore(mustList(t, `testdata\.MultiField`)),
 		)
 
@@ -566,7 +561,6 @@ func Test_Processor_WithPatterns(t *testing.T) {
 		fp := astutil.NewFileParser()
 		proc := structure.NewProcessor(
 			directive.NewScanner(fp),
-			structure.NewOriginScanner(fp),
 			structure.WithOptional(mustList(t, `testdata\.MultiField`)),
 		)
 
@@ -586,7 +580,6 @@ func Test_Processor_WithPatterns(t *testing.T) {
 		fp := astutil.NewFileParser()
 		proc := structure.NewProcessor(
 			directive.NewScanner(fp),
-			structure.NewOriginScanner(fp),
 			structure.WithAllowEmpty(mustList(t, `testdata\.MultiField`)),
 		)
 
@@ -604,7 +597,6 @@ func Test_Processor_WithPatterns(t *testing.T) {
 		fp := astutil.NewFileParser()
 		proc := structure.NewProcessor(
 			directive.NewScanner(fp),
-			structure.NewOriginScanner(fp),
 			structure.WithEnforce(mustList(t, `other\.Type`)),
 			structure.WithIgnore(mustList(t, `other\.Type`)),
 			structure.WithOptional(mustList(t, `other\.Type`)),
@@ -645,7 +637,7 @@ func Test_Processor_ResolveStruct_LineDirective(t *testing.T) {
 
 	fp := astutil.NewFileParser()
 	scanner := directive.NewScanner(fp)
-	proc := structure.NewProcessor(scanner, structure.NewOriginScanner(fp))
+	proc := structure.NewProcessor(scanner)
 
 	scanner.ProcessFiles(fset, file)
 
@@ -668,10 +660,6 @@ func Test_Processor_ResolveStruct_LineDirective(t *testing.T) {
 	optional := resolve("LinedOptional")
 	require.NotNil(t, optional)
 	assert.True(t, optional.Optional, "the directive above the declaration must apply")
-
-	derived := resolve("LinedDerived")
-	require.NotNil(t, derived)
-	assert.True(t, derived.IsDerived, "the origin scan must reach the declaration")
 }
 
 // Test_Processor_ResolveStruct_PositionCollision covers types whose declaration
@@ -698,7 +686,7 @@ func Test_Processor_ResolveStruct_PositionCollision(t *testing.T) {
 		"test setup: both declarations must share a position")
 
 	fp := astutil.NewFileParser()
-	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+	proc := structure.NewProcessor(directive.NewScanner(fp))
 
 	aaa := proc.ResolveStruct(fset, aaaName, aaaStruct, pos, pkg)
 	bbb := proc.ResolveStruct(fset, bbbName, bbbStruct, pos, pkg)
@@ -732,7 +720,7 @@ func Test_Processor_ResolveStruct_NameCollision(t *testing.T) {
 	secondName, secondStruct := synthStruct(second, pos, "Config", "P", "Q", "R")
 
 	fp := astutil.NewFileParser()
-	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+	proc := structure.NewProcessor(directive.NewScanner(fp))
 
 	resolvedFirst := proc.ResolveStruct(fset, firstName, firstStruct, pos, first)
 	resolvedSecond := proc.ResolveStruct(fset, secondName, secondStruct, pos, second)
@@ -820,7 +808,7 @@ func Test_Struct_SkippedFields_PromotedShadowed(t *testing.T) {
 		types.NewField(pos, pkg, "x", types.Typ[types.Int], false))
 
 	fp := astutil.NewFileParser()
-	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+	proc := structure.NewProcessor(directive.NewScanner(fp))
 
 	strct := proc.ResolveStruct(fset, outerName, outerStruct, pos, pkg)
 	require.NotNil(t, strct)
@@ -851,7 +839,7 @@ func promotedFixture(t *testing.T) *structure.Struct {
 		types.NewField(pos, pkg, "a", types.Typ[types.Int], false))
 
 	fp := astutil.NewFileParser()
-	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+	proc := structure.NewProcessor(directive.NewScanner(fp))
 
 	strct := proc.ResolveStruct(fset, aName, aStruct, pos, pkg)
 	require.NotNil(t, strct)
@@ -905,7 +893,7 @@ func Test_Struct_SkippedFields_BelowGo127(t *testing.T) {
 		types.NewField(pos, pkg, "Own", types.Typ[types.Int], false))
 
 	fp := astutil.NewFileParser()
-	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+	proc := structure.NewProcessor(directive.NewScanner(fp))
 
 	strct := proc.ResolveStruct(fset, wrapperName, wrapperStruct, pos, pkg)
 	require.NotNil(t, strct)
@@ -984,7 +972,7 @@ func outerWithInnerFixture(t *testing.T, opts ...structure.Option) *structure.St
 		types.NewField(pos, pkg, "Own", types.Typ[types.Int], false))
 
 	fp := astutil.NewFileParser()
-	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp), opts...)
+	proc := structure.NewProcessor(directive.NewScanner(fp), opts...)
 
 	strct := proc.ResolveStruct(fset, outerName, outerStruct, pos, pkg)
 	require.NotNil(t, strct)
@@ -1010,7 +998,7 @@ func Test_Struct_SkippedFields_EmbeddedPointer(t *testing.T) {
 		types.NewField(pos, pkg, "a", types.Typ[types.Int], false))
 
 	fp := astutil.NewFileParser()
-	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+	proc := structure.NewProcessor(directive.NewScanner(fp))
 
 	strct := proc.ResolveStruct(fset, aName, aStruct, pos, pkg)
 	require.NotNil(t, strct)
@@ -1035,7 +1023,7 @@ func Test_Processor_ResolveStruct_Concurrent(t *testing.T) {
 	typeName, strct := synthStruct(pkg, pos, "Racy", "A", "B")
 
 	fp := astutil.NewFileParser()
-	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+	proc := structure.NewProcessor(directive.NewScanner(fp))
 
 	const callers = 64
 
@@ -1081,7 +1069,7 @@ func Test_Struct_SkippedFields_Shadowed(t *testing.T) {
 
 	fp := astutil.NewFileParser()
 	proc := structure.NewProcessor(
-		directive.NewScanner(fp), structure.NewOriginScanner(fp),
+		directive.NewScanner(fp),
 		structure.WithOptional(mustList(t, `.*\.Outer$`)),
 		structure.WithEnforce(mustList(t, `.*\.Outer#x`)),
 	)
@@ -1117,7 +1105,7 @@ func Test_Struct_SkippedFields_ShadowedAmbiguous(t *testing.T) {
 
 	fp := astutil.NewFileParser()
 	proc := structure.NewProcessor(
-		directive.NewScanner(fp), structure.NewOriginScanner(fp),
+		directive.NewScanner(fp),
 		structure.WithOptional(mustList(t, `.*\.Outer$`)),
 		structure.WithEnforce(mustList(t, `.*\.Outer#x`)),
 	)
@@ -1146,7 +1134,7 @@ func Test_Struct_ResolveStruct_AnonymousPerCaller(t *testing.T) {
 	}, nil)
 
 	fp := astutil.NewFileParser()
-	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+	proc := structure.NewProcessor(directive.NewScanner(fp))
 
 	fromFirst := proc.ResolveStruct(fset, nil, strct, pos, first)
 	require.NotNil(t, fromFirst)
@@ -1175,7 +1163,7 @@ func Test_Struct_SkippedFields_BroadPattern(t *testing.T) {
 
 	fp := astutil.NewFileParser()
 	proc := structure.NewProcessor(
-		directive.NewScanner(fp), structure.NewOriginScanner(fp),
+		directive.NewScanner(fp),
 		structure.WithOptional(mustList(t, `.*\.Outer$`)),
 		structure.WithEnforce(mustList(t, `.*\.Outer.*`)),
 	)
@@ -1220,7 +1208,7 @@ func Test_Struct_SkippedFields_ShadowedAcrossPackages(t *testing.T) {
 		types.NewField(pos, own, "Theirs", theirsNamed, true))
 
 	fp := astutil.NewFileParser()
-	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+	proc := structure.NewProcessor(directive.NewScanner(fp))
 
 	strct := proc.ResolveStruct(fset, outerName, outerStruct, pos, own)
 	require.NotNil(t, strct)
@@ -1330,7 +1318,7 @@ func Test_Struct_SkippedFields_PromotedPatterns(t *testing.T) {
 
 			fp := astutil.NewFileParser()
 			proc := structure.NewProcessor(
-				directive.NewScanner(fp), structure.NewOriginScanner(fp), tt.opts...,
+				directive.NewScanner(fp), tt.opts...,
 			)
 
 			strct := proc.ResolveStruct(fset, aName, aStruct, pos, pkg)
@@ -1362,7 +1350,7 @@ func Test_Struct_SkippedFields_PositionalBlank(t *testing.T) {
 		types.NewField(pos, pkg, "B", types.Typ[types.Byte], false))
 
 	fp := astutil.NewFileParser()
-	proc := structure.NewProcessor(directive.NewScanner(fp), structure.NewOriginScanner(fp))
+	proc := structure.NewProcessor(directive.NewScanner(fp))
 
 	resolved := proc.ResolveStruct(fset, typeName, strct, pos, pkg)
 	require.NotNil(t, resolved)
