@@ -39,6 +39,13 @@ func TestAnalyzerEmpty(t *testing.T) {
 			testPackage: "testdata/config/allow_empty/declarations",
 		},
 		{
+			name: "allow empty blank assignments",
+			config: analyzer.Config{
+				AllowEmptyBlankAssignments: true,
+			},
+			testPackage: "testdata/config/allow_empty/blank_assignments",
+		},
+		{
 			name: "allow empty by pattern",
 			config: analyzer.Config{
 				AllowEmptyPatterns: []string{".*Allowed.*", ".*Nested.*"},
