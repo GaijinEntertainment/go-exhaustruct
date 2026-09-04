@@ -157,6 +157,11 @@ func Test_removeExhaustructFromTag(t *testing.T) {
 			want: backtick + `malformed` + backtick,
 		},
 		{
+			name: "a value that never closes survives the cut",
+			give: backtick + `exhaustruct:"optional" json:"x` + backtick,
+			want: backtick + `json:"x` + backtick,
+		},
+		{
 			name: "a key ending in the deprecated one is a different key",
 			give: backtick + `fooexhaustruct:"keep" exhaustruct:"optional"` + backtick,
 			want: backtick + `fooexhaustruct:"keep"` + backtick,
